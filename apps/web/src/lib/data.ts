@@ -8,11 +8,13 @@ import {
 import { createServerSupabaseClient } from "@asesor/db/server";
 import { getServiceRoleClient } from "@asesor/db/service";
 import {
+  type AdviceView,
   isPremiumSubscription,
   type LookSpec,
   LookSpecSchema,
   SIGNED_URL_TTL_SECONDS,
   STORAGE_BUCKETS,
+  selectAdviceForPlan,
   type StyleProfileCore,
 } from "@asesor/shared";
 import { cache } from "react";
@@ -40,6 +42,17 @@ export async function getActiveStyleProfile(userId: string): Promise<StyleProfil
   const stored = await readActiveStyleProfile(client, userId, { includeAdvice: false });
   return stored?.profile ?? null;
 }
+
+/**
+ * Asesoría de la pantalla de resultados. La parte Premium (`style_advice`) se consulta
+ * solo si el usuario es Premium, con su cliente (RLS); a free nunca le llega.
+ */
+export const getAdviceView = cache(async (userId: string): Promise<AdviceView | null> => {
+  const [client, plan] = await Promise.all([createServerSupabaseClient(), getPlan(userId)]);
+  const stored = await readActiveStyleProfile(client, userId, { includeAdvice: plan.isPremium });
+  if (!stored) return null;
+  return selectAdviceForPlan(stored.profile, stored.advice, plan.isPremium);
+});
 
 export type LookView =
   | {
@@ -100,4 +113,56 @@ export async function getLooks(userId: string): Promise<LookView[]> {
       };
     }),
   );
+}
+
+export type LookDetail =
+  | {
+      locked: false;
+      id: string;
+      position: number;
+      status: LookRow["status"];
+      spec: LookSpec;
+      imageUrl: string | null;
+    }
+  | { locked: true; id: string; position: number; name: string };
+
+/**
+ * Un look del perfil activo. Desbloqueado: spec completo (RLS). Bloqueado: solo nombre y
+ * posición (service role, columnas no sensibles). Ajeno, inexistente o de un perfil viejo: null.
+ */
+export async function getLook(userId: string, lookId: string): Promise<LookDetail | null> {
+  if (!/^[0-9a-f-]{36}$/i.test(lookId)) return null;
+  const { data: summary } = await getServiceRoleClient()
+    .from("looks")
+    .select("id, position, name, style_profiles!inner(active)")
+    .eq("id", lookId)
+    .eq("user_id", userId)
+    .eq("style_profiles.active", true)
+    .maybeSingle();
+  if (!summary) return null;
+
+  const client = await createServerSupabaseClient();
+  const { data: full } = await client
+    .from("looks")
+    .select("id, position, status, spec_json, image_storage_path")
+    .eq("id", lookId)
+    .eq("user_id", userId)
+    .maybeSingle();
+  const spec = full ? LookSpecSchema.safeParse(full.spec_json) : null;
+  if (!full || !spec?.success)
+    return { locked: true, id: summary.id, position: summary.position, name: summary.name };
+
+  const signed = full.image_storage_path
+    ? await client.storage
+        .from(STORAGE_BUCKETS.generatedLooks)
+        .createSignedUrl(full.image_storage_path, SIGNED_URL_TTL_SECONDS)
+    : null;
+  return {
+    locked: false,
+    id: full.id,
+    position: full.position,
+    status: full.status,
+    spec: spec.data,
+    imageUrl: signed?.data?.signedUrl ?? null,
+  };
 }

@@ -5,6 +5,7 @@ import { Button } from "./ui/button";
 
 const BENEFITS = [
   "Los 3 looks con imagen realista",
+  "Asesoría de imagen completa: pelo, barba, ropa, calzado y más",
   "Shopping en tiendas de Uruguay",
   "Favoritos y carrito",
   "Chat con tu asesor",

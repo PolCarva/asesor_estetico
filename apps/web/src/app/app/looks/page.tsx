@@ -4,17 +4,22 @@ import { AutoRefresh } from "@/components/auto-refresh";
 import { LockedLookCard, LookCard } from "@/components/look-card";
 import { PaywallCard } from "@/components/paywall-card";
 import { LinkButton } from "@/components/ui/button";
+import { StyleAdvice } from "@/components/style-advice";
 import { PageHeader } from "@/components/ui/page-header";
 import { FormMessage } from "@/components/ui/states";
 import { requireUser } from "@/lib/auth";
-import { getLooks, getPlan } from "@/lib/data";
+import { getAdviceView, getLooks, getPlan } from "@/lib/data";
 import { FIXTURE_LOOK_SPECS } from "@asesor/shared/fixtures";
 
 export const metadata: Metadata = { title: "Tus looks" };
 
 export default async function LooksPage() {
   const user = await requireUser("/app/looks");
-  const [looks, plan] = await Promise.all([getLooks(user.id), getPlan(user.id)]);
+  const [looks, plan, advice] = await Promise.all([
+    getLooks(user.id),
+    getPlan(user.id),
+    getAdviceView(user.id),
+  ]);
   const hasLocked = looks.some((look) => look.locked);
   // Mientras haya imágenes de looks desbloqueados en camino, se refresca solo.
   const generating = looks.some(
@@ -49,7 +54,12 @@ export default async function LooksPage() {
         <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
           {looks.map((look) =>
             look.locked ? (
-              <LockedLookCard key={look.id} name={look.name} position={look.position} />
+              <LockedLookCard
+                key={look.id}
+                name={look.name}
+                position={look.position}
+                href={`/app/looks/${look.id}`}
+              />
             ) : (
               <LookCard
                 key={look.id}
@@ -57,14 +67,17 @@ export default async function LooksPage() {
                 position={look.position}
                 imageUrl={look.imageUrl}
                 status={look.status}
+                href={`/app/looks/${look.id}`}
               />
             ),
           )}
         </div>
       )}
 
-      {!plan.isPremium && (hasLocked || looks.length === 0) ? (
-        <div className="mt-14 max-w-md">
+      {advice ? <StyleAdvice view={advice} /> : null}
+
+      {!plan.isPremium && (hasLocked || looks.length === 0 || advice) ? (
+        <div id="premium" className="mt-14 max-w-md scroll-mt-24">
           <PaywallCard />
         </div>
       ) : null}

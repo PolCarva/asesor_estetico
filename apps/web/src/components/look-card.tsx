@@ -1,4 +1,5 @@
 import type { LookSpec } from "@asesor/shared";
+import Link from "next/link";
 
 import { Swatches } from "./swatches";
 
@@ -28,6 +29,7 @@ export function LookCard({
   example = false,
   imageUrl = null,
   status = "READY",
+  href,
 }: {
   look: LookSpec;
   position: number;
@@ -35,10 +37,12 @@ export function LookCard({
   /** URL firmada de la imagen generada; sin imagen se muestra la paleta. */
   imageUrl?: string | null;
   status?: ImageStatus;
+  /** Detalle del look. Sin href (ejemplos) la card no linkea. */
+  href?: string;
 }) {
   const generating = status === "PENDING" || status === "GENERATING";
   return (
-    <article className="group">
+    <article className="group relative">
       <div className="relative">
         {imageUrl ? (
           // <img> y no next/image: la imagen es privada (URL firmada) y no debe pasar por el cache del optimizador.
@@ -77,7 +81,16 @@ export function LookCard({
             Look {position} · {RISK_LABEL[look.risk_level]}
             {example ? " · Ejemplo" : ""}
           </p>
-          <h3 className="mt-1 text-2xl">{look.name}</h3>
+          <h3 className="mt-1 text-2xl">
+            {href ? (
+              // El link cubre toda la card (after:absolute sobre el article relativo).
+              <Link href={href} className="after:absolute after:inset-0 hover:text-clay">
+                {look.name}
+              </Link>
+            ) : (
+              look.name
+            )}
+          </h3>
         </div>
       </div>
       <p className="mt-2 text-sm leading-relaxed text-stone">{look.concept}</p>
@@ -88,9 +101,17 @@ export function LookCard({
   );
 }
 
-export function LockedLookCard({ name, position }: { name: string; position: number }) {
+export function LockedLookCard({
+  name,
+  position,
+  href,
+}: {
+  name: string;
+  position: number;
+  href?: string;
+}) {
   return (
-    <article aria-label={`Look ${position} bloqueado`}>
+    <article aria-label={`Look ${position} bloqueado`} className="relative">
       <div className="relative flex aspect-[3/4] items-center justify-center overflow-hidden rounded-2xl bg-sand">
         <div className="absolute inset-0 bg-gradient-to-br from-line to-sand blur-sm" />
         <div className="relative text-center">
@@ -113,7 +134,15 @@ export function LockedLookCard({ name, position }: { name: string; position: num
         </div>
       </div>
       <p className="mt-4 eyebrow">Look {position}</p>
-      <h3 className="mt-1 text-2xl">{name}</h3>
+      <h3 className="mt-1 text-2xl">
+        {href ? (
+          <Link href={href} className="after:absolute after:inset-0 hover:text-clay">
+            {name}
+          </Link>
+        ) : (
+          name
+        )}
+      </h3>
       <p className="mt-2 text-sm text-stone">Desbloqueá este look con Premium.</p>
     </article>
   );

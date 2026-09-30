@@ -38,9 +38,17 @@ export function sendClientEvent(
 }
 
 /** Emite un evento al montar el componente (p. ej., landing_view). */
-export function TrackEvent({ name }: { name: ClientAnalyticsEvent["name"] }) {
+export function TrackEvent({
+  name,
+  properties,
+}: {
+  name: ClientAnalyticsEvent["name"];
+  properties?: ClientAnalyticsEvent["properties"];
+}) {
+  // Se serializa para no re-emitir cuando el objeto cambia de identidad en un re-render.
+  const serialized = JSON.stringify(properties ?? {});
   useEffect(() => {
-    sendClientEvent(name);
-  }, [name]);
+    sendClientEvent(name, JSON.parse(serialized) as ClientAnalyticsEvent["properties"]);
+  }, [name, serialized]);
   return null;
 }

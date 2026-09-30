@@ -109,7 +109,7 @@ source ~/.nvm/nvm.sh && nvm use >/dev/null && pnpm format && pnpm lint && pnpm t
 | #   | Paso                                                                                               | Orden del SPEC | Depende de | Estado |
 | --- | -------------------------------------------------------------------------------------------------- | -------------- | ---------- | ------ |
 | 01  | [Asesoría: schema, prompt y persistencia](pasos/01-asesoria-schema-prompt.md)                      | 1–5            | —          | ✅     |
-| 02  | [Asesoría: UI, Free/Premium y detalle de look](pasos/02-asesoria-ui-detalle-look.md)               | 6              | 01         | ⬜     |
+| 02  | [Asesoría: UI, Free/Premium y detalle de look](pasos/02-asesoria-ui-detalle-look.md)               | 6              | 01         | ✅     |
 | 03  | [Shopping: queries desde el LookSpec y búsqueda real](pasos/03-shopping-queries-busqueda.md)       | 7–9            | —          | ⬜     |
 | 04a | [Shopping: fetcher seguro, extracción y normalización](pasos/04a-fetch-extraccion.md)              | 10–11          | 03         | ⬜     |
 | 04b | [Shopping: adaptadores de talles/stock, validación y locales](pasos/04b-adaptadores-validacion.md) | 10–11          | 04a        | ⬜     |
@@ -182,3 +182,43 @@ source ~/.nvm/nvm.sh && nvm use >/dev/null && pnpm format && pnpm lint && pnpm t
   - Consejo: "Ajustar el ruedo de los jeans para que caigan limpios sobre los championes blancos sin arrugarse".
 - Verificación: sin cambios de código desde la sesión anterior (ver entrada ⛔).
 - Commit: `feat(asesoria-shopping): paso 01 — asesoría: schema, prompt y persistencia`
+
+### Paso 02 — Asesoría: UI, Free/Premium y detalle de look · 2026-09-30 · ✅
+
+- Hecho:
+  - `selectAdviceForPlan(profile, advice, isPremium)` + `buildAdviceSections` en `packages/shared/src/advice-view.ts` (puro, con tests). Free: dirección de estilo, 3 "te favorece", 3 "mejor evitar", hasta 6 colores y los títulos de las 6 secciones bloqueadas; la asesoría se ignora aunque venga (perfil v1). Premium: núcleo completo + secciones sin grupos vacíos; `pendingNextAnalysis` si no hay asesoría v2.
+  - `getAdviceView` (web): `getActiveStyleProfile(..., { includeAdvice: plan.isPremium })`, así que para free ni se consulta `style_advice`. Sin URLs firmadas ni trabajo caro extra en el auto-refresh.
+  - `StyleAdvice` (Server Component) en `/app/looks`, debajo de la grilla: ✓/× con `sr-only`, `Swatches`, indicaciones al peluquero destacadas con `CopyButton`, secciones en 2 columnas (desktop) y bloqueadas con candado + blur + CTA a `#premium` (free).
+  - `/app/looks/[id]`: imagen/concepto (`LookCard`), prendas por slot (`listLookGarments`: color, fit, material, patrón), fit general y notas, pelo y grooming, "por qué te queda" y "evitá". Bloqueado → card bloqueada + `PaywallCard`; ajeno, inexistente o id inválido → 404. Lugar marcado para el CTA del paso 07. `LookCard` y `LockedLookCard` linkean al detalle (toda la card).
+  - Analytics: `style_advice_viewed` en `ANALYTICS_EVENTS` y `CLIENT_ANALYTICS_EVENTS` (`plan`, `sections_visible`, `sections_locked`); el detalle emite `free_look_viewed` / `premium_look_viewed` / `locked_look_clicked` (`position`). `TrackEvent` acepta `properties`.
+  - `PaywallCard`: beneficio "Asesoría de imagen completa". `docs/PRODUCT_SPEC.md`: flujo, MVP y tabla Free vs Premium (teaser vs asesoría completa).
+- Campo → sección (Premium):
+
+  | Campo del StyleProfile                                                                                                                                           | Sección                               |
+  | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------- |
+  | `strengths`                                                                                                                                                      | Te favorece                           |
+  | `avoid`                                                                                                                                                          | Mejor evitar                          |
+  | `colors.best`, `neutrals`, `avoid`                                                                                                                               | Colores                               |
+  | `style_direction.primary`, `keywords`                                                                                                                            | Título de la asesoría                 |
+  | `hair.recommended_cut`, `recommended_length`, `sides`, `recommended_styles`, `texture_tips`, `styling`, `avoid`, `barber_instructions`                           | Pelo (peluquero destacado y copiable) |
+  | `grooming.facial_hair.recommended/avoid`, `eyebrows`, `recommendations`, `avoid`                                                                                 | Grooming                              |
+  | `clothing.recommended_categories`, `recommended_silhouettes`, `pant_cuts`, `lengths`, `layering`, `avoid`; `fits`; `materials`; `body_proportions.balance_notes` | Ropa y fit                            |
+  | `shoes.recommended/avoid`, `accessories.recommended`, `jewelry`, `eyewear`, `avoid`                                                                              | Calzado y accesorios                  |
+  | `tattoos.suggestions`, `placements`                                                                                                                              | Tatuajes                              |
+  | `general_advice`                                                                                                                                                 | Consejos generales                    |
+
+  No se muestran (datos de análisis, no consejos): `appearance`, `hair.color/texture/length/current_style`, `grooming.current`, `clothing.current_style`, `body_proportions.frame`, `tattoos.present/visible_areas/preference`, `colors.season`, `style_direction.risk_level/secondary`. El test "cada ítem de la asesoría aparece en alguna sección" lo cubre.
+
+- Prueba real (navegador, dev server local):
+  - Premium (`demo@asesor.test`), desktop 1280 y mobile 375: las 6 secciones, peluquero con "Copiar", sin scroll horizontal (`scrollWidth` = `innerWidth`). Detalle del look 2 desde la card: prendas, pelo, grooming, por qué y evitar.
+  - Free (`free@asesor.test`), desktop y mobile: teaser (2 fortalezas, 2 evitar, 4 colores) + 6 secciones bloqueadas + CTA + paywall. Look 1 → detalle completo; looks 2 y 3 → paywall.
+  - Fuga: como free, HTML y payload RSC (`RSC: 1`) de `/app/looks` y de los detalles de los looks 2–3 sin ningún texto Premium (peluquero, calzado, barba, cejas, joyería) ni del spec de los looks 2–3 del propio free (`sweater de punto fino`, `camisa de lino cuello cubano`, sus `reasoning`). Solo aparece el nombre del look bloqueado, como antes.
+  - `analytics_events`: `style_advice_viewed` `{plan: FREE, sections_visible: 0, sections_locked: 6}` y `{plan: PREMIUM, sections_visible: 6}`, `premium_look_viewed` y `locked_look_clicked` `{position: 2}`. En dev cada evento sale dos veces (StrictMode), igual que `paywall_viewed`.
+  - El perfil real del paso 01 no se pudo revisar: el script borra su usuario al terminar (privacidad). Queda para 12b.
+- Verificación: format ✓ · lint ✓ · typecheck ✓ · test ✓ (101 unit, 21 integración ejecutados: db 18, worker 3) · build ✓ (`/app/looks/[id]` dinámica) · e2e ✓ (10, desktop + mobile, contra `pnpm dev`)
+- Decisiones: D4 confirmada en UI; D5 confirmada; D20 aplicada a `style_advice_viewed` y a los eventos de look.
+- Para pasos siguientes:
+  - Paso 07: el CTA "Encontrar este look" va en `apps/web/src/app/app/looks/[id]/page.tsx` (comentario "Paso 07"). `getLook` en `apps/web/src/lib/data.ts` devuelve el spec solo si la RLS lo deja leer.
+  - `notFound()` bajo `/app` responde 200 con la UI de 404 (streaming por `app/app/loading.tsx`); comportamiento previo, no se cambió.
+  - Paso 12a: sumar E2E de asesoría (free ve bloqueadas, Premium ve peluquero) y del detalle bloqueado.
+- Commit: `feat(asesoria-shopping): paso 02 — asesoría: UI, Free/Premium y detalle de look`

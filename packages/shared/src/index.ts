@@ -1,5 +1,6 @@
 // Dominio compartido: constantes, schemas Zod, tipos inferidos y utilidades puras.
 // Sin llamadas de red ni SDKs de proveedores.
+export * from "./advice-view";
 export * from "./constants";
 export * from "./errors";
 export * from "./files";

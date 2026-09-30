@@ -35,7 +35,7 @@ fotos
 4. **StyleProfile.** Perfil estructurado y persistente del usuario: paleta de colores recomendada, siluetas y fits, estilos afines, cosas a evitar.
 5. **3 LookSpecs.** Tres propuestas de look concretas y estructuradas: prendas, colores, fit, calzado, accesorios y peinado o grooming, cada una con su justificación.
 6. **Imágenes.** Se genera una imagen del propio usuario con cada look, manteniendo su identidad.
-7. **Recomendaciones.** Consejos accionables: qué colores usar y cuáles evitar, qué fits le favorecen, qué cambiar primero.
+7. **Asesoría de imagen.** En `/app/looks`, debajo de los looks: te favorece (✓) y mejor evitar (×), colores, pelo (con indicaciones copiables para el peluquero), grooming (barba y cejas), ropa y fit, calzado y accesorios (joyería, anteojos), tatuajes y consejos generales de por dónde empezar. Listas cortas, sin bloques de texto. Cada look tiene su detalle en `/app/looks/[id]`: prendas por slot con color, fit y material, pelo y grooming del look, por qué le queda y qué evitar.
 8. **Paywall.** El plan free muestra 1 look. Premium desbloquea el resto.
 9. **Shopping.** Para cada prenda de un look se buscan productos equivalentes en tiendas de Uruguay.
 10. **Chat Premium.** Conversación con el asesor sobre su perfil y sus looks ("¿qué me pongo para un casamiento?", "¿esta camisa me queda?").
@@ -47,7 +47,7 @@ fotos
 | Mercado         | Uruguay                                            |
 | Público         | Hombres y mujeres, solo mayores de 18 años         |
 | Plataforma      | Web / PWA (mobile first)                           |
-| Plan free       | Análisis, StyleProfile, recomendaciones y 1 look   |
+| Plan free       | Análisis, teaser de la asesoría y 1 look           |
 | Premium         | USD 4.99 por mes                                   |
 | Looks Premium   | 3 looks con imagen                                 |
 | Shopping        | Solo Premium, tiendas locales                      |
@@ -60,13 +60,15 @@ fotos
 | Funcionalidad              | Free | Premium |
 | -------------------------- | :--: | :-----: |
 | Subida y análisis de fotos |  ✔   |    ✔    |
-| StyleProfile               |  ✔   |    ✔    |
-| Recomendaciones generales  |  ✔   |    ✔    |
+| Teaser de la asesoría      |  ✔   |    ✔    |
+| Asesoría completa          |      |    ✔    |
 | Looks con imagen realista  |  1   |    3    |
 | Shopping local             |      |    ✔    |
 | Favoritos                  |  ✔   |    ✔    |
 | Carrito externo            |      |    ✔    |
 | Chat con el asesor         |      |    ✔    |
+
+El teaser es el núcleo del perfil recortado: dirección de estilo, 3 ítems de "te favorece" y 3 de "mejor evitar" y hasta 6 colores. La asesoría completa (pelo, grooming, ropa y fit, calzado y accesorios, tatuajes, consejos generales, neutros y colores a evitar) es Premium: la protege la RLS de `style_advice` y la web ni siquiera la consulta para un usuario free (`selectAdviceForPlan` en `packages/shared`).
 
 Decisión vigente (aplicada en RLS): en free solo se pueden guardar looks; guardar productos es Premium, igual que el shopping. Revisar con datos de uso.
 
