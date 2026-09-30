@@ -1,0 +1,59 @@
+@import "tailwindcss";
+
+/*
+ * Sistema visual: editorial y cálido. Papel marfil, tinta casi negra, acento arcilla.
+ * Tipografía display serif (Fraunces) + sans neutra (Inter).
+ */
+@theme {
+  --color-ivory: #f6f2ec;
+  --color-paper: #fbf9f5;
+  --color-sand: #ebe3d7;
+  --color-line: #ddd3c5;
+  --color-stone: #6f675e;
+  --color-ink: #1b1815;
+  --color-clay: #9a5636;
+  --color-clay-dark: #7a3f24;
+  --color-moss: #4c563a;
+  --color-danger: #a3322a;
+
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-fraunces), ui-serif, Georgia, serif;
+
+  --tracking-eyebrow: 0.18em;
+}
+
+@layer base {
+  html {
+    color-scheme: light;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  body {
+    @apply bg-ivory font-sans text-ink antialiased;
+  }
+
+  :focus-visible {
+    @apply outline-2 outline-offset-2 outline-clay;
+  }
+
+  h1,
+  h2,
+  h3 {
+    @apply font-display tracking-tight;
+    font-optical-sizing: auto;
+  }
+}
+
+@utility eyebrow {
+  @apply text-[0.7rem] font-medium text-stone uppercase;
+  letter-spacing: var(--tracking-eyebrow);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

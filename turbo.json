@@ -1,0 +1,47 @@
+{
+  "$schema": "https://turborepo.com/schema.json",
+  "ui": "stream",
+  "globalDependencies": [".env"],
+  "globalPassThroughEnv": [
+    "CI",
+    "SUPABASE_SERVICE_ROLE_KEY",
+    "AI_PROVIDER",
+    "OPENROUTER_*",
+    "AI_IMAGE_QUALITY",
+    "MERCADOPAGO_ACCESS_TOKEN",
+    "MERCADOPAGO_WEBHOOK_SECRET",
+    "WORKER_CONCURRENCY",
+    "LOG_LEVEL",
+    "PLAYWRIGHT_*"
+  ],
+  "tasks": {
+    "transit": {
+      "dependsOn": ["^transit"]
+    },
+    "build": {
+      "dependsOn": ["^build", "transit"],
+      "env": ["NEXT_PUBLIC_*", "NODE_ENV"],
+      "outputs": [".next/**", "!.next/cache/**", "dist/**"]
+    },
+    "lint": {
+      "dependsOn": ["transit"]
+    },
+    "typecheck": {
+      "outputs": [".next/types/**"],
+      "dependsOn": ["transit"]
+    },
+    "test:unit": {
+      "env": ["NEXT_PUBLIC_*"],
+      "dependsOn": ["transit"]
+    },
+    "test:integration": {
+      "cache": false,
+      "env": ["NEXT_PUBLIC_*"],
+      "dependsOn": ["transit"]
+    },
+    "dev": {
+      "cache": false,
+      "persistent": true
+    }
+  }
+}

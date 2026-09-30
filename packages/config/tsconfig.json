@@ -1,0 +1,4 @@
+{
+  "extends": "./typescript/node.json",
+  "include": ["src", "test"]
+}

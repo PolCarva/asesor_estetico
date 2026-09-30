@@ -1,0 +1,41 @@
+{
+  "name": "@asesor/db",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./admin": "./src/clients/admin.ts",
+    "./browser": "./src/clients/browser.ts",
+    "./proxy": "./src/clients/proxy.ts",
+    "./server": "./src/clients/server.ts",
+    "./service": "./src/clients/service.ts",
+    "./worker": "./src/clients/worker.ts"
+  },
+  "scripts": {
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test:unit": "vitest run",
+    "test:integration": "vitest run --config vitest.integration.config.ts",
+    "seed": "tsx --env-file-if-exists=../../.env scripts/seed.ts",
+    "types": "supabase gen types typescript --local --schema public > src/database.types.ts && prettier --write src/database.types.ts"
+  },
+  "dependencies": {
+    "@asesor/config": "workspace:*",
+    "@asesor/shared": "workspace:*",
+    "@supabase/ssr": "catalog:",
+    "@supabase/supabase-js": "catalog:",
+    "server-only": "catalog:"
+  },
+  "peerDependencies": {
+    "next": "catalog:"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "eslint": "catalog:",
+    "next": "catalog:",
+    "tsx": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

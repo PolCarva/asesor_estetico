@@ -1,0 +1,40 @@
+{
+  "name": "@asesor/config",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./env/public": "./src/env/public.ts",
+    "./env/server": "./src/env/server.ts",
+    "./env/worker": "./src/env/worker.ts",
+    "./eslint/base": "./eslint/base.js",
+    "./eslint/next": "./eslint/next.js",
+    "./tsconfig/base.json": "./typescript/base.json",
+    "./tsconfig/library.json": "./typescript/library.json",
+    "./tsconfig/node.json": "./typescript/node.json",
+    "./tsconfig/nextjs.json": "./typescript/nextjs.json"
+  },
+  "dependencies": {
+    "@eslint/js": "catalog:",
+    "eslint-config-next": "catalog:",
+    "eslint-config-prettier": "catalog:",
+    "globals": "catalog:",
+    "typescript-eslint": "catalog:",
+    "zod": "catalog:"
+  },
+  "peerDependencies": {
+    "eslint": "^9",
+    "typescript": "^6"
+  },
+  "scripts": {
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test:unit": "vitest run"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "eslint": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

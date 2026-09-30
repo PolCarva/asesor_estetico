@@ -1,0 +1,7 @@
+{
+  "extends": "@asesor/config/tsconfig/node.json",
+  "compilerOptions": {
+    "lib": ["ES2023", "DOM"]
+  },
+  "include": ["src", "test", "tsup.config.ts"]
+}

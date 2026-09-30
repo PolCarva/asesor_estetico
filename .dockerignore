@@ -1,0 +1,15 @@
+**/node_modules
+**/.next
+**/.turbo
+**/dist
+**/coverage
+**/playwright-report
+**/test-results
+.git
+.github
+.env
+.env.*
+!.env.example
+supabase/.temp
+supabase/.branches
+docs

@@ -1,0 +1,34 @@
+{
+  "name": "asesor-estetico",
+  "private": true,
+  "packageManager": "pnpm@12.8.1",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "dev": "turbo run dev --filter=@asesor/web",
+    "worker:dev": "pnpm --filter @asesor/worker dev",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test:unit test:integration",
+    "test:unit": "turbo run test:unit",
+    "test:integration": "turbo run test:integration",
+    "test:e2e": "pnpm --filter @asesor/web test:e2e",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "check": "pnpm format:check && turbo run lint typecheck test:unit build",
+    "db:start": "supabase start && node scripts/setup-env.mjs",
+    "db:stop": "supabase stop",
+    "db:reset": "supabase db reset && pnpm db:seed",
+    "db:seed": "pnpm --filter @asesor/db seed",
+    "db:types": "pnpm --filter @asesor/db types",
+    "env:local": "node scripts/setup-env.mjs"
+  },
+  "devDependencies": {
+    "prettier": "catalog:",
+    "prettier-plugin-tailwindcss": "catalog:",
+    "supabase": "catalog:",
+    "turbo": "catalog:"
+  }
+}
