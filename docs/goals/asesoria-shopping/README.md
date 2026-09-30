@@ -108,7 +108,7 @@ source ~/.nvm/nvm.sh && nvm use >/dev/null && pnpm format && pnpm lint && pnpm t
 
 | #   | Paso                                                                                               | Orden del SPEC | Depende de | Estado |
 | --- | -------------------------------------------------------------------------------------------------- | -------------- | ---------- | ------ |
-| 01  | [Asesoría: schema, prompt y persistencia](pasos/01-asesoria-schema-prompt.md)                      | 1–5            | —          | ⛔     |
+| 01  | [Asesoría: schema, prompt y persistencia](pasos/01-asesoria-schema-prompt.md)                      | 1–5            | —          | ✅     |
 | 02  | [Asesoría: UI, Free/Premium y detalle de look](pasos/02-asesoria-ui-detalle-look.md)               | 6              | 01         | ⬜     |
 | 03  | [Shopping: queries desde el LookSpec y búsqueda real](pasos/03-shopping-queries-busqueda.md)       | 7–9            | —          | ⬜     |
 | 04a | [Shopping: fetcher seguro, extracción y normalización](pasos/04a-fetch-extraccion.md)              | 10–11          | 03         | ⬜     |
@@ -170,3 +170,15 @@ source ~/.nvm/nvm.sh && nvm use >/dev/null && pnpm format && pnpm lint && pnpm t
   - `getActiveStyleProfile` de la web ahora lanza `AppError` si la consulta falla (antes devolvía null).
   - Otra sesión de Claude ("Configuración inicial del monorepo") tenía la app corriendo en este mismo directorio y relanzaba el worker: en una corrida de `pnpm test` ese worker tomó jobs de `jobs.int.test.ts` (2 fallos; aislado, 18/18 tres veces). Esa sesión cambió el script `dev` del worker a `node --watch --import tsx` (commit aparte `chore(worker)`, aprobado por el usuario), así que el `pgrep` de la verificación ahora busca los dos patrones. Antes de testear, confirmar que no haya otra sesión con el worker prendido.
 - Commit: `wip(asesoria-shopping): paso 01 — bloqueado: fotos de prueba autorizadas`
+
+### Paso 01 — Asesoría: schema, prompt y persistencia · 2026-09-30 · ✅
+
+- Hecho: se destrabó el bloqueo. Fotos autorizadas (persona ficticia generada con IA) convertidas de PNG a JPEG en `~/asesor-fotos-prueba/cuerpo.jpg` y `cara.jpg`. Sin cambios de código.
+- Prueba real: `real-style-analysis.ts` contra OpenRouter (`google/gemini-3.8-flash`): "StyleProfile v2 validado con Zod; 3 LookSpecs validados". ANALYZE_STYLE_PROFILE 3215 in / 3716 out, USD 0.0162, 23 s; GENERATE_LOOK_SPECS 8411 in / 9481 out, USD 0.0414, 36 s; total USD 0.0576. Guardado style_profile + 3 looks; "Free (su JWT): núcleo sí, asesoría no"; "Premium (su JWT): asesoría sí, completa".
+- Recomendaciones reales (revisadas como concretas y aplicables):
+  - Pelo · laterales: "Rebaje progresivo con peine 3 a 4 sin rapar a piel".
+  - Barba: "Barba corta de 3 a 4 mm recortada semanalmente" y "Línea de cuello despejada a dos dedos sobre la nuez".
+  - Ropa · pantalones: "Straight fit con caída limpia sobre el empeine".
+  - Consejo: "Ajustar el ruedo de los jeans para que caigan limpios sobre los championes blancos sin arrugarse".
+- Verificación: sin cambios de código desde la sesión anterior (ver entrada ⛔).
+- Commit: `feat(asesoria-shopping): paso 01 — asesoría: schema, prompt y persistencia`
