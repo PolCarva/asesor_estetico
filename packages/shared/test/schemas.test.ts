@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
 
 import {
   AnalyticsEventSchema,
@@ -17,8 +18,19 @@ import {
   StyleProfileSchema,
   SubscriptionStatusSchema,
   isPremiumSubscription,
+  mergeStyleProfile,
+  parseStoredStyleProfile,
+  splitStyleProfile,
+  StyleAdviceSchema,
+  StyleProfileCoreSchema,
+  StyleProfileV1Schema,
 } from "../src";
-import { FIXTURE_LOOK_SPECS, FIXTURE_PRODUCTS, FIXTURE_STYLE_PROFILE } from "../src/fixtures";
+import {
+  FIXTURE_LOOK_SPECS,
+  FIXTURE_PRODUCTS,
+  FIXTURE_STYLE_PROFILE,
+  FIXTURE_STYLE_PROFILE_V1,
+} from "../src/fixtures";
 
 const UUID = "0b5a1c3e-8f5d-4c1b-9d2e-1a2b3c4d5e6f";
 const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0]);
@@ -28,6 +40,7 @@ const WEBP = new TextEncoder().encode("RIFF\0\0\0\0WEBPVP8 ");
 describe("fixtures cumplen los schemas", () => {
   it("StyleProfile", () => {
     expect(StyleProfileSchema.parse(FIXTURE_STYLE_PROFILE)).toEqual(FIXTURE_STYLE_PROFILE);
+    expect(StyleProfileV1Schema.parse(FIXTURE_STYLE_PROFILE_V1)).toEqual(FIXTURE_STYLE_PROFILE_V1);
   });
   it("LookSpecs", () => {
     for (const look of FIXTURE_LOOK_SPECS)
@@ -36,6 +49,105 @@ describe("fixtures cumplen los schemas", () => {
   it("Products", () => {
     for (const product of FIXTURE_PRODUCTS)
       expect(ProductSchema.safeParse(product).success).toBe(true);
+  });
+});
+
+describe("StyleProfile v2: asesoría completa", () => {
+  it("cubre cada tema del SPEC con datos estructurados", () => {
+    const p = FIXTURE_STYLE_PROFILE;
+    expect(p.schema_version).toBe(2);
+    // pelo: corte, largo, laterales, textura, peinado, evitar e indicaciones al peluquero
+    expect(p.hair.recommended_cut).not.toBe("");
+    expect(p.hair.recommended_length).not.toBe("");
+    expect(p.hair.sides).not.toBe("");
+    expect(p.hair.texture_tips.length).toBeGreaterThan(0);
+    expect(p.hair.styling.length).toBeGreaterThan(0);
+    expect(p.hair.avoid.length).toBeGreaterThan(0);
+    expect(p.hair.barber_instructions).not.toBe("");
+    // grooming: barba, cejas
+    expect(p.grooming.facial_hair.recommended.length).toBeGreaterThan(0);
+    expect(p.grooming.eyebrows.length).toBeGreaterThan(0);
+    // ropa: siluetas, cortes de pantalón, largos, layering, evitar
+    for (const list of [
+      p.clothing.recommended_silhouettes,
+      p.clothing.pant_cuts,
+      p.clothing.lengths,
+      p.clothing.layering,
+      p.clothing.avoid,
+      p.shoes.avoid,
+      p.accessories.jewelry,
+      p.accessories.eyewear,
+      p.tattoos.placements,
+      p.general_advice,
+    ])
+      expect(list.length).toBeGreaterThan(0);
+  });
+
+  it("no tiene campos de puntaje", () => {
+    const keys = JSON.stringify(z.toJSONSchema(StyleProfileSchema)).match(/"[a-z_]+":/g) ?? [];
+    expect(keys.filter((k) => /score|rating|attractiv|puntaje/.test(k))).toEqual([]);
+  });
+
+  it("aplica los límites de cantidad y largo", () => {
+    const long = { ...FIXTURE_STYLE_PROFILE.hair, barber_instructions: "x".repeat(401) };
+    expect(StyleProfileSchema.safeParse({ ...FIXTURE_STYLE_PROFILE, hair: long }).success).toBe(
+      false,
+    );
+    const many = { ...FIXTURE_STYLE_PROFILE, general_advice: Array.from({ length: 7 }, () => "x") };
+    expect(StyleProfileSchema.safeParse(many).success).toBe(false);
+    // "no aplica" se expresa con listas y strings vacíos, sin null.
+    const empty = {
+      ...FIXTURE_STYLE_PROFILE,
+      accessories: { ...FIXTURE_STYLE_PROFILE.accessories, eyewear: [] },
+      tattoos: { ...FIXTURE_STYLE_PROFILE.tattoos, suggestions: [], placements: [] },
+    };
+    expect(StyleProfileSchema.safeParse(empty).success).toBe(true);
+  });
+
+  it("se parte en núcleo (free) y asesoría (Premium) sin perder datos", () => {
+    const { core, advice } = splitStyleProfile(FIXTURE_STYLE_PROFILE);
+    expect(Object.keys(core).sort()).toEqual(
+      ["appearance", "avoid", "colors", "schema_version", "strengths", "style_direction"].sort(),
+    );
+    expect(StyleProfileCoreSchema.parse(core)).toEqual(core);
+    expect(StyleAdviceSchema.parse(advice)).toEqual(advice);
+    expect("appearance" in advice).toBe(false);
+    expect(mergeStyleProfile(core, advice)).toEqual(FIXTURE_STYLE_PROFILE);
+  });
+});
+
+describe("parseStoredStyleProfile", () => {
+  const { core, advice } = splitStyleProfile(FIXTURE_STYLE_PROFILE);
+
+  it("lee v2: núcleo + asesoría", () => {
+    expect(parseStoredStyleProfile(core, advice)).toEqual({ profile: core, advice });
+  });
+
+  it("v2 sin asesoría (usuario free o perfil sin fila Premium): advice null", () => {
+    expect(parseStoredStyleProfile(core)).toEqual({ profile: core, advice: null });
+    expect(parseStoredStyleProfile(core, { basura: true })).toEqual({
+      profile: core,
+      advice: null,
+    });
+  });
+
+  it("sube un perfil v1 guardado a v2 con la asesoría nueva vacía", () => {
+    const stored = parseStoredStyleProfile(FIXTURE_STYLE_PROFILE_V1);
+    expect(stored?.profile.schema_version).toBe(2);
+    expect(stored?.profile.style_direction).toEqual(FIXTURE_STYLE_PROFILE_V1.style_direction);
+    expect(stored?.profile.colors).toEqual(FIXTURE_STYLE_PROFILE_V1.colors);
+    expect(stored?.advice?.hair.recommended_styles).toEqual(
+      FIXTURE_STYLE_PROFILE_V1.hair.recommended_styles,
+    );
+    expect(stored?.advice?.hair.barber_instructions).toBe("");
+    expect(stored?.advice?.general_advice).toEqual([]);
+    expect(StyleAdviceSchema.safeParse(stored?.advice).success).toBe(true);
+  });
+
+  it("devuelve null si profile_json no es un perfil de ninguna versión", () => {
+    expect(parseStoredStyleProfile(null)).toBeNull();
+    expect(parseStoredStyleProfile({ schema_version: 3 })).toBeNull();
+    expect(parseStoredStyleProfile({ ...core, colors: { best: [] } })).toBeNull();
   });
 });
 

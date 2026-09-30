@@ -1,6 +1,10 @@
 import "server-only";
 
-import { getLatestSubscription, type LookRow } from "@asesor/db";
+import {
+  getActiveStyleProfile as readActiveStyleProfile,
+  getLatestSubscription,
+  type LookRow,
+} from "@asesor/db";
 import { createServerSupabaseClient } from "@asesor/db/server";
 import { getServiceRoleClient } from "@asesor/db/service";
 import {
@@ -9,8 +13,7 @@ import {
   LookSpecSchema,
   SIGNED_URL_TTL_SECONDS,
   STORAGE_BUCKETS,
-  type StyleProfile,
-  StyleProfileSchema,
+  type StyleProfileCore,
 } from "@asesor/shared";
 import { cache } from "react";
 
@@ -31,16 +34,11 @@ export const getProfile = cache(async (userId: string) => {
   return data;
 });
 
-export async function getActiveStyleProfile(userId: string): Promise<StyleProfile | null> {
+/** Núcleo del perfil activo (lo ve cualquier plan). Tolera perfiles v1 guardados. */
+export async function getActiveStyleProfile(userId: string): Promise<StyleProfileCore | null> {
   const client = await createServerSupabaseClient();
-  const { data } = await client
-    .from("style_profiles")
-    .select("profile_json")
-    .eq("user_id", userId)
-    .eq("active", true)
-    .maybeSingle();
-  const parsed = StyleProfileSchema.safeParse(data?.profile_json);
-  return parsed.success ? parsed.data : null;
+  const stored = await readActiveStyleProfile(client, userId, { includeAdvice: false });
+  return stored?.profile ?? null;
 }
 
 export type LookView =

@@ -96,6 +96,10 @@ export class MockAIProvider implements AIProvider {
       tattoos: {
         ...FIXTURE_STYLE_PROFILE.tattoos,
         preference: input.preferences.tattoo_preference,
+        // Como pide el prompt: sin ideas de tatuajes si el usuario prefiere cubrirlos.
+        ...(input.preferences.tattoo_preference === "COVER"
+          ? { suggestions: [], placements: [] }
+          : {}),
       },
       style_direction: {
         ...FIXTURE_STYLE_PROFILE.style_direction,

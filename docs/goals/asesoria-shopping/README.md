@@ -61,7 +61,7 @@ Plan de trabajo por pasos para cumplir [`SPEC.md`](SPEC.md), el pedido original 
 ## Verificación
 
 ```bash
-pgrep -fl 'tsx watch.*src/index.ts'   # si hay un worker corriendo, apagalo antes de testear (pkill -f 'tsx watch.*src/index.ts')
+pgrep -fl 'tsx watch.*src/index.ts|--import tsx src/index.ts'   # si hay un worker corriendo, apagalo antes de testear (pkill -f con el mismo patrón)
 source ~/.nvm/nvm.sh && nvm use >/dev/null && pnpm format && pnpm lint && pnpm typecheck && CI=1 pnpm test
 ```
 
@@ -108,7 +108,7 @@ source ~/.nvm/nvm.sh && nvm use >/dev/null && pnpm format && pnpm lint && pnpm t
 
 | #   | Paso                                                                                               | Orden del SPEC | Depende de | Estado |
 | --- | -------------------------------------------------------------------------------------------------- | -------------- | ---------- | ------ |
-| 01  | [Asesoría: schema, prompt y persistencia](pasos/01-asesoria-schema-prompt.md)                      | 1–5            | —          | ⬜     |
+| 01  | [Asesoría: schema, prompt y persistencia](pasos/01-asesoria-schema-prompt.md)                      | 1–5            | —          | ⛔     |
 | 02  | [Asesoría: UI, Free/Premium y detalle de look](pasos/02-asesoria-ui-detalle-look.md)               | 6              | 01         | ⬜     |
 | 03  | [Shopping: queries desde el LookSpec y búsqueda real](pasos/03-shopping-queries-busqueda.md)       | 7–9            | —          | ⬜     |
 | 04a | [Shopping: fetcher seguro, extracción y normalización](pasos/04a-fetch-extraccion.md)              | 10–11          | 03         | ⬜     |
@@ -143,3 +143,30 @@ source ~/.nvm/nvm.sh && nvm use >/dev/null && pnpm format && pnpm lint && pnpm t
 - Para pasos siguientes: …
 - Commit: `feat(asesoria-shopping): paso NN — <título>` (el hash va en el reporte del chat)
 -->
+
+### Paso 01 — Asesoría: schema, prompt y persistencia · 2026-09-30 · ⛔
+
+- Hecho:
+  - `StyleProfileSchema` v2 (`packages/shared/src/schemas/style-profile.ts`) con la asesoría completa: pelo (corte, largo, laterales, textura, peinado, evitar, indicaciones al peluquero), grooming (barba, cejas, evitar), ropa (siluetas, cortes de pantalón, largos, layering, evitar), calzado y accesorios con `avoid`, joyería, anteojos, tatuajes (sugerencias y ubicaciones) y `general_advice`. Sin nullables nuevos ni campos de puntaje.
+  - `splitStyleProfile`/`mergeStyleProfile`, `StyleProfileCoreSchema` (teaser) y `StyleAdviceSchema` (Premium); `StyleProfileV1Schema`, `upgradeStyleProfileV1` y `parseStoredStyleProfile` (acepta v1 y v2).
+  - Migración `20260930000200_style_advice.sql`: tabla `style_advice` (RLS solo propio + Premium, revokes explícitos, FK compuesta al perfil del mismo usuario) y `create_style_profile_with_looks` de 4 argumentos (guarda núcleo + asesoría + 3 looks en una transacción; se borró la de 3). `db:reset` + `db:types`.
+  - `@asesor/db`: `saveStyleProfileWithLooks` parte el perfil; `getActiveStyleProfile(db, userId)` nuevo (lectura tolerante, `advice` null para free). La web lo usa en `getActiveStyleProfile`.
+  - Prompt: reglas "mejor versión de esta misma persona", sin puntuaciones de atractivo, sin análisis médico, recomendaciones concretas y aplicables; bloque por bloque con límites. `PROMPT_VERSION` `2026-09-30.2`; el mensaje de usuario manda `schema_version: 2`.
+  - Fixture v2 completo (+ `FIXTURE_STYLE_PROFILE_V1`), mock (tatuajes vacíos con `COVER`) y seed (núcleo + `style_advice`).
+  - Tests: schema (temas, límites, sin puntajes, split), `parseStoredStyleProfile` (v1, v2, sin asesoría, inválido), OpenRouter con fake fetch (schema estricto v2, `schema_version: 2`), prompt, RLS de `style_advice` (free con JWT no lee, Premium sí, otro usuario no, anon no, nadie escribe, FK compuesta), lectura v1 contra la base y pipeline (3 looks + asesoría guardada).
+  - `turbo.json`: `test:integration` depende de `^test:integration` (db → worker en serie).
+  - Script de prueba real `apps/worker/scripts/real-style-analysis.ts` (análisis con las fotos, 3 LookSpecs, guardado para un usuario local nuevo y lectura free/Premium con su JWT; `--schema-check` sin fotos).
+  - Docs: `AI_PIPELINE.md`, `DATA_MODEL.md`, `SECURITY_PRIVACY.md`; decisiones D1–D4 y D23 en `DECISIONES.md`.
+- Prueba real:
+  - `real-style-analysis.ts --schema-check` contra OpenRouter: `google/gemini-3.8-flash` aceptó el JSON Schema estricto v2 (5956 bytes, 80 propiedades, 3 `anyOf`) y la respuesta validó con `StyleProfileSchema`: 1049 tokens in / 2815 out, USD 0.0112, 20 s. Sin fotos: el contenido no es un análisis de una persona real, solo prueba la gramática y el tamaño de salida.
+  - **Bloqueado:** el análisis real con fotos no se pudo correr. `ls ~/asesor-fotos-prueba/` → "No such file or directory"; el script sale con "Falta /Users/pablocarvalho/asesor-fotos-prueba/cuerpo.jpg".
+- Qué tiene que hacer el usuario: poner las fotos de prueba autorizadas (una persona que lo autorizó o una persona ficticia generada con IA), en JPEG y de hasta 5 MB cada una, en `~/asesor-fotos-prueba/cuerpo.jpg` (cuerpo entero) y `~/asesor-fotos-prueba/cara.jpg` (rostro).
+- Cómo se comprueba: `ls -la ~/asesor-fotos-prueba/cuerpo.jpg ~/asesor-fotos-prueba/cara.jpg` lista los dos archivos. La sesión que retome el paso corre `pnpm --filter @asesor/worker exec tsx --env-file-if-exists=../../.env scripts/real-style-analysis.ts` (~USD 0.05) y cierra con ✅ si imprime "StyleProfile v2 validado con Zod", el costo, "Free (su JWT): … asesoría no" y "Premium (su JWT): asesoría sí, completa". Después cita 3–5 recomendaciones reales en el log, revisadas como concretas y aplicables.
+- Verificación: format ✓ · lint ✓ · typecheck ✓ · test ✓ (94 unit, 21 integración ejecutados: db 18, worker 3) · build ✓ · e2e ✓ (10, desktop + mobile, contra `pnpm dev`) · db:reset ✓ · db:types ✓ · navegador: con `free@asesor.test`, `/app/profile` muestra el núcleo v2 ("smart casual cálido", colores, fortalezas, mejor evitar) y `/app/dashboard` marca "Análisis de estilo · Listo"
+- Decisiones: D1, D2, D3, D23 confirmadas; D4 confirmada en datos, con un ajuste: los bloques v1 que la UI no mostraba (pelo, grooming, proporciones, ropa, fits, materiales, calzado, accesorios, tatuajes) también son Premium. Mediciones en `DECISIONES.md`.
+- Para pasos siguientes:
+  - Paso 02: la UI usa `getActiveStyleProfile` de `@asesor/db` (`profile` + `advice`). `advice` puede venir no-null para un free con perfil v1 (se lee de `profile_json`): `selectAdviceForPlan` tiene que filtrar por plan igual. Premium con perfil v1 ve la asesoría nueva vacía: mostrar "aparece en tu próximo análisis".
+  - Chat (sin UI todavía): necesita el perfil completo; leerlo con service role y `mergeStyleProfile`, o `upgradeStyleProfileV1` para v1.
+  - `getActiveStyleProfile` de la web ahora lanza `AppError` si la consulta falla (antes devolvía null).
+  - Otra sesión de Claude ("Configuración inicial del monorepo") tenía la app corriendo en este mismo directorio y relanzaba el worker: en una corrida de `pnpm test` ese worker tomó jobs de `jobs.int.test.ts` (2 fallos; aislado, 18/18 tres veces). Esa sesión cambió el script `dev` del worker a `node --watch --import tsx` (commit aparte `chore(worker)`, aprobado por el usuario), así que el `pgrep` de la verificación ahora busca los dos patrones. Antes de testear, confirmar que no haya otra sesión con el worker prendido.
+- Commit: `wip(asesoria-shopping): paso 01 — bloqueado: fotos de prueba autorizadas`

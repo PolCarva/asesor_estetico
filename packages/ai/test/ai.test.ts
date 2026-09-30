@@ -4,6 +4,7 @@ import { z } from "zod";
 
 import {
   AIError,
+  ANALYZE_STYLE_PROFILE_PROMPT,
   analyzeStyleProfile,
   buildLookImagePrompt,
   chatWithStyleAdvisor,
@@ -11,6 +12,7 @@ import {
   generateLookSpecs,
   MockAIProvider,
   OpenRouterProvider,
+  PROMPT_VERSION,
   readImageDimensions,
   toStrictJsonSchema,
   validatePhotos,
@@ -55,6 +57,15 @@ describe("MockAIProvider + operaciones", () => {
     });
     expect(result.data.style_direction.risk_level).toBe("BOLD");
     expect(result.data.tattoos.preference).toBe("HIGHLIGHT");
+    expect(result.data.schema_version).toBe(2);
+    expect(result.data.hair.barber_instructions).not.toBe("");
+
+    const cover = await analyzeStyleProfile(provider, {
+      photos: [photo(ID_A)],
+      preferences: { ...preferences, tattoo_preference: "COVER" },
+      country_code: "UY",
+    });
+    expect(cover.data.tattoos).toMatchObject({ suggestions: [], placements: [] });
   });
 
   it("devuelve usage y timing", async () => {
@@ -125,6 +136,32 @@ describe("errores normalizados", () => {
 });
 
 describe("prompts", () => {
+  it("el prompt de análisis fija las reglas de la asesoría y los límites", () => {
+    expect(PROMPT_VERSION).toBe("2026-09-30.2");
+    const prompt = ANALYZE_STYLE_PROFILE_PROMPT;
+    expect(prompt).toContain("Nunca das puntuaciones ni opiniones de atractivo");
+    expect(prompt).toContain("No hacés análisis médico");
+    expect(prompt).toContain("estructura facial, la altura, el cuerpo, el peso, la musculatura");
+    expect(prompt).toContain("concreta, breve y aplicable");
+    expect(prompt).toContain("máximo 120 caracteres");
+    expect(prompt).toContain("barber_instructions (máximo 400");
+    for (const block of [
+      "recommended_cut",
+      "sides",
+      "texture_tips",
+      "facial_hair",
+      "eyebrows",
+      "pant_cuts",
+      "layering",
+      "shoes.avoid",
+      "jewelry",
+      "eyewear",
+      "placements",
+      "general_advice",
+    ])
+      expect(prompt).toContain(block);
+  });
+
   it("arma el prompt de imagen desde el LookSpec", () => {
     const prompt = buildLookImagePrompt(FIXTURE_LOOK_SPECS[0]);
     expect(prompt).toContain("camisa oxford, crudo, algodón");
@@ -245,6 +282,52 @@ describe("OpenRouterProvider (fetch simulado)", () => {
       count: 3,
     });
     expect(looks.data.looks).toHaveLength(3);
+  });
+
+  it("pide el StyleProfile v2 con JSON schema estricto (asesoría completa)", async () => {
+    const { fn, calls } = fakeFetch([{ body: chatReply(FIXTURE_STYLE_PROFILE) }]);
+    const result = await analyzeStyleProfile(openrouter(fn), {
+      photos: [dataPhoto(ID_A)],
+      preferences,
+      country_code: "UY",
+    });
+    expect(result.data.general_advice).toEqual(FIXTURE_STYLE_PROFILE.general_advice);
+
+    const body = calls[0]!.body as {
+      max_tokens: number;
+      messages: Array<{ role: string; content: unknown }>;
+      response_format: {
+        json_schema: { name: string; strict: boolean; schema: Record<string, unknown> };
+      };
+    };
+    expect(body.messages[0]?.content).toBe(ANALYZE_STYLE_PROFILE_PROMPT);
+    expect(JSON.stringify(body.messages[1]?.content)).toContain("schema_version: 2.");
+    const { name, strict, schema } = body.response_format.json_schema;
+    expect([name, strict]).toEqual(["style_profile", true]);
+    type Node = {
+      properties: Record<string, Node>;
+      required: string[];
+      additionalProperties: boolean;
+    };
+    const root = schema as unknown as Node;
+    expect(root.properties.schema_version).toEqual({ type: "number", const: 2 });
+    expect(root.required).toContain("general_advice");
+    const hair = root.properties.hair!;
+    expect(hair.additionalProperties).toBe(false);
+    expect(hair.required).toEqual(
+      expect.arrayContaining(["recommended_cut", "sides", "texture_tips", "barber_instructions"]),
+    );
+    expect(root.properties.grooming!.properties.facial_hair!.required).toEqual([
+      "recommended",
+      "avoid",
+    ]);
+    expect(root.properties.accessories!.required).toEqual(
+      expect.arrayContaining(["jewelry", "eyewear", "avoid"]),
+    );
+    const text = JSON.stringify(schema);
+    expect(text).not.toMatch(/maxLength|maxItems/);
+    // Solo los 3 nullable de v1 (eye_color, season, secondary): lo nuevo no agrega anyOf.
+    expect(text.match(/"anyOf"/g)).toHaveLength(3);
   });
 
   it("genera la imagen con las fotos como referencia y registra el costo real", async () => {

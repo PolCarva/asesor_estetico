@@ -3,9 +3,14 @@ import { resolve } from "node:path";
 
 import { MockAIProvider } from "@asesor/ai";
 import { AnalyticsService, MemoryAnalyticsProvider } from "@asesor/analytics";
-import type { Json, JobRow, TypedSupabaseClient } from "@asesor/db";
+import {
+  getActiveStyleProfile,
+  type Json,
+  type JobRow,
+  type TypedSupabaseClient,
+} from "@asesor/db";
 import { createAdminClient } from "@asesor/db/admin";
-import { createLogger, type JobType } from "@asesor/shared";
+import { createLogger, type JobType, StyleAdviceSchema } from "@asesor/shared";
 import { MockProductFetcher, MockSearchProvider } from "@asesor/shopping";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
@@ -140,10 +145,24 @@ describeIntegration("pipeline de análisis (MockAIProvider + Supabase local)", (
 
     const { data: profile } = await db
       .from("style_profiles")
-      .select("id, version, active")
+      .select("id, version, active, profile_json")
       .eq("user_id", userId)
       .single();
     expect(profile).toMatchObject({ version: 1, active: true });
+    // Guardado partido: núcleo en profile_json, asesoría detallada (Premium) en style_advice.
+    expect(Object.keys(profile!.profile_json as object).sort()).toEqual(
+      ["appearance", "avoid", "colors", "schema_version", "strengths", "style_direction"].sort(),
+    );
+    const { data: advice } = await db
+      .from("style_advice")
+      .select("user_id, advice_json")
+      .eq("style_profile_id", profile!.id)
+      .single();
+    expect(advice?.user_id).toBe(userId);
+    expect(StyleAdviceSchema.parse(advice?.advice_json).hair.barber_instructions).not.toBe("");
+    const stored = await getActiveStyleProfile(db, userId);
+    expect(stored?.profile.schema_version).toBe(2);
+    expect(stored?.advice?.general_advice.length).toBeGreaterThan(0);
     const { data: looks } = await db
       .from("looks")
       .select("id, position, status")

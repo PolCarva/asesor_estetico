@@ -8,6 +8,7 @@ import {
   AnalyticsEventNameSchema,
   LookSpecSchema,
   ProductSchema,
+  splitStyleProfile,
   StyleProfileSchema,
 } from "@asesor/shared";
 import {
@@ -133,19 +134,27 @@ async function seedProducts() {
 }
 
 async function seedStyle(userId: string) {
-  const profile = StyleProfileSchema.parse(FIXTURE_STYLE_PROFILE);
+  // Mismo guardado partido que el worker: núcleo en profile_json, asesoría en style_advice.
+  const { core, advice } = splitStyleProfile(StyleProfileSchema.parse(FIXTURE_STYLE_PROFILE));
   const styleProfile = must(
     await db
       .from("style_profiles")
       .insert({
         user_id: userId,
         version: 1,
-        profile_json: toJson(profile),
+        profile_json: toJson(core),
         active: true,
       })
       .select("id")
       .single(),
     "style profile",
+  );
+  must(
+    await db
+      .from("style_advice")
+      .insert({ style_profile_id: styleProfile.id, user_id: userId, advice_json: toJson(advice) })
+      .select("style_profile_id"),
+    "style advice",
   );
   const looks = must(
     await db

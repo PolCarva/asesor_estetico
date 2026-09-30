@@ -1,9 +1,9 @@
 import type { LookSpec } from "../schemas/look-spec";
-import type { StyleProfile } from "../schemas/style-profile";
+import type { StyleProfile, StyleProfileV1 } from "../schemas/style-profile";
 
 /** Datos ficticios para desarrollo, tests y mocks. No representan a ninguna persona real. */
 export const FIXTURE_STYLE_PROFILE: StyleProfile = {
-  schema_version: 1,
+  schema_version: 2,
   appearance: {
     presentation: "MASCULINE",
     age_range: "25_34",
@@ -18,11 +18,38 @@ export const FIXTURE_STYLE_PROFILE: StyleProfile = {
     texture: "WAVY",
     length: "SHORT",
     current_style: "corto sin forma definida",
+    recommended_cut: "textured crop con flequillo corto hacia adelante",
+    recommended_length: "4 a 5 cm arriba para que se marque la onda",
+    sides: "degradado bajo con tijera, sin rapar al cero",
+    texture_tips: [
+      "secar con los dedos en vez de cepillo para definir la onda",
+      "crema de peinar liviana con el pelo húmedo",
+    ],
+    styling: [
+      "aplicar pasta mate del tamaño de un garbanzo con el pelo seco",
+      "despeinar hacia adelante y apenas hacia un costado",
+    ],
     recommended_styles: ["textured crop", "corte medio con volumen arriba"],
+    avoid: ["gel con efecto mojado", "laterales rapados al cero con arriba largo"],
+    barber_instructions:
+      "Textured crop: arriba 4-5 cm texturizado con tijera, laterales en degradado bajo con máquina 2 que se funde con tijera, nuca prolija y natural, sin línea marcada.",
   },
   grooming: {
     current: "barba de pocos días irregular",
+    facial_hair: {
+      recommended: [
+        "barba corta de 3 a 5 mm pareja",
+        "línea de mejilla natural apenas perfilada",
+        "cuello limpio dos dedos arriba de la nuez",
+      ],
+      avoid: ["barba con zonas desparejas sin recortar", "perfilado muy marcado y recto"],
+    },
+    eyebrows: [
+      "quitar solo los pelos del entrecejo",
+      "peinarlas hacia arriba con gel transparente",
+    ],
     recommendations: ["barba corta perfilada en mejillas", "cejas prolijas sin afinar"],
+    avoid: ["afinar las cejas", "dejar crecer la barba sin mantenimiento semanal"],
   },
   colors: {
     season: "otoño",
@@ -49,6 +76,23 @@ export const FIXTURE_STYLE_PROFILE: StyleProfile = {
   clothing: {
     current_style: "casual básico con prendas holgadas",
     recommended_categories: ["camisas de algodón", "punto fino", "pantalón chino", "overshirt"],
+    recommended_silhouettes: [
+      "arriba regular y abajo recto",
+      "capa abierta sobre remera lisa",
+      "cintura marcada con cinturón",
+    ],
+    pant_cuts: ["recto de tiro medio", "chino con pierna apenas cónica", "sastrero sin pinzas"],
+    lengths: [
+      "remeras que terminan a mitad del cierre del pantalón",
+      "ruedo con quiebre mínimo sobre el zapato",
+      "mangas de camisa hasta el hueso de la muñeca",
+    ],
+    layering: [
+      "overshirt abierto sobre remera lisa",
+      "cardigan fino sobre camisa",
+      "campera corta que no pase la cadera",
+    ],
+    avoid: ["prendas dos talles más grandes", "remeras que tapan el bolsillo del pantalón"],
   },
   fits: {
     recommended: ["regular con caída limpia", "pantalón de tiro medio y pierna recta"],
@@ -58,9 +102,23 @@ export const FIXTURE_STYLE_PROFILE: StyleProfile = {
     recommended: ["algodón peinado", "lino", "lana merino", "gamuza"],
     avoid: ["poliéster brillante"],
   },
-  shoes: { recommended: ["desert boots", "zapatillas blancas de cuero", "loafers de gamuza"] },
-  accessories: { recommended: ["reloj con malla de cuero", "cinturón marrón"] },
-  tattoos: { present: true, visible_areas: ["antebrazo izquierdo"], preference: "NEUTRAL" },
+  shoes: {
+    recommended: ["desert boots", "zapatillas blancas de cuero", "loafers de gamuza"],
+    avoid: ["zapatillas deportivas técnicas con ropa de vestir", "punta cuadrada"],
+  },
+  accessories: {
+    recommended: ["reloj con malla de cuero", "cinturón marrón"],
+    jewelry: ["cadena fina de plata o acero", "anillo liso en el meñique"],
+    eyewear: ["lentes de sol de acetato carey con forma cuadrada suave"],
+    avoid: ["cadenas gruesas", "relojes deportivos grandes con ropa de vestir"],
+  },
+  tattoos: {
+    present: true,
+    visible_areas: ["antebrazo izquierdo"],
+    preference: "NEUTRAL",
+    suggestions: ["piezas chicas de línea fina que sigan el estilo del antebrazo"],
+    placements: ["antebrazo interno derecho", "parte alta del brazo"],
+  },
   strengths: ["sonrisa amplia", "tono de piel cálido que admite colores tierra"],
   avoid: ["logos grandes", "contrastes blanco/negro muy duros"],
   style_direction: {
@@ -69,6 +127,43 @@ export const FIXTURE_STYLE_PROFILE: StyleProfile = {
     keywords: ["texturas", "tonos tierra", "prendas atemporales"],
     risk_level: "BALANCED",
   },
+  general_advice: [
+    "cortar el pelo con el largo y los laterales indicados",
+    "perfilar la barba una vez por semana",
+    "cambiar remeras largas por remeras de largo justo",
+    "sumar un overshirt camel como capa base",
+  ],
+};
+
+/** Perfil v1 (formato anterior, guardado antes del 2026-09-30) para tests de compatibilidad. */
+export const FIXTURE_STYLE_PROFILE_V1: StyleProfileV1 = {
+  schema_version: 1,
+  appearance: FIXTURE_STYLE_PROFILE.appearance,
+  hair: {
+    color: "castaño oscuro",
+    texture: "WAVY",
+    length: "SHORT",
+    current_style: "corto sin forma definida",
+    recommended_styles: ["textured crop", "corte medio con volumen arriba"],
+  },
+  grooming: {
+    current: "barba de pocos días irregular",
+    recommendations: ["barba corta perfilada en mejillas", "cejas prolijas sin afinar"],
+  },
+  colors: FIXTURE_STYLE_PROFILE.colors,
+  body_proportions: FIXTURE_STYLE_PROFILE.body_proportions,
+  clothing: {
+    current_style: "casual básico con prendas holgadas",
+    recommended_categories: ["camisas de algodón", "punto fino", "pantalón chino", "overshirt"],
+  },
+  fits: FIXTURE_STYLE_PROFILE.fits,
+  materials: FIXTURE_STYLE_PROFILE.materials,
+  shoes: { recommended: ["desert boots", "zapatillas blancas de cuero", "loafers de gamuza"] },
+  accessories: { recommended: ["reloj con malla de cuero", "cinturón marrón"] },
+  tattoos: { present: true, visible_areas: ["antebrazo izquierdo"], preference: "NEUTRAL" },
+  strengths: FIXTURE_STYLE_PROFILE.strengths,
+  avoid: FIXTURE_STYLE_PROFILE.avoid,
+  style_direction: FIXTURE_STYLE_PROFILE.style_direction,
 };
 
 const identityPrompt = {

@@ -694,6 +694,42 @@ export type Database = {
         };
         Relationships: [];
       };
+      style_advice: {
+        Row: {
+          advice_json: NonNullable<Json>;
+          created_at: string;
+          style_profile_id: string;
+          user_id: string;
+        };
+        Insert: {
+          advice_json: NonNullable<Json>;
+          created_at?: string;
+          style_profile_id: string;
+          user_id: string;
+        };
+        Update: {
+          advice_json?: NonNullable<Json>;
+          created_at?: string;
+          style_profile_id?: string;
+          user_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "style_advice_style_profile_id_user_id_fkey";
+            columns: ["style_profile_id", "user_id"];
+            isOneToOne: false;
+            referencedRelation: "style_profiles";
+            referencedColumns: ["id", "user_id"];
+          },
+          {
+            foreignKeyName: "style_advice_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       style_profiles: {
         Row: {
           active: boolean;
@@ -908,7 +944,7 @@ export type Database = {
         };
       };
       create_style_profile_with_looks: {
-        Args: { p_looks: Json; p_profile: Json; p_user_id: string };
+        Args: { p_advice: Json; p_looks: Json; p_profile: Json; p_user_id: string };
         Returns: {
           look_id: string;
           look_position: number;

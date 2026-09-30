@@ -1,4 +1,4 @@
-import { PhotoIssueCodeSchema } from "@asesor/shared";
+import { PhotoIssueCodeSchema, STYLE_PROFILE_SCHEMA_VERSION } from "@asesor/shared";
 import { z } from "zod";
 
 import { AIError, type AIErrorCode } from "../errors";
@@ -339,7 +339,7 @@ export class OpenRouterProvider implements AIProvider {
       [
         {
           type: "text",
-          text: `País: ${input.country_code}. Nivel de riesgo elegido: ${input.preferences.risk_level}. Preferencia de tatuajes: ${input.preferences.tattoo_preference}. schema_version: 1.`,
+          text: `País: ${input.country_code}. Nivel de riesgo elegido: ${input.preferences.risk_level}. Preferencia de tatuajes: ${input.preferences.tattoo_preference}. schema_version: ${STYLE_PROFILE_SCHEMA_VERSION}.`,
         },
         ...photoParts(input.photos),
       ],

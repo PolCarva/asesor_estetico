@@ -34,7 +34,7 @@ sequenceDiagram
   K->>Q: user_photos.status VALID/INVALID; encola ANALYZE_STYLE_PROFILE
   K->>AI: analyzeStyleProfile → StyleProfile
   K->>AI: generateLookSpecs → 3 LookSpecs
-  K->>Q: create_style_profile_with_looks (atómico); encola GENERATE_LOOK
+  K->>Q: create_style_profile_with_looks (núcleo + asesoría + 3 looks, atómico); encola GENERATE_LOOK
   K->>AI: generateLookImage (look 1; 2 y 3 si es Premium)
   K->>Q: sube a generated-looks; looks.status READY
   U->>W: /app/looks (URL firmada de 5 min, auto-refresco mientras genera)
@@ -44,19 +44,19 @@ Detalles:
 
 - **Disparo**: `/app/onboarding` (`startAnalysisAction`) guarda preferencias (nivel de riesgo, tatuajes) y encola `VALIDATE_PHOTOS`. No permite dos análisis simultáneos ni más de `MAX_ANALYSES_PER_DAY` (3) por día.
 - **Fotos a la IA**: el worker las descarga de Storage con service role y las manda como data URL (el Storage local no es accesible desde el proveedor). Límite 5 MB por foto; el navegador ya las reduce a ≤2048 px en JPEG (y elimina EXIF/GPS).
-- **Guardado atómico**: `create_style_profile_with_looks` desactiva el perfil anterior, crea la versión nueva activa y sus 3 looks en una transacción.
+- **Guardado atómico**: `create_style_profile_with_looks(user, profile, advice, looks)` desactiva el perfil anterior y crea en una transacción la versión nueva activa (núcleo en `style_profiles.profile_json`), su asesoría Premium (`style_advice`) y sus 3 looks. `saveStyleProfileWithLooks` parte el perfil con `splitStyleProfile`.
 - **Premium**: solo se genera la imagen del look 1 para usuarios free; el handler de `GENERATE_LOOK` vuelve a verificar el plan antes de generar un look bloqueado.
 - **Estados**: `user_photos.status` (UPLOADED → VALIDATING → VALID/INVALID, con motivos en `metadata_json`), `looks.status` (PENDING → GENERATING → READY/FAILED). La UI se refresca sola mientras hay trabajo en curso.
 
 ## Operaciones (`packages/ai`)
 
-| Función                | Input                                       | Output validado                      |
-| ---------------------- | ------------------------------------------- | ------------------------------------ |
-| `validatePhotos`       | fotos (id, tipo, data URL o URL firmada)    | resultados por foto + `can_continue` |
-| `analyzeStyleProfile`  | fotos + preferencias (riesgo, tatuajes)     | `StyleProfile`                       |
-| `generateLookSpecs`    | `StyleProfile` + preferencias, `count: 3`   | exactamente 3 `LookSpec`             |
-| `generateLookImage`    | `LookSpec` + fotos de referencia + variante | imagen base64 + dimensiones          |
-| `chatWithStyleAdvisor` | perfil, looks, historial, mensaje           | respuesta + sugerencias (sin UI aún) |
+| Función                | Input                                       | Output validado                       |
+| ---------------------- | ------------------------------------------- | ------------------------------------- |
+| `validatePhotos`       | fotos (id, tipo, data URL o URL firmada)    | resultados por foto + `can_continue`  |
+| `analyzeStyleProfile`  | fotos + preferencias (riesgo, tatuajes)     | `StyleProfile` v2 (asesoría completa) |
+| `generateLookSpecs`    | `StyleProfile` + preferencias, `count: 3`   | exactamente 3 `LookSpec`              |
+| `generateLookImage`    | `LookSpec` + fotos de referencia + variante | imagen base64 + dimensiones           |
+| `chatWithStyleAdvisor` | perfil, looks, historial, mensaje           | respuesta + sugerencias (sin UI aún)  |
 
 Cada operación (`runOperation`) valida el input con Zod, llama al proveedor con timeout y señal de cancelación, valida el output con Zod y devuelve `{ operation, data, usage, timing }`.
 
@@ -67,6 +67,32 @@ Cada operación (`runOperation`) valida el input con Zod, llama al proveedor con
 - Imágenes: `POST /api/v1/images` con `input_references` (las dos fotos), `aspect_ratio: 3:4`, `resolution: 1K`, `quality`.
 - Ruteo: `provider: { data_collection: "deny", require_parameters: true }` → nunca proveedores que retengan/entrenen con datos, y solo los que soportan salida estructurada.
 - Costo: `usage.cost` de OpenRouter (real), sumado entre intentos.
+
+## StyleProfile v2: asesoría de imagen completa
+
+`StyleProfileSchema` (`packages/shared/src/schemas/style-profile.ts`, `schema_version: 2`) es la salida de `analyzeStyleProfile`: una sola llamada de IA devuelve el perfil para los looks y la asesoría completa (D1). Todo son listas cortas y strings breves; ningún campo de puntaje.
+
+| Bloque              | Contenido                                                                                                                                                                                  |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `appearance`        | presentación, rango de edad, forma de rostro, tono/subtono, contraste, ojos                                                                                                                |
+| `hair`              | actual (`color`, `texture`, `length`, `current_style`) + `recommended_cut`, `recommended_length`, `sides`, `texture_tips`, `styling`, `recommended_styles`, `avoid`, `barber_instructions` |
+| `grooming`          | `current`, `facial_hair { recommended, avoid }`, `eyebrows`, `recommendations`, `avoid`                                                                                                    |
+| `colors`            | `season`, `best`, `neutrals`, `avoid` (nombre + hex)                                                                                                                                       |
+| `body_proportions`  | `frame`, `balance_notes` (solo cómo vestir)                                                                                                                                                |
+| `clothing`          | `current_style`, `recommended_categories`, `recommended_silhouettes`, `pant_cuts`, `lengths`, `layering`, `avoid`                                                                          |
+| `fits`, `materials` | `recommended`, `avoid`                                                                                                                                                                     |
+| `shoes`             | `recommended`, `avoid`                                                                                                                                                                     |
+| `accessories`       | `recommended`, `jewelry`, `eyewear` (vacío si no corresponde), `avoid`                                                                                                                     |
+| `tattoos`           | `present`, `visible_areas`, `preference` + `suggestions` y `placements` opcionales (vacíos con `COVER`)                                                                                    |
+| `strengths`/`avoid` | lo que le favorece y lo que conviene evitar                                                                                                                                                |
+| `style_direction`   | `primary`, `secondary`, `keywords`, `risk_level`                                                                                                                                           |
+| `general_advice`    | quick wins priorizados                                                                                                                                                                     |
+
+- **"No aplica"** = lista o string vacío, nunca `null` (cada `.nullable()` suma un `anyOf` a la gramática, D3). Los límites de cantidad y largo están en el texto del prompt, porque `toStrictJsonSchema` los saca.
+- **Tamaño del JSON Schema estricto** (medido con `toStrictJsonSchema`): v1 4384 bytes, 56 propiedades, 3 `anyOf` → v2 5956 bytes, 80 propiedades, 3 `anyOf`. Gemini 3.8 Flash lo acepta (prueba real del 2026-09-30: 2815 tokens de salida, USD 0.011, con `max_tokens` 8000).
+- **Guardado partido** (D4): `splitStyleProfile` separa el núcleo teaser (`schema_version`, `appearance`, `colors`, `strengths`, `avoid`, `style_direction` → `style_profiles.profile_json`) de la asesoría (`StyleAdviceSchema`, el resto → `style_advice.advice_json`, solo Premium por RLS). `mergeStyleProfile` los vuelve a unir.
+- **Lectura tolerante**: `parseStoredStyleProfile(profile_json, advice_json)` acepta v2 y v1 (lo sube a v2 con los campos nuevos vacíos). `getActiveStyleProfile(db, userId)` de `@asesor/db` la usa: con el cliente del usuario, `advice` es `null` para free.
+- **Prueba real**: `apps/worker/scripts/real-style-analysis.ts` (análisis con las fotos autorizadas, guardado y lectura free/Premium) o `--schema-check` (solo aceptación del schema, sin fotos).
 
 ## Errores normalizados
 
@@ -87,7 +113,7 @@ El worker reintenta con backoff exponencial (3 intentos). Si el último falla: f
 
 ## Prompts
 
-`packages/ai/src/prompts`: reglas comunes (español rioplatense, respeto, **nunca** sugerir cambios corporales, no inferir etnia/salud/orientación, solo JSON) y un prompt por operación. `buildLookImagePrompt()` arma el prompt de imagen en inglés desde el LookSpec, exigiendo preservar identidad y proporciones. `PROMPT_VERSION` se guarda en `ai_usage.metadata`.
+`packages/ai/src/prompts`: reglas comunes (español rioplatense, respeto; "mejor versión estética de esta misma persona": **nunca** cambiar estructura facial, altura, cuerpo, peso, musculatura ni rasgos fundamentales; **sin puntuaciones de atractivo** ni análisis médico; no inferir etnia/salud/orientación; recomendaciones concretas, breves y aplicables; solo JSON) y un prompt por operación. `ANALYZE_STYLE_PROFILE_PROMPT` recorre cada bloque del StyleProfile con sus límites (ítems ≤120 caracteres, cantidad máxima por lista, `barber_instructions` ≤400). `buildLookImagePrompt()` arma el prompt de imagen en inglés desde el LookSpec, exigiendo preservar identidad y proporciones. `PROMPT_VERSION` (hoy `2026-09-30.2`) se guarda en `ai_usage.metadata`.
 
 ## Pendiente
 

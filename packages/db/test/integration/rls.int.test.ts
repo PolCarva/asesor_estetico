@@ -1,8 +1,14 @@
-import { FIXTURE_LOOK_SPECS, FIXTURE_STYLE_PROFILE } from "@asesor/shared/fixtures";
+import { splitStyleProfile } from "@asesor/shared";
+import {
+  FIXTURE_LOOK_SPECS,
+  FIXTURE_STYLE_PROFILE,
+  FIXTURE_STYLE_PROFILE_V1,
+} from "@asesor/shared/fixtures";
 import { afterAll, beforeAll, expect, it } from "vitest";
 
 import { getCurrentUser, requirePremium } from "../../src/auth";
 import { deleteUserPhoto, getUserPhotoSignedUrl, uploadUserPhoto } from "../../src/storage";
+import { getActiveStyleProfile } from "../../src/style-profile";
 import { toJson } from "../../src/types";
 import { adminClient, createTestUser, deleteTestUser, describeIntegration } from "./setup";
 
@@ -24,20 +30,34 @@ describeIntegration("RLS, auth y Storage", () => {
   let alice: Awaited<ReturnType<typeof createTestUser>>;
   let bob: Awaited<ReturnType<typeof createTestUser>>;
   let aliceLooks: { id: string; position: number }[] = [];
+  let aliceProfileId = "";
+  const { core, advice } = splitStyleProfile(FIXTURE_STYLE_PROFILE);
+
+  const givePremium = (userId: string) =>
+    admin.from("subscriptions").insert({
+      user_id: userId,
+      provider: "MOCK",
+      provider_subscription_id: `test-${userId}`,
+      status: "ACTIVE",
+      current_period_start: new Date().toISOString(),
+      current_period_end: new Date(Date.now() + 86_400_000).toISOString(),
+    });
 
   beforeAll(async () => {
     alice = await createTestUser("alice");
     bob = await createTestUser("bob");
     const { data: profile } = await admin
       .from("style_profiles")
-      .insert({
-        user_id: alice.id,
-        version: 1,
-        active: true,
-        profile_json: toJson(FIXTURE_STYLE_PROFILE),
-      })
+      .insert({ user_id: alice.id, version: 1, active: true, profile_json: toJson(core) })
       .select("id")
       .single();
+    aliceProfileId = profile!.id;
+    const saved = await admin.from("style_advice").insert({
+      style_profile_id: aliceProfileId,
+      user_id: alice.id,
+      advice_json: toJson(advice),
+    });
+    expect(saved.error).toBeNull();
     const { data } = await admin
       .from("looks")
       .insert(
@@ -98,13 +118,96 @@ describeIntegration("RLS, auth y Storage", () => {
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     );
-    for (const table of ["profiles", "looks", "products", "jobs", "ai_usage"] as const) {
+    for (const table of [
+      "profiles",
+      "style_profiles",
+      "style_advice",
+      "looks",
+      "products",
+      "jobs",
+      "ai_usage",
+    ] as const) {
       const { data, error } = await anon.from(table).select("id").limit(1);
       expect(error !== null || (data ?? []).length === 0).toBe(true);
     }
   });
 
+  it("asesoría: el núcleo lo ve cualquier plan; la asesoría detallada solo Premium", async () => {
+    // Free, con su JWT: ve el núcleo del perfil, no la asesoría (ni por PostgREST directo).
+    const free = await getActiveStyleProfile(alice.client, alice.id);
+    expect(free).toEqual({ id: aliceProfileId, profile: core, advice: null });
+    const direct = await alice.client.from("style_advice").select("advice_json");
+    expect(direct.error).toBeNull();
+    expect(direct.data).toEqual([]);
+
+    // Nadie escribe la asesoría desde el cliente (la escribe el worker con service role).
+    const insert = await alice.client.from("style_advice").insert({
+      style_profile_id: aliceProfileId,
+      user_id: alice.id,
+      advice_json: toJson(advice),
+    });
+    expect(insert.error).not.toBeNull();
+
+    expect((await givePremium(alice.id)).error).toBeNull();
+    const premium = await getActiveStyleProfile(alice.client, alice.id);
+    expect(premium).toEqual({ id: aliceProfileId, profile: core, advice });
+
+    const update = await alice.client
+      .from("style_advice")
+      .update({ advice_json: toJson({}) })
+      .eq("style_profile_id", aliceProfileId)
+      .select();
+    expect(update.error !== null || (update.data ?? []).length === 0).toBe(true);
+    const remove = await alice.client
+      .from("style_advice")
+      .delete()
+      .eq("style_profile_id", aliceProfileId)
+      .select();
+    expect(remove.error !== null || (remove.data ?? []).length === 0).toBe(true);
+    const still = await admin
+      .from("style_advice")
+      .select("advice_json")
+      .eq("style_profile_id", aliceProfileId)
+      .single();
+    expect(still.data?.advice_json).toEqual(advice);
+
+    // Otro usuario no ve ni el perfil ni la asesoría ajena.
+    expect(await getActiveStyleProfile(bob.client, alice.id)).toBeNull();
+    const intruder = await bob.client.from("style_advice").select("style_profile_id");
+    expect(intruder.data).toEqual([]);
+
+    // La asesoría no puede apuntar a un perfil de otro usuario (FK compuesta).
+    const mismatch = await admin.from("style_advice").insert({
+      style_profile_id: aliceProfileId,
+      user_id: bob.id,
+      advice_json: toJson(advice),
+    });
+    expect(mismatch.error).not.toBeNull();
+  });
+
+  it("asesoría: los perfiles v1 guardados se siguen leyendo (subidos a v2)", async () => {
+    await admin.from("style_profiles").insert({
+      user_id: bob.id,
+      version: 1,
+      active: true,
+      profile_json: toJson(FIXTURE_STYLE_PROFILE_V1),
+    });
+    const stored = await getActiveStyleProfile(bob.client, bob.id);
+    expect(stored?.profile).toMatchObject({
+      schema_version: 2,
+      style_direction: FIXTURE_STYLE_PROFILE_V1.style_direction,
+      strengths: FIXTURE_STYLE_PROFILE_V1.strengths,
+    });
+    expect(stored?.advice?.hair.recommended_styles).toEqual(
+      FIXTURE_STYLE_PROFILE_V1.hair.recommended_styles,
+    );
+    expect(stored?.advice?.general_advice).toEqual([]);
+    await admin.from("style_profiles").delete().eq("user_id", bob.id);
+  });
+
   it("looks: sin Premium solo se ve el look 1; con Premium, los tres", async () => {
+    // El test anterior le dio Premium a alice: se le saca para ver el caso free.
+    await admin.from("subscriptions").delete().eq("user_id", alice.id);
     const free = await alice.client.from("looks").select("position").order("position");
     expect(free.data?.map((l) => l.position)).toEqual([1]);
     const intruder = await bob.client.from("looks").select("id");
@@ -112,14 +215,7 @@ describeIntegration("RLS, auth y Storage", () => {
 
     await expect(requirePremium(alice.client)).rejects.toMatchObject({ code: "PREMIUM_REQUIRED" });
 
-    await admin.from("subscriptions").insert({
-      user_id: alice.id,
-      provider: "MOCK",
-      provider_subscription_id: `test-${alice.id}`,
-      status: "ACTIVE",
-      current_period_start: new Date().toISOString(),
-      current_period_end: new Date(Date.now() + 86_400_000).toISOString(),
-    });
+    await givePremium(alice.id);
     const premium = await alice.client.from("looks").select("position").order("position");
     expect(premium.data?.map((l) => l.position)).toEqual([1, 2, 3]);
     await expect(requirePremium(alice.client)).resolves.toMatchObject({ id: alice.id });

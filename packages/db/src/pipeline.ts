@@ -2,6 +2,7 @@ import {
   AppError,
   isPremiumSubscription,
   type LookSpec,
+  splitStyleProfile,
   STORAGE_BUCKETS,
   type StyleProfile,
 } from "@asesor/shared";
@@ -71,14 +72,20 @@ export async function getStylePreferences(db: TypedSupabaseClient, userId: strin
   return { risk_level: data.style_risk_level, tattoo_preference: data.tattoo_preference };
 }
 
-/** Guarda StyleProfile + 3 looks en una sola transacción (función SQL). */
+/**
+ * Guarda StyleProfile + asesoría Premium + 3 looks en una sola transacción (función
+ * SQL). El perfil se parte: el núcleo va a `style_profiles.profile_json` y la asesoría
+ * detallada a `style_advice` (RLS: solo Premium).
+ */
 export async function saveStyleProfileWithLooks(
   db: TypedSupabaseClient,
   input: { userId: string; profile: StyleProfile; looks: LookSpec[] },
 ): Promise<{ styleProfileId: string; looks: Array<{ id: string; position: number }> }> {
+  const { core, advice } = splitStyleProfile(input.profile);
   const { data, error } = await db.rpc("create_style_profile_with_looks", {
     p_user_id: input.userId,
-    p_profile: toJson(input.profile),
+    p_profile: toJson(core),
+    p_advice: toJson(advice),
     p_looks: toJson(input.looks),
   });
   if (error || !data?.[0])

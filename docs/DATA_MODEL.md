@@ -15,6 +15,7 @@ Convenciones:
 erDiagram
   AUTH_USERS ||--|| PROFILES : "trigger handle_new_user"
   PROFILES ||--o{ STYLE_PROFILES : tiene
+  STYLE_PROFILES ||--o| STYLE_ADVICE : "asesoría Premium"
   PROFILES ||--o{ USER_PHOTOS : sube
   PROFILES ||--o{ LOOKS : recibe
   STYLE_PROFILES ||--o{ LOOKS : genera
@@ -51,8 +52,13 @@ erDiagram
     uuid id PK
     uuid user_id FK
     int version
-    jsonb profile_json "StyleProfile"
+    jsonb profile_json "StyleProfileCore (teaser, v1 legado: perfil completo)"
     bool active "uno activo por usuario"
+  }
+  STYLE_ADVICE {
+    uuid style_profile_id PK
+    uuid user_id FK
+    jsonb advice_json "StyleAdvice (solo Premium)"
   }
   USER_PHOTOS {
     uuid id PK
@@ -193,6 +199,7 @@ erDiagram
 | ------------------ | -------------------------------------------------------------------- | -------------------------------------- |
 | `profiles`         | Perfil de la app, 1:1 con `auth.users`                               | Trigger + usuario (columnas limitadas) |
 | `style_profiles`   | Versiones del StyleProfile (jsonb); una activa por usuario           | Worker                                 |
+| `style_advice`     | Asesoría detallada (Premium) de cada StyleProfile, 1:1               | Worker                                 |
 | `user_photos`      | Metadata de fotos; el archivo está en Storage. Una por tipo          | Usuario (insert/delete)                |
 | `looks`            | 3 looks por StyleProfile (`position` 1..3) con `spec_json`           | Worker                                 |
 | `products`         | Catálogo global normalizado de tiendas externas                      | Worker / servidor                      |
@@ -209,6 +216,14 @@ erDiagram
 | `ai_usage`         | Costo y uso de cada operación de IA                                  | Solo service role                      |
 | `analytics_events` | Eventos de producto                                                  | Solo service role                      |
 
+## StyleProfile guardado
+
+El análisis (`StyleProfile` v2, ver `AI_PIPELINE.md`) se guarda partido para que la parte Premium quede protegida por RLS (D4):
+
+- `style_profiles.profile_json`: núcleo teaser (`StyleProfileCoreSchema`: `schema_version: 2`, `appearance`, `colors`, `strengths`, `avoid`, `style_direction`). Lo lee cualquier plan.
+- `style_advice.advice_json`: asesoría detallada (`StyleAdviceSchema`: pelo, grooming, proporciones, ropa y fit, materiales, calzado, accesorios, tatuajes, `general_advice`). PK = `style_profile_id`; FK compuesta `(style_profile_id, user_id)` → `style_profiles (id, user_id)`, así nunca apunta al perfil de otro usuario. RLS: `select` solo propio y con `current_user_is_premium()`; nadie escribe desde el cliente.
+- Perfiles v1 (anteriores al 2026-09-30): el perfil completo quedó en `profile_json` y no tienen fila en `style_advice`. `parseStoredStyleProfile` los sube a v2 con la asesoría nueva vacía. Solo existen en bases locales (no hay producción).
+
 ## Índices principales
 
 - `jobs_queue_idx (priority desc, scheduled_at) where status = 'QUEUED'` — índice parcial para `claim_next_job`.
@@ -223,7 +238,7 @@ RLS habilitado en **todas** las tablas. Resumen (ver `20260929000300_rls_policie
 
 - `anon`: sin acceso a ninguna tabla.
 - `authenticated`: solo sus filas (`user_id = auth.uid()`), y solo las columnas con `GRANT` explícito. Por ejemplo, en `profiles` puede cambiar `display_name`, `style_risk_level`, `tattoo_preference` y `onboarding_completed`, pero **no** `role` ni `country_code`.
-- Premium reforzado en datos: `looks` con `position > 1`, `look_products`, `carts`, `cart_items`, `chat_*` y favoritos de productos requieren `current_user_is_premium()`.
+- Premium reforzado en datos: `looks` con `position > 1`, `style_advice`, `look_products`, `carts`, `cart_items`, `chat_*` y favoritos de productos requieren `current_user_is_premium()`.
 - IDOR: los inserts que referencian otros recursos (favoritos, hilos de chat, ítems del carrito) verifican que el recurso sea del usuario.
 - `jobs`: el usuario puede **leer** el estado de sus jobs (columnas no sensibles); nunca crear ni modificar.
 - `ai_usage`, `analytics_events`, `payment_events`: sin acceso desde el cliente.

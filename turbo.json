@@ -37,7 +37,7 @@
     "test:integration": {
       "cache": false,
       "env": ["NEXT_PUBLIC_*"],
-      "dependsOn": ["transit"]
+      "dependsOn": ["transit", "^test:integration"]
     },
     "dev": {
       "cache": false,
