@@ -1,0 +1,89 @@
+[
+  {
+    "productId": "3113",
+    "productName": "Remera Essentials Logo",
+    "link": "https://www.adidas.com.uy/remera-essentials-logo-adkc0917/p",
+    "items": [
+      {
+        "itemId": "29253",
+        "name": "ADKC0917-S",
+        "variations": ["Talla"],
+        "Talla": ["S"],
+        "sellers": [
+          {
+            "commertialOffer": {
+              "Price": 1490.0,
+              "ListPrice": 1490.0,
+              "AvailableQuantity": 10,
+              "IsAvailable": true
+            }
+          }
+        ]
+      },
+      {
+        "itemId": "29269",
+        "name": "ADKC0917-M",
+        "variations": ["Talla"],
+        "Talla": ["M"],
+        "sellers": [
+          {
+            "commertialOffer": {
+              "Price": 1490.0,
+              "ListPrice": 1490.0,
+              "AvailableQuantity": 1,
+              "IsAvailable": true
+            }
+          }
+        ]
+      },
+      {
+        "itemId": "29222",
+        "name": "ADKC0917-L",
+        "variations": ["Talla"],
+        "Talla": ["L"],
+        "sellers": [
+          {
+            "commertialOffer": {
+              "Price": 1490.0,
+              "ListPrice": 1490.0,
+              "AvailableQuantity": 10,
+              "IsAvailable": true
+            }
+          }
+        ]
+      },
+      {
+        "itemId": "29237",
+        "name": "ADKC0917-XL",
+        "variations": ["Talla"],
+        "Talla": ["XL"],
+        "sellers": [
+          {
+            "commertialOffer": {
+              "Price": 1490.0,
+              "ListPrice": 1490.0,
+              "AvailableQuantity": 0,
+              "IsAvailable": false
+            }
+          }
+        ]
+      },
+      {
+        "itemId": "29206",
+        "name": "ADKC0917-2XL",
+        "variations": ["Talla"],
+        "Talla": ["2XL"],
+        "sellers": [
+          {
+            "commertialOffer": {
+              "Price": 1490.0,
+              "ListPrice": 1490.0,
+              "AvailableQuantity": 0,
+              "IsAvailable": false
+            }
+          }
+        ]
+      }
+    ]
+  }
+]

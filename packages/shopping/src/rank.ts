@@ -81,6 +81,8 @@ function sizeScore(size: string | null, product: Product) {
 const STOCK_SCORE = { IN_STOCK: 1, IN_STORE_ONLY: 0.6, UNKNOWN: 0.4, OUT_OF_STOCK: 0 } as const;
 
 function priceScore(product: Product, query: ShoppingQuery, range: { min: number; max: number }) {
+  // Local físico sin precio publicado: neutro (ni premia ni castiga). Paso 05 lo revisa.
+  if (!product.price) return 0.5;
   const price = toUyu(product.price);
   if (query.max_price) {
     const max = toUyu(query.max_price);
@@ -103,7 +105,7 @@ export function rankProducts(
   weights: RankingWeights = DEFAULT_RANKING_WEIGHTS,
 ): RankedProduct[] {
   const garment = query.garment;
-  const prices = products.map((p) => toUyu(p.price));
+  const prices = products.flatMap((p) => (p.price ? [toUyu(p.price)] : []));
   const range = { min: Math.min(...prices), max: Math.max(...prices) };
   const garmentTokens = tokens(`${garment.description} ${garment.material ?? ""}`);
   const totalWeight = Object.values(weights).reduce((a, b) => a + b, 0);

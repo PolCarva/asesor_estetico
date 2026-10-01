@@ -593,7 +593,7 @@ export type Database = {
           category: Database["public"]["Enums"]["product_category"];
           colors: string[];
           created_at: string;
-          currency: Database["public"]["Enums"]["currency_code"];
+          currency: Database["public"]["Enums"]["currency_code"] | null;
           data_json: NonNullable<Json>;
           description: string | null;
           external_id: string;
@@ -602,7 +602,7 @@ export type Database = {
           image_url: string | null;
           last_fetched_at: string;
           materials: string[];
-          price_amount: number;
+          price_amount: number | null;
           store_domain: string;
           store_name: string;
           title: string;
@@ -615,7 +615,7 @@ export type Database = {
           category: Database["public"]["Enums"]["product_category"];
           colors?: string[];
           created_at?: string;
-          currency: Database["public"]["Enums"]["currency_code"];
+          currency?: Database["public"]["Enums"]["currency_code"] | null;
           data_json?: NonNullable<Json>;
           description?: string | null;
           external_id: string;
@@ -624,7 +624,7 @@ export type Database = {
           image_url?: string | null;
           last_fetched_at?: string;
           materials?: string[];
-          price_amount: number;
+          price_amount?: number | null;
           store_domain: string;
           store_name: string;
           title: string;
@@ -637,7 +637,7 @@ export type Database = {
           category?: Database["public"]["Enums"]["product_category"];
           colors?: string[];
           created_at?: string;
-          currency?: Database["public"]["Enums"]["currency_code"];
+          currency?: Database["public"]["Enums"]["currency_code"] | null;
           data_json?: NonNullable<Json>;
           description?: string | null;
           external_id?: string;
@@ -646,7 +646,7 @@ export type Database = {
           image_url?: string | null;
           last_fetched_at?: string;
           materials?: string[];
-          price_amount?: number;
+          price_amount?: number | null;
           store_domain?: string;
           store_name?: string;
           title?: string;

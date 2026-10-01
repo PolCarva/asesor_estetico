@@ -73,6 +73,8 @@ El worker descarga URLs que vienen de terceros (búsqueda web, sitemaps). Todo p
 - redirects manuales, revalidados uno por uno (y por el robots.txt de su origen);
 - timeout, tope de tamaño medido mientras se lee y ritmo por dominio.
 
+Los endpoints de plataforma para talles y stock (API de catálogo VTEX, `.js` de Shopify, Store API de WooCommerce; paso 04b) usan el mismo cliente, siempre en el host de la página del producto y solo si robots.txt los permite. No llevan datos del usuario: solo el SKU, el handle o el slug del producto.
+
 De las respuestas solo se usan los datos de producto extraídos (validados con Zod); el HTML crudo no se guarda. Detalle en [`SHOPPING_ENGINE.md`](SHOPPING_ENGINE.md#descarga-segura-paso-04a).
 
 ## Rate limiting

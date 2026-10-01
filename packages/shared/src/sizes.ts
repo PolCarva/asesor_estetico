@@ -59,3 +59,53 @@ export function sizeForCategory(sizes: UserSizes, category: ProductCategory): st
   const kind = sizeKindForCategory(category);
   return kind ? sizes[kind] : null;
 }
+
+/** Talles de letra en orden, y cómo los escriben las tiendas (inglés, español, Brasil). */
+const ALPHA_SIZES: Array<[string, RegExp]> = [
+  ["XXS", /^(XXS|2XS|EXTRA ?EXTRA ?(CHICO|SMALL))$/],
+  ["XS", /^(XS|PP|EXTRA ?(CHICO|SMALL))$/],
+  ["S", /^(S|P|CH|CHICO|SMALL|PEQUEÑO|PEQUENO)$/],
+  ["M", /^(M|MEDIANO|MEDIUM|MEDIO)$/],
+  ["L", /^(L|G|GRANDE|LARGE)$/],
+  ["XL", /^(XL|GG|XG|EG|EXTRA ?(GRANDE|LARGE))$/],
+  ["XXL", /^(XXL|2XL|XXG|XGG|EGG|G3)$/],
+  ["XXXL", /^(XXXL|3XL|XXXG|G4)$/],
+  ["4XL", /^(XXXXL|4XL|G5)$/],
+];
+
+const UNIQUE_SIZE =
+  /^(U|TU|UNI|UNICO|ÚNICO|TALLE ÚNICO|TALLE UNICO|TALLA ÚNICA|TALLA UNICA|ONE ?SIZE|OS|STANDARD)$/;
+
+/**
+ * Talle de una tienda → forma canónica para comparar con el del usuario:
+ * - letras: `XS`…`XXL` (también "Small", "Grande", y los brasileños P/M/G/GG/XG);
+ * - números de pantalón o calzado EU: `42`, `42.5`; pantalón con largo: `32/34`;
+ * - calzado de EE. UU. o del Reino Unido: `US 9`, `UK 8`;
+ * - talle único: `ÚNICO`.
+ * Lo que no reconoce vuelve en mayúsculas, tal cual (la etiqueta original se guarda aparte).
+ */
+export function normalizeSizeLabel(label: string | null | undefined): string | null {
+  if (!label) return null;
+  const s = label
+    .trim()
+    .toUpperCase()
+    .replace(/^(TALLE|TALLA|TALL|SIZE|TAM\.?|TAMAÑO|NRO\.?|N°|Nº)\s*:?\s*/, "")
+    .replace(/\s+/g, " ");
+  if (!s) return null;
+  if (UNIQUE_SIZE.test(s)) return "ÚNICO";
+  for (const [canonical, pattern] of ALPHA_SIZES) if (pattern.test(s)) return canonical;
+
+  const number = (n: string) => n.replace(",", ".").replace(/\.0$/, "");
+  const regional =
+    /^(US|UK|EU|EUR|BR)\s?(\d{1,2}(?:[.,]5)?)$|^(\d{1,2}(?:[.,]5)?)\s?(US|UK|EU|EUR|BR)$/.exec(s);
+  if (regional) {
+    const system = (regional[1] ?? regional[4])!;
+    const value = number((regional[2] ?? regional[3])!);
+    return system === "EU" || system === "EUR" ? value : `${system} ${value}`;
+  }
+  // Pantalón con cintura y largo ("W32 L34", "32/34", "32x34").
+  const waistLength = /^W?(\d{2})\s?(?:[/X]|\sL)\s?L?(\d{2})$/.exec(s);
+  if (waistLength) return `${waistLength[1]}/${waistLength[2]}`;
+  if (/^\d{1,2}(?:[.,]5)?$/.test(s)) return number(s);
+  return s.slice(0, 20);
+}

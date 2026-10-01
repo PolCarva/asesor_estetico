@@ -56,7 +56,9 @@ export default async function FavoritesPage() {
                     <p className="eyebrow">{fav.products.store_name}</p>
                     <h2 className="mt-2 text-2xl">{fav.products.title}</h2>
                     <p className="mt-1 text-sm text-stone">
-                      {fav.products.currency} {fav.products.price_amount.toLocaleString("es-UY")}
+                      {fav.products.price_amount === null
+                        ? "Precio a consultar en el local"
+                        : `${fav.products.currency} ${fav.products.price_amount.toLocaleString("es-UY")}`}
                     </p>
                   </>
                 ) : (

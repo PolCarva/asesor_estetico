@@ -1,0 +1,89 @@
+[
+  {
+    "productId": "52826",
+    "productName": "Remera estampada de estilo vintage Loose Fit",
+    "link": "https://uy.hm.com/1225609039/p",
+    "items": [
+      {
+        "itemId": "245570",
+        "name": "Remera estampada de estilo vintage Loose Fit S",
+        "variations": ["Talla Hombre"],
+        "Talla Hombre": ["S"],
+        "sellers": [
+          {
+            "commertialOffer": {
+              "Price": 999.0,
+              "ListPrice": 999.0,
+              "AvailableQuantity": 100,
+              "IsAvailable": true
+            }
+          }
+        ]
+      },
+      {
+        "itemId": "245571",
+        "name": "Remera estampada de estilo vintage Loose Fit M",
+        "variations": ["Talla Hombre"],
+        "Talla Hombre": ["M"],
+        "sellers": [
+          {
+            "commertialOffer": {
+              "Price": 999.0,
+              "ListPrice": 999.0,
+              "AvailableQuantity": 0,
+              "IsAvailable": false
+            }
+          }
+        ]
+      },
+      {
+        "itemId": "245572",
+        "name": "Remera estampada de estilo vintage Loose Fit L",
+        "variations": ["Talla Hombre"],
+        "Talla Hombre": ["L"],
+        "sellers": [
+          {
+            "commertialOffer": {
+              "Price": 999.0,
+              "ListPrice": 999.0,
+              "AvailableQuantity": 0,
+              "IsAvailable": false
+            }
+          }
+        ]
+      },
+      {
+        "itemId": "245573",
+        "name": "Remera estampada de estilo vintage Loose Fit XL",
+        "variations": ["Talla Hombre"],
+        "Talla Hombre": ["XL"],
+        "sellers": [
+          {
+            "commertialOffer": {
+              "Price": 999.0,
+              "ListPrice": 999.0,
+              "AvailableQuantity": 0,
+              "IsAvailable": false
+            }
+          }
+        ]
+      },
+      {
+        "itemId": "245574",
+        "name": "Remera estampada de estilo vintage Loose Fit XXL",
+        "variations": ["Talla Hombre"],
+        "Talla Hombre": ["XXL"],
+        "sellers": [
+          {
+            "commertialOffer": {
+              "Price": 999.0,
+              "ListPrice": 999.0,
+              "AvailableQuantity": 0,
+              "IsAvailable": false
+            }
+          }
+        ]
+      }
+    ]
+  }
+]

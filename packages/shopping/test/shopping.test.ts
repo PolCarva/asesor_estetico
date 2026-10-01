@@ -222,6 +222,10 @@ describe("searchProducts", () => {
       not_product: 2, // categoría + PDF
       no_price: 1,
       invalid: 1, // moneda ARS
+      // Del catálogo ficticio: las botas tienen stock UNKNOWN, y las botas, las zapatillas
+      // y el overshirt no traen talles (accesorios como el reloj no cuentan).
+      unverified_stock: 1,
+      unverified_sizes: 3,
     });
   });
 });

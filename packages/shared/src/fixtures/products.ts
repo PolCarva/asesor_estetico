@@ -23,6 +23,7 @@ export const FIXTURE_PRODUCTS: Product[] = [
         id: "mock-oxford-crudo-m",
         sku: "OX-M",
         size: "M",
+        size_label: "M",
         color: "crudo",
         availability: "IN_STOCK",
         price: null,
@@ -31,11 +32,13 @@ export const FIXTURE_PRODUCTS: Product[] = [
         id: "mock-oxford-crudo-l",
         sku: "OX-L",
         size: "L",
+        size_label: "L",
         color: "crudo",
         availability: "OUT_OF_STOCK",
         price: null,
       },
     ],
+    in_store: null,
     fetched_at: FETCHED_AT,
   },
   {
@@ -57,11 +60,13 @@ export const FIXTURE_PRODUCTS: Product[] = [
         id: "mock-oxford-blanca-m",
         sku: null,
         size: "M",
+        size_label: "M",
         color: "blanco",
         availability: "IN_STOCK",
         price: null,
       },
     ],
+    in_store: null,
     fetched_at: FETCHED_AT,
   },
   {
@@ -83,11 +88,13 @@ export const FIXTURE_PRODUCTS: Product[] = [
         id: "mock-chino-oliva-42",
         sku: "CH-42",
         size: "42",
+        size_label: "42",
         color: "verde oliva",
         availability: "IN_STOCK",
         price: null,
       },
     ],
+    in_store: null,
     fetched_at: FETCHED_AT,
   },
   {
@@ -105,6 +112,7 @@ export const FIXTURE_PRODUCTS: Product[] = [
     fit: "regular",
     availability: "IN_STORE_ONLY",
     variants: [],
+    in_store: null,
     fetched_at: FETCHED_AT,
   },
   {
@@ -122,6 +130,7 @@ export const FIXTURE_PRODUCTS: Product[] = [
     fit: null,
     availability: "UNKNOWN",
     variants: [],
+    in_store: null,
     fetched_at: FETCHED_AT,
   },
   {
@@ -139,6 +148,35 @@ export const FIXTURE_PRODUCTS: Product[] = [
     fit: null,
     availability: "OUT_OF_STOCK",
     variants: [],
+    in_store: null,
     fetched_at: FETCHED_AT,
   },
 ];
+
+/**
+ * Producto de un local físico ficticio sin venta online (`IN_STORE_ONLY`) y sin precio
+ * publicado. Fuera del catálogo principal: lo usan los tests del paso 04b.
+ */
+export const FIXTURE_IN_STORE_PRODUCT: Product = {
+  id: "mock-sombrero-local",
+  store: { name: "Sombrerería Ficticia", domain: "sombrereria.ficticia.test" },
+  url: "https://sombrereria.ficticia.test/productos/sombrero-panama",
+  title: "Sombrero panamá natural",
+  brand: null,
+  category: "HAT",
+  description: "Disponible solo en el local.",
+  image_url: null,
+  price: null,
+  colors: ["natural"],
+  materials: ["paja toquilla"],
+  fit: null,
+  availability: "IN_STORE_ONLY",
+  variants: [],
+  in_store: {
+    address: "Calle Ficticia 1234",
+    locality: "Montevideo",
+    phone: "+598 2000 0000",
+    contact_url: "https://sombrereria.ficticia.test/contacto",
+  },
+  fetched_at: FETCHED_AT,
+};

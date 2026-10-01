@@ -19,6 +19,8 @@ export interface PageData {
   meta: Map<string, string[]>;
   /** Items de microdata de primer nivel (los anidados cuelgan de sus propiedades). */
   items: MicrodataItem[];
+  /** `<link rel="canonical">`, tal como está en la página (puede ser relativo). */
+  canonical: string | null;
 }
 
 /** Elementos cuyo valor de microdata sale de un atributo (spec de HTML, "microdata"). */
@@ -76,7 +78,7 @@ function parseJsonLd(text: string): unknown {
 }
 
 export function parseHtml(html: string): PageData {
-  const data: PageData = { jsonLd: [], meta: new Map(), items: [] };
+  const data: PageData = { jsonLd: [], meta: new Map(), items: [], canonical: null };
   const frames: Frame[] = [];
   const collecting: Frame[] = [];
 
@@ -103,6 +105,10 @@ export function parseHtml(html: string): PageData {
           else frame.skipText = true;
         } else if (name === "style" || name === "template") {
           frame.skipText = true;
+        }
+        if (name === "link" && data.canonical === null && attribs.href) {
+          const rel = (attribs.rel ?? "").toLowerCase().split(/\s+/);
+          if (rel.includes("canonical")) data.canonical = attribs.href.trim();
         }
         if (name === "meta") {
           const key = (attribs.property ?? attribs.name ?? "").trim().toLowerCase();

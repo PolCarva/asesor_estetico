@@ -2,6 +2,7 @@ import { isHtmlContentType } from "../extract";
 import { NotHtmlError } from "../fetch";
 import type { FetchLike } from "../net";
 import type { FetchedPage, FetchOptions, ProductFetcher, SearchProvider } from "../types";
+import { PlatformVariantEnricher, type VariantEnricher } from "../variants";
 import { buildUserAgent, PoliteHttpClient } from "./http";
 import {
   CompositeSearchProvider,
@@ -52,11 +53,15 @@ export interface LiveShoppingOptions {
   fetch?: FetchLike;
 }
 
-/** Proveedores reales: registro de tiendas + sitemaps + descubrimiento web. */
+/**
+ * Proveedores reales: registro de tiendas + sitemaps + descubrimiento web, descarga de
+ * páginas y talles y stock por plataforma.
+ */
 export function createLiveShopping(options: LiveShoppingOptions = {}): {
   http: PoliteHttpClient;
   searchProvider: SearchProvider;
   fetcher: ProductFetcher;
+  variants: VariantEnricher;
 } {
   const http = new PoliteHttpClient({
     userAgent: buildUserAgent(options.botContact),
@@ -83,5 +88,6 @@ export function createLiveShopping(options: LiveShoppingOptions = {}): {
     http,
     searchProvider: new CompositeSearchProvider(sources, { onError: options.onError }),
     fetcher: new HttpProductFetcher(http),
+    variants: new PlatformVariantEnricher(http),
   };
 }

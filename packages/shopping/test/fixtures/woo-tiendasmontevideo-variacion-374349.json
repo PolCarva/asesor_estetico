@@ -1,0 +1,22 @@
+{
+  "id": 374349,
+  "name": "Pantalón De Pijama Estampado",
+  "type": "variation",
+  "variation": "Color: DISEÑO 1, Talle: L",
+  "parent": 374346,
+  "is_in_stock": true,
+  "low_stock_remaining": 2,
+  "prices": {
+    "price": "31900",
+    "regular_price": "31900",
+    "sale_price": "31900",
+    "price_range": null,
+    "currency_code": "UYU",
+    "currency_symbol": "$",
+    "currency_minor_unit": 2,
+    "currency_decimal_separator": ",",
+    "currency_thousand_separator": ".",
+    "currency_prefix": "$",
+    "currency_suffix": ""
+  }
+}

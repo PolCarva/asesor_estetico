@@ -19,4 +19,6 @@ export * from "./providers/web-search";
 export * from "./rank";
 export * from "./search";
 export * from "./types";
+export * from "./validate";
+export * from "./variants";
 export * from "./vocabulary";

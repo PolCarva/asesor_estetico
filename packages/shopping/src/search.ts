@@ -1,5 +1,6 @@
 import {
   type Product,
+  sizeKindForCategory,
   type ShoppingQuery,
   type ShoppingQueryInput,
   ShoppingQuerySchema,
@@ -27,10 +28,14 @@ import type {
   SearchProvider,
   ShoppingCache,
 } from "./types";
+import { canonicalProductUrl, type ValidationFailure, validateProduct } from "./validate";
+import { applyVariants, type VariantEnricher, type VariantResult } from "./variants";
 
 export interface ShoppingDeps {
   searchProvider: SearchProvider;
   fetcher: ProductFetcher;
+  /** Talles y stock por plataforma (paso 04b). Sin él, solo lo que dice la página. */
+  variants?: VariantEnricher;
   cache?: ShoppingCache;
   now?: () => Date;
   /** Páginas que se descargan en paralelo. */
@@ -72,6 +77,9 @@ export function classifyFetchError(error: unknown): FetchFailure {
   return "network";
 }
 
+/** Por qué se descartó un producto extraído: normalización o Validate. */
+export type DiscardReason = NormalizeFailure | ValidationFailure;
+
 /** Resultado de una URL candidata. Cada candidato falla solo, sin romper la búsqueda. */
 export type CandidateOutcome =
   | {
@@ -79,15 +87,19 @@ export type CandidateOutcome =
       candidate: CandidateUrl;
       product: Product;
       sources: Partial<Record<RawField, ExtractSource>>;
+      /** Qué pasó con los talles y el stock de la plataforma. */
+      variants: VariantResult;
     }
   | { status: "failed"; candidate: CandidateUrl; reason: FetchFailure }
   | { status: "not_product"; candidate: CandidateUrl }
-  | { status: "discarded"; candidate: CandidateUrl; reason: NormalizeFailure };
+  | { status: "discarded"; candidate: CandidateUrl; reason: DiscardReason };
 
-/** Fetch → Extract → Normalize de una URL candidata. */
+const NO_VARIANTS: VariantResult = { status: "unsupported" };
+
+/** Fetch → Extract → variantes de la plataforma → Normalize → Validate de una URL candidata. */
 export async function loadCandidate(
   candidate: CandidateUrl,
-  deps: Pick<ShoppingDeps, "fetcher" | "signal">,
+  deps: Pick<ShoppingDeps, "fetcher" | "signal" | "variants">,
 ): Promise<CandidateOutcome> {
   let page;
   try {
@@ -98,17 +110,28 @@ export async function loadCandidate(
   if (page.status === 404 || page.status === 410) {
     return { status: "failed", candidate, reason: "gone" };
   }
-  const raw = extractProduct(page);
-  if (!raw) return { status: "not_product", candidate };
-  const result = normalizeProductResult(raw, { store: candidate.store, fetchedAt: page.fetchedAt });
-  return result.ok
-    ? { status: "product", candidate, product: result.product, sources: raw.sources }
-    : { status: "discarded", candidate, reason: result.reason };
+  const extracted = extractProduct(page);
+  if (!extracted) return { status: "not_product", candidate };
+  // Un adaptador que falla no descarta el producto: talles y stock quedan sin verificar.
+  const variants =
+    (await deps.variants
+      ?.enrich({ page, raw: extracted, platform: candidate.platform, signal: deps.signal })
+      .catch((): VariantResult => NO_VARIANTS)) ?? NO_VARIANTS;
+  const raw = applyVariants(extracted, variants);
+  const result = normalizeProductResult(raw, {
+    store: candidate.store,
+    fetchedAt: page.fetchedAt,
+    url: canonicalProductUrl(page.url, raw.canonicalUrl),
+  });
+  if (!result.ok) return { status: "discarded", candidate, reason: result.reason };
+  const valid = validateProduct(result.product, { store: candidate.store, page, raw });
+  if (!valid.ok) return { status: "discarded", candidate, reason: valid.reason };
+  return { status: "product", candidate, product: result.product, sources: raw.sources, variants };
 }
 
 export async function loadCandidates(
   candidates: CandidateUrl[],
-  deps: Pick<ShoppingDeps, "fetcher" | "signal" | "concurrency">,
+  deps: Pick<ShoppingDeps, "fetcher" | "signal" | "concurrency" | "variants">,
 ): Promise<CandidateOutcome[]> {
   const unique = [...new Map(candidates.map((c) => [c.url, c])).values()];
   return mapWithConcurrency(unique, deps.concurrency ?? 4, (c) => loadCandidate(c, deps));
@@ -124,10 +147,18 @@ export function summarizeOutcomes(outcomes: CandidateOutcome[]): ShoppingStats {
     not_product: 0,
     no_price: 0,
     invalid: 0,
+    unverified_stock: 0,
+    unverified_sizes: 0,
   };
   for (const outcome of outcomes) {
-    if (outcome.status === "product") stats.products++;
-    else if (outcome.status === "not_product") stats.not_product++;
+    if (outcome.status === "product") {
+      stats.products++;
+      const { product } = outcome;
+      if (product.availability === "UNKNOWN") stats.unverified_stock++;
+      if (sizeKindForCategory(product.category) && !product.variants.some((v) => v.size)) {
+        stats.unverified_sizes++;
+      }
+    } else if (outcome.status === "not_product") stats.not_product++;
     else if (outcome.status === "discarded") {
       if (outcome.reason === "no_price") stats.no_price++;
       else stats.invalid++;
@@ -144,8 +175,9 @@ export function searchCacheKey(query: ShoppingQuery) {
 }
 
 /**
- * Pipeline: ShoppingQuery → SearchProvider → URLs candidatas → Fetch → Extract →
- * Normalize → Rank → Cache. El resultado lleva los conteos de lo que falló.
+ * Pipeline: ShoppingQuery → SearchProvider → URLs candidatas → Fetch → Extract → variantes
+ * de la plataforma → Normalize → Validate → Rank → Cache. El resultado lleva los conteos de
+ * lo que falló y de lo que no se pudo verificar.
  */
 export async function searchProducts(
   rawQuery: ShoppingQueryInput,
@@ -185,7 +217,7 @@ export type RefreshResult =
   | {
       status: "failed";
       product: Product;
-      reason: FetchFailure | "not_product" | NormalizeFailure;
+      reason: FetchFailure | "not_product" | DiscardReason;
     };
 
 /**
@@ -194,7 +226,7 @@ export type RefreshResult =
  */
 export async function refreshProduct(
   product: Product,
-  deps: Pick<ShoppingDeps, "fetcher" | "signal">,
+  deps: Pick<ShoppingDeps, "fetcher" | "signal" | "variants">,
 ): Promise<RefreshResult> {
   const outcome = await loadCandidate({ url: product.url, store: product.store }, deps);
   if (outcome.status === "product") {

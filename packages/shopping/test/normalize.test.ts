@@ -15,7 +15,9 @@ import {
 
 const raw = (overrides: Partial<RawProduct> = {}): RawProduct => ({
   url: "https://tienda.com.uy/p/1",
+  canonicalUrl: null,
   externalId: null,
+  sku: null,
   title: "Camisa Oxford - Celeste",
   brand: null,
   description: null,
@@ -27,6 +29,8 @@ const raw = (overrides: Partial<RawProduct> = {}): RawProduct => ({
   material: null,
   category: null,
   variants: [],
+  regions: [],
+  inStore: null,
   sources: {},
   ...overrides,
 });

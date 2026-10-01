@@ -62,7 +62,7 @@ for (const { slot, query } of queries) {
       const p = r.product;
       const sources = [...new Set(Object.values(r.sources))].join("+");
       console.log(
-        `  ✓ ${where} · ${p.title} · ${p.price.currency} ${p.price.amount} · ${p.availability} · ${p.category}${p.fit ? ` · fit ${p.fit}` : ""}${p.colors.length ? ` · ${p.colors.join("/")}` : ""} · img ${p.image_url ? "sí" : "no"} · ${sources}`,
+        `  ✓ ${where} · ${p.title} · ${p.price ? `${p.price.currency} ${p.price.amount}` : "sin precio"} · ${p.availability} · ${p.category}${p.fit ? ` · fit ${p.fit}` : ""}${p.colors.length ? ` · ${p.colors.join("/")}` : ""} · img ${p.image_url ? "sí" : "no"} · ${sources}`,
       );
     } else {
       const why = r.status === "not_product" ? "no es producto" : r.reason;
@@ -98,7 +98,7 @@ for (const r of outcomes) {
     row.valid++;
     const p = r.product;
     // "Válido" para el paso: nombre, precio, moneda e imagen.
-    if (p.title && p.price.amount > 0 && p.image_url) {
+    if (p.title && p.price && p.price.amount > 0 && p.image_url) {
       row.complete++;
       row.example ??= `${p.title.slice(0, 48)} · ${p.price.currency} ${p.price.amount}`;
     }

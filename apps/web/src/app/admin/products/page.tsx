@@ -30,7 +30,11 @@ export default async function AdminProductsPage() {
           { header: "Categoría", cell: (r) => r.category },
           {
             header: "Precio",
-            cell: (r) => `${r.currency} ${r.price_amount.toLocaleString("es-UY")}`,
+            // Sin precio solo puede estar un producto de local físico (IN_STORE_ONLY).
+            cell: (r) =>
+              r.price_amount === null
+                ? "En el local"
+                : `${r.currency} ${r.price_amount.toLocaleString("es-UY")}`,
             align: "right",
           },
           { header: "Stock", cell: (r) => <StatusBadge value={r.availability} /> },

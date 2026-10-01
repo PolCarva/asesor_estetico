@@ -1,5 +1,7 @@
 import {
   type Currency,
+  type InStoreInfo,
+  normalizeSizeLabel,
   type Product,
   type ProductAvailability,
   type ProductCategory,
@@ -216,7 +218,7 @@ const splitList = (value: string | null) =>
 
 const within = (value: string | null, max: number) => (value && value.length <= max ? value : null);
 
-function normalizeVariants(raw: RawProduct, currency: Currency): ProductVariant[] {
+function normalizeVariants(raw: RawProduct, currency: Currency | null): ProductVariant[] {
   const seen = new Set<string>();
   const variants: ProductVariant[] = [];
   for (const variant of raw.variants) {
@@ -226,15 +228,18 @@ function normalizeVariants(raw: RawProduct, currency: Currency): ProductVariant[
     seen.add(id);
     const price = parsePrice(variant.price);
     const variantCurrency = parseCurrency(variant.currency) ?? currency;
+    const label = variant.size?.trim() || null;
     variants.push({
       id,
       sku: within(variant.sku, 80),
-      size: within(variant.size?.trim() ?? null, 20),
+      size: normalizeSizeLabel(label),
+      size_label: within(label, 40),
       color: variant.color
         ? (colorsIn(variant.color)[0] ?? within(variant.color.toLowerCase(), 60))
         : null,
       availability: normalizeAvailability(variant.availability),
-      price: price === null ? null : { amount: price, currency: variantCurrency },
+      price:
+        price === null || !variantCurrency ? null : { amount: price, currency: variantCurrency },
     });
     if (variants.length === 100) break;
   }
@@ -246,46 +251,64 @@ export type NormalizeFailure = "no_title" | "no_price" | "unsupported_currency" 
 export type NormalizeResult =
   { ok: true; product: Product } | { ok: false; reason: NormalizeFailure };
 
+/** Ubicación y contacto del local, solo con lo que la página declara. */
+function inStoreInfo(raw: RawProduct, url: string): InStoreInfo {
+  const place = raw.inStore;
+  return {
+    address: within(place?.address ?? null, 200),
+    locality: within(place?.locality ?? null, 80),
+    phone: within(place?.phone ?? null, 40),
+    contact_url: place?.url ?? url,
+  };
+}
+
 /**
  * Convierte datos crudos en un Product validado, o dice por qué no: sin título, sin precio
  * legible, moneda distinta de UYU/USD o datos que no pasan el schema. Nunca completa un
- * precio, un stock ni un talle que la página no dio.
+ * precio, un stock ni un talle que la página no dio. Un producto `IN_STORE_ONLY` (local
+ * físico) puede no publicar precio: se muestra igual, sin precio (D10).
  */
 export function normalizeProductResult(
   raw: RawProduct,
-  context: { store: Store; fetchedAt: string },
+  context: { store: Store; fetchedAt: string; url?: string },
 ): NormalizeResult {
   const title = raw.title?.trim();
   if (!title) return { ok: false, reason: "no_title" };
+  const availability = normalizeAvailability(raw.availability);
+  const inStoreOnly = availability === "IN_STORE_ONLY";
   const price = parsePrice(raw.price);
-  if (price === null) return { ok: false, reason: "no_price" };
+  if (price === null && !inStoreOnly) return { ok: false, reason: "no_price" };
   const currency = raw.currency
     ? parseCurrency(raw.currency)
     : typeof raw.price === "string"
       ? currencyInText(raw.price)
       : null;
-  if (!currency) return { ok: false, reason: "unsupported_currency" };
+  if (!currency && (price !== null || raw.currency)) {
+    return { ok: false, reason: "unsupported_currency" };
+  }
 
   const variants = normalizeVariants(raw, currency);
   const declaredColors = [
     ...splitList(raw.color),
     ...raw.variants.map((v) => v.color).filter((c): c is string => Boolean(c)),
   ];
+  const url = context.url ?? raw.url;
   const candidate = {
-    id: raw.externalId ?? raw.url,
+    id: raw.externalId ?? url,
     store: context.store,
-    url: raw.url,
+    url,
     title: title.slice(0, 200),
     brand: raw.brand?.slice(0, 80) ?? null,
     category: inferCategory(raw),
     description: raw.description?.slice(0, 2000) ?? null,
     image_url: raw.imageUrl && /^https?:\/\//.test(raw.imageUrl) ? raw.imageUrl : null,
-    price: { amount: price, currency },
+    price: price !== null && currency ? { amount: price, currency } : null,
     colors: inferColors(declaredColors, title).slice(0, 20),
     materials: inferMaterials(splitList(raw.material), title, raw.description).slice(0, 10),
     fit: inferFit(title, raw.description),
-    availability: normalizeAvailability(raw.availability),
+    availability,
     variants,
+    in_store: inStoreOnly ? inStoreInfo(raw, url) : null,
     fetched_at: context.fetchedAt,
   };
   const parsed = ProductSchema.safeParse(candidate);
@@ -294,7 +317,7 @@ export function normalizeProductResult(
 
 export function normalizeProduct(
   raw: RawProduct,
-  context: { store: Store; fetchedAt: string },
+  context: { store: Store; fetchedAt: string; url?: string },
 ): Product | null {
   const result = normalizeProductResult(raw, context);
   return result.ok ? result.product : null;

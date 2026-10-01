@@ -1,0 +1,238 @@
+[
+  {
+    "id": 374346,
+    "name": "Pantalón De Pijama Estampado",
+    "permalink": "https://www.tiendasmontevideo.com.uy/product/pantalon-de-pijama-estampado-2/",
+    "type": "variable",
+    "is_in_stock": true,
+    "attributes": [
+      {
+        "id": 3,
+        "name": "Color",
+        "taxonomy": "pa_color",
+        "has_variations": true,
+        "terms": [
+          {
+            "id": 113,
+            "name": "DISEÑO 1",
+            "slug": "diseno-1",
+            "default": true
+          },
+          {
+            "id": 871,
+            "name": "DISEÑO 11",
+            "slug": "diseno-11",
+            "default": false
+          },
+          {
+            "id": 112,
+            "name": "DISEÑO 2",
+            "slug": "diseno-2",
+            "default": false
+          },
+          {
+            "id": 114,
+            "name": "DISEÑO 3",
+            "slug": "diseno-3",
+            "default": false
+          },
+          {
+            "id": 125,
+            "name": "DISEÑO 4",
+            "slug": "diseno-4",
+            "default": false
+          },
+          {
+            "id": 311,
+            "name": "DISEÑO 7",
+            "slug": "diseno-7",
+            "default": false
+          },
+          {
+            "id": 312,
+            "name": "DISEÑO 8",
+            "slug": "diseno-8",
+            "default": false
+          }
+        ]
+      },
+      {
+        "id": 4,
+        "name": "Talle",
+        "taxonomy": "pa_talle",
+        "has_variations": true,
+        "terms": [
+          {
+            "id": 315,
+            "name": "L",
+            "slug": "l",
+            "default": true
+          },
+          {
+            "id": 563,
+            "name": "M",
+            "slug": "m",
+            "default": false
+          },
+          {
+            "id": 251,
+            "name": "S",
+            "slug": "s",
+            "default": false
+          },
+          {
+            "id": 564,
+            "name": "XL",
+            "slug": "xl",
+            "default": false
+          }
+        ]
+      }
+    ],
+    "variations": [
+      {
+        "id": 391004,
+        "attributes": [
+          {
+            "name": "Color",
+            "value": "diseno-8"
+          },
+          {
+            "name": "Talle",
+            "value": "m"
+          }
+        ]
+      },
+      {
+        "id": 374349,
+        "attributes": [
+          {
+            "name": "Color",
+            "value": "diseno-1"
+          },
+          {
+            "name": "Talle",
+            "value": "l"
+          }
+        ]
+      },
+      {
+        "id": 374357,
+        "attributes": [
+          {
+            "name": "Color",
+            "value": "diseno-3"
+          },
+          {
+            "name": "Talle",
+            "value": "l"
+          }
+        ]
+      },
+      {
+        "id": 374358,
+        "attributes": [
+          {
+            "name": "Color",
+            "value": "diseno-3"
+          },
+          {
+            "name": "Talle",
+            "value": "xl"
+          }
+        ]
+      },
+      {
+        "id": 374361,
+        "attributes": [
+          {
+            "name": "Color",
+            "value": "diseno-4"
+          },
+          {
+            "name": "Talle",
+            "value": "l"
+          }
+        ]
+      },
+      {
+        "id": 374363,
+        "attributes": [
+          {
+            "name": "Color",
+            "value": "diseno-7"
+          },
+          {
+            "name": "Talle",
+            "value": "s"
+          }
+        ]
+      },
+      {
+        "id": 374362,
+        "attributes": [
+          {
+            "name": "Color",
+            "value": "diseno-4"
+          },
+          {
+            "name": "Talle",
+            "value": "xl"
+          }
+        ]
+      },
+      {
+        "id": 374364,
+        "attributes": [
+          {
+            "name": "Color",
+            "value": "diseno-7"
+          },
+          {
+            "name": "Talle",
+            "value": "m"
+          }
+        ]
+      },
+      {
+        "id": 374371,
+        "attributes": [
+          {
+            "name": "Color",
+            "value": "diseno-11"
+          },
+          {
+            "name": "Talle",
+            "value": "s"
+          }
+        ]
+      },
+      {
+        "id": 374374,
+        "attributes": [
+          {
+            "name": "Color",
+            "value": "diseno-11"
+          },
+          {
+            "name": "Talle",
+            "value": "xl"
+          }
+        ]
+      }
+    ],
+    "prices": {
+      "price": "31900",
+      "regular_price": "31900",
+      "sale_price": "31900",
+      "price_range": null,
+      "currency_code": "UYU",
+      "currency_symbol": "$",
+      "currency_minor_unit": 2,
+      "currency_decimal_separator": ",",
+      "currency_thousand_separator": ".",
+      "currency_prefix": "$",
+      "currency_suffix": ""
+    }
+  }
+]

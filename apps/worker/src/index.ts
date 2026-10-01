@@ -78,6 +78,7 @@ const runner = new WorkerRunner({
     }),
     searchProvider: shopping.searchProvider,
     fetcher: shopping.fetcher,
+    variants: "variants" in shopping ? shopping.variants : undefined,
   },
   logger,
   concurrency: env.WORKER_CONCURRENCY,

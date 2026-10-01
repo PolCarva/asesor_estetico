@@ -2,7 +2,7 @@ import { AIError, type AIProvider } from "@asesor/ai";
 import type { AnalyticsService } from "@asesor/analytics";
 import type { Json, JobRow, TypedSupabaseClient } from "@asesor/db";
 import { isAppError, type JobType, type Logger } from "@asesor/shared";
-import type { ProductFetcher, SearchProvider } from "@asesor/shopping";
+import type { ProductFetcher, SearchProvider, VariantEnricher } from "@asesor/shopping";
 import { ZodError } from "zod";
 
 export interface HandlerDeps {
@@ -12,6 +12,8 @@ export interface HandlerDeps {
   analytics: AnalyticsService;
   searchProvider: SearchProvider;
   fetcher: ProductFetcher;
+  /** Talles y stock por plataforma (solo con SHOPPING_PROVIDER=live). */
+  variants?: VariantEnricher;
 }
 
 export interface JobContext {

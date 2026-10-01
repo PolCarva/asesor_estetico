@@ -3,7 +3,8 @@
 ## Estado
 
 - **Búsqueda real** (paso 03): LookSpec → `buildShoppingQueries` → `CompositeSearchProvider` (registro de tiendas por plataforma + sitemaps + descubrimiento web) → URLs candidatas de tiendas uruguayas.
-- **Descarga, extracción y normalización reales** (paso 04a): fetcher endurecido (anti-SSRF con DNS y redirects, timeout, tamaño, robots, ritmo por dominio), extracción en cascada JSON-LD → microdata → OpenGraph y normalización de precios locales, categorías de Uruguay, fit, colores, materiales e ids estables. Talles y stock por plataforma, Validate y locales físicos son del paso 04b.
+- **Descarga, extracción y normalización reales** (paso 04a): fetcher endurecido (anti-SSRF con DNS y redirects, timeout, tamaño, robots, ritmo por dominio), extracción en cascada JSON-LD → microdata → OpenGraph y normalización de precios locales, categorías de Uruguay, fit, colores, materiales e ids estables.
+- **Talles, stock, Validate y locales físicos** (paso 04b): variantes con talle y disponibilidad desde la plataforma de cada tienda (Fenicio, VTEX, Shopify, WooCommerce), talles normalizados, etapa Validate (página descargada, host de la tienda, Uruguay, precio, URL canónica, tiendas bloqueadas) y productos `IN_STORE_ONLY` con precio opcional, ubicación y contacto.
 - **Mocks** (`MockSearchProvider`, `MockProductFetcher`, catálogo ficticio `.test`): solo con `SHOPPING_PROVIDER=mock` (tests y E2E). El default del worker es `live` y en producción `mock` está prohibido por el schema de env.
 
 ## Pipeline
@@ -13,12 +14,14 @@ ShoppingQuery
   → SearchProvider        URLs candidatas
   → fetchProductPage      descarga segura (HttpProductFetcher → PoliteHttpClient → transporte con IP validada)
   → extractProduct        JSON-LD → microdata → OpenGraph → RawProduct (con la fuente de cada dato)
+  → VariantEnricher       talles y stock de la plataforma (Fenicio, VTEX, Shopify, Woo); si falla, sin verificar
   → normalizeProduct      RawProduct → Product (Zod), o el motivo del descarte
+  → validateProduct       página real, host de la tienda, vende en Uruguay, precio > 0, URL canónica
   → rankProducts          score ponderado + breakdown por factor
   → Cache
 ```
 
-Funciones públicas (`packages/shopping`): `searchProducts`, `loadCandidate(s)`, `summarizeOutcomes`, `fetchProductPage`, `extractProduct`, `normalizeProduct(Result)`, `rankProducts`, `refreshProduct`.
+Funciones públicas (`packages/shopping`): `searchProducts`, `loadCandidate(s)`, `summarizeOutcomes`, `fetchProductPage`, `extractProduct`, `PlatformVariantEnricher`, `normalizeProduct(Result)`, `validateProduct`, `canonicalProductUrl`, `rankProducts`, `refreshProduct`. `createLiveShopping` devuelve `searchProvider`, `fetcher` y `variants` (el worker los recibe como dependencias).
 
 - **ShoppingQuery**: una prenda (`Garment` del LookSpec), país (`UY`), talle opcional, precio máximo opcional, límite.
 - Cada candidato falla solo (`CandidateOutcome`: `product`, `failed` con motivo, `not_product` o `discarded` con motivo) y el `ShoppingResult` lleva `stats` (ver "Tolerancia a fallas").
@@ -94,25 +97,76 @@ Precio y moneda salen juntos de la primera fuente con un precio legible (la mone
 - **Fit** (`inferFit`), solo explícito: en el título ("Jean slim", "Pantalón recto", "Wide Leg") o en la descripción con contexto ("modelo Slim", "corte entallado", "regular fit"). Valores: `oversize`, `skinny`, `slim`, `relajado`, `ancho`, `recto`, `regular`, `boxy`. "fit cómodo" o "mejor ajuste" no son un fit.
 - **Colores** (`inferColors`): los declarados (JSON-LD, microdata, variantes) o los del título, en español (`Black` → negro, `Navy` → azul marino, "GRIS OSCURO" → gris). Fenicio pone el color al final ("Pantalón - Negro - Blanco"). Del título solo salen colores del vocabulario: un nombre de fantasía ("Forest River") queda sin dato.
 - **Materiales** (`inferMaterials`): declarados o nombrados en título o descripción (algodón, lino, lana, cuero, cuero sintético, gamuza, poliéster, viscosa, elastano…). "jean" solo cuenta en el título.
+- **Talles** (`normalizeSizeLabel`, en `packages/shared` para comparar también el del usuario): letras `XS`…`4XL` (también "Small", "Grande" y los brasileños de Hering: `P`→S, `G`→L, `GG`/`XG`→XL), números `42`/`42.5`, pantalón con largo `32/34`, calzado `US 9`/`UK 8` (EU queda como número) y `ÚNICO`. La etiqueta original queda en `size_label` (Indian: `2XL`; Hering: `XG`).
 - **Ids**: `Product.id` es el id de producto que declara la plataforma (`productGroupID`, `productID`) o, si no hay, la URL de la página (el SKU no sirve: VTEX FastStore usa `"1"` en todos los productos de H&M). Variantes: id de la plataforma (`?variant=` de Shopify) o SKU; sin ninguno, la variante se descarta (nunca el índice).
 - **Fechas honestas**: `fetched_at` es el momento de la descarga exitosa. `refreshProduct` devuelve `verified` (datos y fecha nuevos), `gone` (404/410) o `failed` (con motivo); en los dos últimos la disponibilidad pasa a `UNKNOWN` y **`fetched_at` no cambia**: una falla no cuenta como verificación.
+
+## Talles y stock por plataforma (paso 04b)
+
+El JSON-LD casi nunca trae talles. `PlatformVariantEnricher` (`variants.ts`) los busca donde los publica la **plataforma** de la tienda (no hay código por tienda). La plataforma sale del candidato, del registro o de la huella del HTML (`detectPlatform`). Todo request pasa por `PoliteHttpClient`: robots.txt, ritmo por dominio, tope de tamaño y anti-SSRF.
+
+| Plataforma  | Dónde                                                                       | Talle                                                                    | Stock                                                                     |
+| ----------- | --------------------------------------------------------------------------- | ------------------------------------------------------------------------ | ------------------------------------------------------------------------- |
+| Fenicio     | la propia página: `ul#lstTalles > li > input[name=sku]` (sin request extra) | `<b>` (en Indian `data-cpre` es un código); el `span.precio` no es talle | `li[data-stock]` "disponible"/"agotado", o `input[data-stock]` (cantidad) |
+| VTEX        | `/api/catalog_system/pub/products/search?fq=skuId:<sku>` (SKU del JSON-LD)  | la clave de `variations` que nombra el talle (`Talla`, `Talla Hombre`…)  | `IsAvailable` o `AvailableQuantity > 0` (viene topeado: solo sí/no)       |
+| Shopify     | `/products/<handle>.js`                                                     | la opción `Talla`/`Talle`/`Size`                                         | `available` por variante; precio en centésimos                            |
+| WooCommerce | Store API: `/wp-json/wc/store/v1/products?slug=<slug>` + una por variación  | términos del atributo `Talle` (`pa_talle`)                               | `is_in_stock` de cada variación (hasta 12; las demás quedan sin dato)     |
+
+- **Se verifica que sea el mismo producto**: la respuesta de VTEX o Woo tiene que tener el mismo path que la página; el `handle` de Shopify, el mismo. Si no, `mismatch` y no se usa.
+- **Un adaptador que falla no descarta el producto** (`VariantResult`: `verified`, `unsupported` o `failed` con `blocked`, `unavailable`, `malformed`, `no_id` o `mismatch`). El producto sigue con lo que dijo su página (el JSON-LD de VTEX y Shopify trae disponibilidad por oferta, que es un dato real) y lo que no se verificó queda `UNKNOWN` o sin talle.
+- **robots.txt manda**: BAS prohíbe `/api/` → sus talles quedan sin verificar (su página FastStore no los trae en el HTML). H&M prohíbe `/*_*` pero permite `?fq=` explícitamente: se usa solo esa forma.
+- La disponibilidad del producto pasa a ser la de la plataforma (alguna variante disponible → `IN_STOCK`; todas agotadas → `OUT_OF_STOCK`). Si la plataforma no dice nada, queda la de la página.
+- Magento no tiene adaptador (poca ropa y robots `Disallow: /*?`).
+
+## Validate (paso 04b)
+
+`validateProduct` corre después de normalizar. Un producto se descarta (cuenta en `invalid`) si:
+
+| Motivo          | Regla                                                                                                                                 |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `not_extracted` | el título o el precio no salen de la página descargada (nunca de un snippet de búsqueda ni de lo que diga un LLM)                     |
+| `host_mismatch` | la página, después de redirects, o su URL canónica son de otro dominio que la tienda                                                  |
+| `blocked_store` | dominio de `BLOCKED_DOMAINS` (Zara, Nike, Mercado Libre, Tienda Inglesa), aunque la página se haya podido leer                        |
+| `invalid_price` | precio ≤ 0, o sin precio fuera de un local físico                                                                                     |
+| `foreign_store` | sin evidencia de que vende en Uruguay: no está en el registro, el dominio no es `.uy`, no cobra en UYU y la página no declara Uruguay |
+
+La moneda fuera de UYU/USD ya se descarta al normalizar (`unsupported_currency`). **Evidencia de Uruguay** en la página: `eligibleRegion` o `areaServed` de la oferta, el país de la dirección del local o `og:locale` `es_UY`.
+
+**URL canónica** (`canonicalProductUrl`): la `<link rel="canonical">` si es de la misma tienda (no la raíz ni una ruta interna de VTEX `/_v/`), sin fragmento, sin tracking (`utm_*`, `fbclid`, `gclid`, `srsltid`, `_pos`/`_sid`/`_ss` de Shopify…) ni `?variant=`, con el host en minúsculas y sin `/` final. Es la `url` del producto y su id cuando la plataforma no declara uno.
+
+## Locales físicos: `IN_STORE_ONLY` (paso 04b, D10)
+
+Un producto es `IN_STORE_ONLY` solo si la página lo declara (`availability: InStoreOnly`). Nunca se deduce.
+
+- **Precio opcional**: `Product.price` puede ser `null` solo en `IN_STORE_ONLY` (refine de `ProductSchema` y check `products_price_known` en la base). Online sin precio sigue siendo `no_price`.
+- **Ubicación y contacto** (`Product.in_store`, guardado en `data_json`): `address`, `locality`, `phone` y `contact_url`, de la oferta (`availableAtOrFrom`) o de un `LocalBusiness`/`Store` de la página. Lo que no se publica queda en `null`; el contacto mínimo es la página del producto.
+- **Carrito**: un producto sin precio no se compra online; el trigger del carrito lo rechaza con un error explícito (el paso 10a decide cómo se muestra). El ranking le da un puntaje de precio neutro (0.5) hasta el paso 05.
+- **Caso real**: no apareció ninguno el 2026-10-01 (ver `TIENDAS_UY.md`). El soporte está probado con fixtures.
+
+## Tiendas bloqueadas (D7)
+
+Zara, Nike, Mercado Libre y Tienda Inglesa (`BLOCKED_DOMAINS`) **no se muestran**: ni como producto ni como link a la tienda. El descubrimiento las filtra antes de descargar y Validate las rechaza si igual llegan. No se intenta evadir sus protecciones. Un link "también en Zara" sin precio ni stock quedó fuera del MVP: no aporta un producto verificable.
 
 ## Tolerancia a fallas (paso 04a)
 
 Cada URL candidata se procesa por separado (`loadCandidate`) y su falla no afecta a las demás. `ShoppingResult.stats` lleva los conteos para los mensajes honestos de la UI ("no pudimos verificar algunas tiendas"), sin errores técnicos:
 
-| Conteo        | Qué cuenta                                                        |
-| ------------- | ----------------------------------------------------------------- |
-| `candidates`  | URLs candidatas (sin duplicados)                                  |
-| `products`    | productos válidos, antes de rankear y recortar                    |
-| `blocked`     | 401/403/429 o robots.txt que no deja                              |
-| `gone`        | 404/410: el producto desapareció                                  |
-| `failed`      | timeout, 5xx, red, tamaño, demasiados redirects, URL insegura     |
-| `not_product` | no es página de producto (categoría, HTML que cambió, no es HTML) |
-| `no_price`    | producto sin precio legible                                       |
-| `invalid`     | sin título, moneda distinta de UYU/USD o datos fuera del schema   |
+| Conteo             | Qué cuenta                                                                        |
+| ------------------ | --------------------------------------------------------------------------------- |
+| `candidates`       | URLs candidatas (sin duplicados)                                                  |
+| `products`         | productos válidos, antes de rankear y recortar                                    |
+| `blocked`          | 401/403/429 o robots.txt que no deja                                              |
+| `gone`             | 404/410: el producto desapareció                                                  |
+| `failed`           | timeout, 5xx, red, tamaño, demasiados redirects, URL insegura                     |
+| `not_product`      | no es página de producto (categoría, HTML que cambió, no es HTML)                 |
+| `no_price`         | producto sin precio legible                                                       |
+| `invalid`          | sin título, moneda distinta de UYU/USD, fuera del schema o rechazado por Validate |
+| `unverified_stock` | productos válidos con stock `UNKNOWN` (paso 04b)                                  |
+| `unverified_sizes` | productos válidos de una prenda con talle sin talles verificados (paso 04b)       |
 
-Prueba real: `apps/worker/scripts/real-product-extraction.ts [look-N] [--discovery]` (tabla por tienda con fuentes, fallas y un ejemplo).
+Los dos últimos alimentan el mensaje honesto del SPEC ("no pudimos verificar el stock de algunas prendas").
+
+Prueba real: `apps/worker/scripts/real-product-extraction.ts [look-N] [--discovery]` (tabla por tienda con fuentes, fallas y un ejemplo) y `real-product-variants.ts [look-N] [--discovery] [--url …]` (talles y stock por tienda, con lo que quedó sin verificar y por qué).
 
 ## Disponibilidad
 
@@ -159,6 +213,5 @@ Los precios en USD se convierten con una tasa aproximada (`APPROX_UYU_PER_USD`) 
 
 ## Próximos pasos
 
-1. Talles y stock por plataforma, etapa Validate y locales físicos (04b).
-2. Cache en Postgres y jobs de refresco (05).
-3. `visual_similarity` con embeddings de imagen.
+1. Cache en Postgres y jobs de refresco (05).
+2. `visual_similarity` con embeddings de imagen.

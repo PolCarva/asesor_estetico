@@ -35,8 +35,11 @@ export interface ProductFetcher {
   fetch(url: string, options?: FetchOptions): Promise<FetchedPage>;
 }
 
-/** De dónde salió un dato: la cascada prueba JSON-LD → microdata → OpenGraph. */
-export type ExtractSource = "jsonld" | "microdata" | "opengraph";
+/**
+ * De dónde salió un dato: la cascada prueba JSON-LD → microdata → OpenGraph, y los talles y
+ * el stock pueden venir de la plataforma de la tienda (`platform`, paso 04b).
+ */
+export type ExtractSource = "jsonld" | "microdata" | "opengraph" | "platform";
 
 export interface RawVariant {
   /** Id de la plataforma (p. ej. `?variant=` de Shopify) o SKU. Nunca un índice. */
@@ -50,11 +53,26 @@ export interface RawVariant {
   currency: string | null;
 }
 
+/** Lugar físico que declara la página (`availableAtOrFrom`, `LocalBusiness`, `Store`). */
+export interface RawPlace {
+  name: string | null;
+  address: string | null;
+  locality: string | null;
+  /** País de la dirección, como venga (`UY`, `Uruguay`). */
+  country: string | null;
+  phone: string | null;
+  url: string | null;
+}
+
 /** Datos crudos extraídos de una página, antes de normalizar. */
 export interface RawProduct {
   url: string;
+  /** `<link rel="canonical">` absoluto, si la página lo declara. */
+  canonicalUrl: string | null;
   /** Id del producto en la plataforma (`productID`, `productGroupID`), si lo declara. */
   externalId: string | null;
+  /** SKU del producto (JSON-LD `sku`): la API de VTEX lo busca por ahí. */
+  sku: string | null;
   title: string | null;
   brand: string | null;
   description: string | null;
@@ -66,11 +84,23 @@ export interface RawProduct {
   material: string | null;
   category: string | null;
   variants: RawVariant[];
+  /**
+   * Regiones donde la página dice que vende (`eligibleRegion`, `areaServed`, país de la
+   * dirección del local, `og:locale`): evidencia para Validate de que vende en Uruguay.
+   */
+  regions: string[];
+  /** Local físico declarado (para `IN_STORE_ONLY`). */
+  inStore: RawPlace | null;
   /** Fuente de cada dato que se encontró. */
   sources: Partial<Record<RawField, ExtractSource>>;
 }
 
-export type RawField = Exclude<keyof RawProduct, "url" | "variants" | "sources"> | "variants";
+export type RawField =
+  | Exclude<
+      keyof RawProduct,
+      "url" | "canonicalUrl" | "variants" | "regions" | "inStore" | "sources"
+    >
+  | "variants";
 
 export interface ShoppingCache {
   get<T>(key: string): Promise<T | null>;

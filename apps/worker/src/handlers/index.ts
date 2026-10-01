@@ -277,6 +277,8 @@ export const handlers: HandlerRegistry = {
     const result = await searchProducts(payload.query, {
       searchProvider: ctx.deps.searchProvider,
       fetcher: ctx.deps.fetcher,
+      variants: ctx.deps.variants,
+      signal: ctx.signal,
     });
     return {
       slot: payload.slot,
@@ -289,7 +291,11 @@ export const handlers: HandlerRegistry = {
     parsePayload(job, "REFRESH_PRODUCT");
     const [product] = FIXTURE_PRODUCTS;
     if (!product) throw new NonRetryableJobError("Catálogo vacío.");
-    const refreshed = await refreshProduct(product, { fetcher: ctx.deps.fetcher });
+    const refreshed = await refreshProduct(product, {
+      fetcher: ctx.deps.fetcher,
+      variants: ctx.deps.variants,
+      signal: ctx.signal,
+    });
     return { status: refreshed.status, availability: refreshed.product.availability };
   },
 };

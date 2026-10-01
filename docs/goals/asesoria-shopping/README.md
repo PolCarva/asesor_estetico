@@ -113,7 +113,7 @@ source ~/.nvm/nvm.sh && nvm use >/dev/null && pnpm format && pnpm lint && pnpm t
 | 02b | [Perfil visual: los datos que pide el diseño](pasos/02b-perfil-visual-datos.md)                    | 1–6            | 01, 02     | ✅     |
 | 03  | [Shopping: queries desde el LookSpec y búsqueda real](pasos/03-shopping-queries-busqueda.md)       | 7–9            | —          | ✅     |
 | 04a | [Shopping: fetcher seguro, extracción y normalización](pasos/04a-fetch-extraccion.md)              | 10–11          | 03         | ✅     |
-| 04b | [Shopping: adaptadores de talles/stock, validación y locales](pasos/04b-adaptadores-validacion.md) | 10–11          | 04a        | ⬜     |
+| 04b | [Shopping: adaptadores de talles/stock, validación y locales](pasos/04b-adaptadores-validacion.md) | 10–11          | 04a        | ✅     |
 | 05  | [Shopping: ranking y cache persistente](pasos/05-shopping-ranking-cache.md)                        | 12–13          | 04b        | ⬜     |
 | 06  | [Shopping: jobs reales, progreso y Premium server-side](pasos/06-shopping-jobs-premium.md)         | 14, 19         | 05         | ⬜     |
 | 07  | [Talles, CTA "Encontrar este look" y progreso](pasos/07-talles-cta-progreso.md)                    | 16, 15         | 02, 06     | ⬜     |
@@ -375,3 +375,59 @@ source ~/.nvm/nvm.sh && nvm use >/dev/null && pnpm format && pnpm lint && pnpm t
   - 12b: revisar en la prueba de punta a punta que silueta, proporciones y notas Premium sean coherentes entre sí (en esta prueba, `TRAPEZOID` con una nota de "hombros y cadera alineados").
   - Nombre de la marca ("espejo" vs `APP_NAME`): sigue pendiente, como dejó la adaptación visual.
 - Commit: `feat(asesoria-shopping): paso 02b — perfil visual: los datos que pide el diseño`
+
+### Paso 04b — Shopping: adaptadores de talles/stock, validación y locales · 2026-10-01 · ✅
+
+- Hecho:
+  - **Talles y stock por plataforma** (`packages/shopping/src/variants.ts`, `PlatformVariantEnricher`), entre Extract y Normalize:
+    - Fenicio: `#lstTalles` de la página, sin request extra (`<b>` como talle; `span.precio` de `data-varia` como precio de la variante).
+    - VTEX: API de catálogo `?fq=skuId:<sku del JSON-LD>`.
+    - Shopify: `/products/<handle>.js`.
+    - WooCommerce: Store API por `slug`, más una consulta por variación (tope 12).
+    - Cada respuesta se valida con Zod y se compara con la página (mismo path o handle). Si el adaptador falla (`blocked`, `unavailable`, `malformed`, `no_id`, `mismatch`), el producto sigue con lo de su página y lo demás queda sin verificar. `createLiveShopping` devuelve `variants` y el worker lo pasa a `SEARCH_PRODUCTS` y `REFRESH_PRODUCT` (también el `signal`).
+  - **Talles normalizados** (`normalizeSizeLabel` en `packages/shared/src/sizes.ts`): letras (también brasileños P/G/GG/XG), números, `32/34`, `US 9`/`UK 8`, `ÚNICO`. `ProductVariant.size_label` (aditivo) guarda la etiqueta de la tienda.
+  - **Validate** (`validate.ts`): `not_extracted`, `host_mismatch`, `blocked_store`, `invalid_price` y `foreign_store`. "Vende en Uruguay" = registro, `.uy`, UYU o evidencia en la página (`eligibleRegion`, `areaServed`, país del local, `og:locale`). `canonicalProductUrl`: `rel=canonical` de la misma tienda, sin tracking ni `?variant=`.
+  - **`IN_STORE_ONLY`** (D10):
+    - `ProductSchema.price` nullable solo en `IN_STORE_ONLY` (refine) y `Product.in_store` (dirección, localidad, teléfono, link) en `data_json`. La extracción lee `availableAtOrFrom` y `LocalBusiness`/`Store` de la página.
+    - Migración `20261001000100_in_store_price.sql`: precio y moneda nullable con el check `products_price_known`, y trigger del carrito con error explícito para productos sin precio. `db:reset` + `db:types`.
+    - Web: favoritos y admin de productos muestran "consultar en el local" si no hay precio. Ranking: precio neutro (0.5). Seed, mocks (`eligibleRegion: UY`, local físico) y fixture `FIXTURE_IN_STORE_PRODUCT`.
+  - **Conteos**: `ShoppingStats.unverified_stock` y `unverified_sizes` (aditivos).
+  - **Tests**:
+    - `variants.test.ts` (20): fixtures reales de Legacy, Indian, Hering, La Isla, Adidas, H&M, Jack & Jones y Tiendas Montevideo. Cubren robots de BAS, `mismatch`, `no_id`, adaptador caído y Woo con variaciones que no responden.
+    - `validate.test.ts` (17): URL canónica, host, EUR/ARS, precio 0, `.com.ar`, Zara, `not_extracted`, evidencias de Uruguay e `IN_STORE_ONLY` con y sin precio y con y sin ubicación.
+    - `sizes.test.ts` (37).
+    - Integración `products.int.test.ts` (4): el check de precio y el trigger del carrito.
+  - **Script** `apps/worker/scripts/real-product-variants.ts [look-N] [--discovery] [--url …]`.
+  - **Docs**: `SHOPPING_ENGINE.md` (adaptadores, Validate, `IN_STORE_ONLY`, tiendas bloqueadas, conteos), `DATA_MODEL.md`, `SECURITY_PRIVACY.md`, `TIENDAS_UY.md` y `DECISIONES.md` (D7, D9, D10).
+- Prueba real (`real-product-variants.ts look-1 --url <Woo> --url <H&M>`, sin descubrimiento, USD 0): **61 de 61 productos válidos**, talles verificados en las 4 plataformas, 39 s:
+
+  | Tienda                   | Plataforma  | Productos | Con talles | Stock disp / agot / ? | Fuente             | Ejemplo                                                                |
+  | ------------------------ | ----------- | --------- | ---------- | --------------------- | ------------------ | ---------------------------------------------------------------------- |
+  | decathlon.com.uy         | SHOPIFY     | 12        | 12         | 12 / 0 / 0            | shopify:product-js | CAMISA HOMBRE TRAVEL100 · S✓ M✓ L✓ XXL✗                                |
+  | indian.com.uy            | FENICIO     | 9         | 9          | 9 / 0 / 0             | fenicio:html       | Camisa Mustafa - Crudo / Natural · S✓ M✓ L✓ XL✓ XXL(2XL)✓              |
+  | jackjones.com.uy         | SHOPIFY     | 9         | 9          | 9 / 0 / 0             | shopify:product-js | CAMISA CLÁSICA REGULAR OXFORD - Crockery · L✗ S✓ M✓ XL✗ XXL✓           |
+  | laisla.com.uy            | FENICIO     | 7         | 7          | 7 / 0 / 0             | fenicio:html       | Pantalon Rip Curl Classic Surf Chino - Verde · 30✓ 34✓ 36✓ 38✓ 40✓ 32✗ |
+  | legacy.com.uy            | FENICIO     | 6         | 6          | 6 / 0 / 0             | fenicio:html       | CAMISA OXFORD LISA - Rosa · L✓ M✓ S✓ XL✓ XXL✓ XXXL✓                    |
+  | hering.com.uy            | FENICIO     | 3         | 3          | 3 / 0 / 0             | fenicio:html       | PANTALÓN MODELO CHINO SLIM - VERDE · 48✓ 44✗ 40✗                       |
+  | stadium.com.uy           | FENICIO     | 3         | 3          | 3 / 0 / 0             | fenicio:html       | Pantalon de Hombre Adidas Tiro26L · L✓ M✓                              |
+  | tiendasmontevideo.com.uy | WOOCOMMERCE | 1         | 1          | 1 / 0 / 0             | woo:store-api      | Pantalón De Pijama Estampado · S, M, L, XL ✓                           |
+  | uy.hm.com                | VTEX        | 1         | 1          | 1 / 0 / 0             | vtex:catalog       | Remera estampada de estilo vintage Loose · S✓ M✗ L✗ XL✗ XXL✗           |
+  | bas.com.uy               | VTEX        | 10        | 0          | 0 / 10 / 0            | — (robots)         | —                                                                      |
+  - Conteos: `{"candidates":61,"products":61,…,"unverified_stock":0,"unverified_sizes":9}`.
+  - **Qué quedó sin verificar y por qué:** los talles de BAS (10 productos), porque robots.txt prohíbe `/api/` y su HTML FastStore no trae variantes (`vtex:catalog: blocked`). Su stock sí sale del JSON-LD: los 10 dicen `OutOfStock`, y en la página se ven los talles S–XXXL tachados en los 3 colores (contraste 1). Una búsqueda del registro (Stadium) se cortó por timeout y se toleró.
+  - **Bug encontrado y corregido en vivo:** La Isla (`data-varia="true"`) mete el precio de la variante dentro del `<b>` del talle ("30 $ 2.990"). Ahora el `span.precio` se separa como precio de la variante. Se sumó el fixture real `fenicio-talles-laisla.html`.
+  - **Contrastes a mano en el navegador:**
+    - Jack & Jones "CAMISA CLÁSICA REGULAR OXFORD - Crockery Stripes" (`/products/12182486_4502398`): S, M y XXL activos, L y XL grises. Coincide con `L✗ S✓ M✓ XL✗ XXL✓`.
+    - Indian "Pantalon Alvren - Verde Oliva": `#lstTalles` con S "disponible" y M, L y XL "agotado" (title "Agotado"), grises en pantalla. Coincide con `S✓ M✗ L✗ XL✗`.
+  - **`IN_STORE_ONLY` real:** no apareció. Dos búsquedas web (USD 0.0183) dieron tiendas Shopify online (actitudguay.com.uy, dolceragazza.com.uy, que pasaron el pipeline como `IN_STOCK`) y directorios de locales sin datos de producto (smartservices.uy, guiadeo.com: "no es producto"). La ausencia queda documentada y el soporte, probado con fixtures, la alternativa que admite el paso.
+
+- Verificación: format ✓ · lint ✓ · typecheck ✓ · test ✓ (344 unit, 27 integración ejecutados: db 23, worker 4) · build ✓ (worker 1,72 MB) · e2e ✓ (10, desktop + mobile, contra `pnpm dev`) · db:reset ✓ · db:types ✓ · navegador: `/app/favorites` de `demo@` con "UYU 2,290".
+- Decisiones: D7 confirmada (las bloqueadas no se muestran, ni como link). D9 confirmada para 04b (plataforma, no tienda; Validate). D10 decidida: precio nullable solo para `IN_STORE_ONLY`, local en `data_json`. Detalle en `DECISIONES.md`.
+- Para pasos siguientes:
+  - 05: el ranking compara `normalizeText(v.size)` con el talle de la query; normalizar los dos con `normalizeSizeLabel` (hoy "Medium" del usuario no coincide con "M"). Precio `null` en `rankProducts` = 0.5 provisorio. Persistir `size_label` e `in_store` (van en `data_json`); `product_variants.size` ya viene normalizado.
+  - 06: el worker ya pasa `variants` y `signal`; `SEARCH_PRODUCTS` devuelve `stats` con `unverified_*`.
+  - 07: normalizar los talles que carga el usuario con `normalizeSizeLabel`.
+  - 08: mensaje honesto con `unverified_stock`/`unverified_sizes`; "Disponible en tienda física" con `in_store` y sin "Comprar".
+  - 10a: el trigger rechaza agregar al carrito un producto sin precio (`22023`, "has no price"): no ofrecer el botón.
+  - `db:reset` recreó los usuarios del seed: se perdieron los renders y el perfil real que tenían `demo@`/`free@` en la base local.
+- Commit: `feat(asesoria-shopping): paso 04b — adaptadores de talles/stock, validación y locales`

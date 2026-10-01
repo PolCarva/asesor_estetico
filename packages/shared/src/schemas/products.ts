@@ -20,7 +20,10 @@ export type Store = z.infer<typeof StoreSchema>;
 export const ProductVariantSchema = z.object({
   id: z.string().min(1).max(120),
   sku: z.string().max(80).nullable(),
+  /** Talle normalizado (`normalizeSizeLabel`): `M`, `42`, `US 9`, `ÚNICO`… */
   size: z.string().max(20).nullable(),
+  /** Talle como lo escribe la tienda ("Medium", "G", "42/43"). */
+  size_label: z.string().max(40).nullable().default(null),
   color: z.string().max(60).nullable(),
   availability: ProductAvailabilitySchema,
   price: MoneySchema.nullable(),
@@ -28,27 +31,48 @@ export const ProductVariantSchema = z.object({
 export type ProductVariant = z.infer<typeof ProductVariantSchema>;
 
 /**
+ * Local físico donde se consigue un producto `IN_STORE_ONLY`. Solo datos que publica la
+ * tienda; lo que no dice queda en null.
+ */
+export const InStoreInfoSchema = z.object({
+  address: z.string().max(200).nullable(),
+  locality: z.string().max(80).nullable(),
+  phone: z.string().max(40).nullable(),
+  /** Página de la tienda o del local para consultar (contacto o link). */
+  contact_url: z.url({ protocol: /^https?$/ }).nullable(),
+});
+export type InStoreInfo = z.infer<typeof InStoreInfoSchema>;
+
+/**
  * Producto normalizado de una tienda externa. `id` es el id de producto que declara la
  * plataforma (`productGroupID`/`productID`) o, si no hay, la URL de la página: estable y
  * único por tienda (no es el uuid de la base).
  */
-export const ProductSchema = z.object({
-  id: z.string().min(1).max(500),
-  store: StoreSchema,
-  url: z.url({ protocol: /^https?$/ }),
-  title: z.string().min(1).max(200),
-  brand: z.string().max(80).nullable(),
-  category: ProductCategorySchema,
-  description: z.string().max(2000).nullable(),
-  image_url: z.url({ protocol: /^https?$/ }).nullable(),
-  price: MoneySchema,
-  colors: z.array(z.string().max(60)).max(20),
-  materials: z.array(z.string().max(60)).max(10),
-  fit: z.string().max(60).nullable(),
-  availability: ProductAvailabilitySchema,
-  variants: z.array(ProductVariantSchema).max(100),
-  fetched_at: z.iso.datetime({ offset: true }),
-});
+export const ProductSchema = z
+  .object({
+    id: z.string().min(1).max(500),
+    store: StoreSchema,
+    url: z.url({ protocol: /^https?$/ }),
+    title: z.string().min(1).max(200),
+    brand: z.string().max(80).nullable(),
+    category: ProductCategorySchema,
+    description: z.string().max(2000).nullable(),
+    image_url: z.url({ protocol: /^https?$/ }).nullable(),
+    /** Obligatorio, salvo en un local físico que no publica el precio (`IN_STORE_ONLY`, D10). */
+    price: MoneySchema.nullable(),
+    colors: z.array(z.string().max(60)).max(20),
+    materials: z.array(z.string().max(60)).max(10),
+    fit: z.string().max(60).nullable(),
+    availability: ProductAvailabilitySchema,
+    variants: z.array(ProductVariantSchema).max(100),
+    /** Solo en `IN_STORE_ONLY`: ubicación y contacto del local. */
+    in_store: InStoreInfoSchema.nullable().default(null),
+    fetched_at: z.iso.datetime({ offset: true }),
+  })
+  .refine((p) => p.price !== null || p.availability === "IN_STORE_ONLY", {
+    message: "Solo un producto IN_STORE_ONLY puede no tener precio.",
+    path: ["price"],
+  });
 export type Product = z.infer<typeof ProductSchema>;
 
 /** Público de la prenda. `null` = sin filtro (unisex o no se sabe). */
@@ -120,8 +144,15 @@ export const ShoppingStatsSchema = z.object({
   not_product: count,
   /** Producto sin precio legible: no se muestra (nunca se inventa). */
   no_price: count,
-  /** Datos incoherentes: sin título, moneda distinta de UYU/USD, fuera del schema. */
+  /**
+   * Datos incoherentes o que no pasan Validate: sin título, moneda distinta de UYU/USD,
+   * host distinto de la tienda, tienda que no vende en Uruguay, fuera del schema.
+   */
   invalid: count,
+  /** Productos válidos cuyo stock no se pudo verificar (`UNKNOWN`). Paso 04b. */
+  unverified_stock: count.default(0),
+  /** Productos válidos de una prenda con talle cuyos talles no se pudieron verificar. */
+  unverified_sizes: count.default(0),
 });
 export type ShoppingStats = z.infer<typeof ShoppingStatsSchema>;
 

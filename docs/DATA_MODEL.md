@@ -87,7 +87,7 @@ erDiagram
     text store_domain
     text url
     product_category category
-    numeric price_amount
+    numeric price_amount "null solo en IN_STORE_ONLY"
     currency_code currency
     product_availability availability
     jsonb data_json
@@ -226,6 +226,15 @@ El análisis (`StyleProfile` v3, ver `AI_PIPELINE.md`) se guarda partido para qu
 - Perfiles v1 (anteriores al 2026-09-30): el perfil completo quedó en `profile_json` y no tienen fila en `style_advice`. `parseStoredStyleProfile` los sube a v3 con la asesoría nueva vacía. Solo existen en bases locales (no hay producción).
 - `looks.spec_json` anteriores al 2026-10-01 tienen `reasoning` como lista de strings; `StoredLookSpecSchema` los lee como razones de aspecto `STYLE` (ver `AI_PIPELINE.md`).
 
+## Productos de tiendas
+
+`products` guarda el `Product` normalizado (`packages/shared`); `data_json` tiene el objeto completo, con las variantes y `in_store`.
+
+- **Precio** (migración `20261001000100_in_store_price.sql`, D10): `price_amount` y `currency` pueden ser `null` solo en un local físico que no publica el precio. El check `products_price_known` exige que vayan juntos y que, si faltan, `availability = 'IN_STORE_ONLY'`.
+- **Local físico**: ubicación y contacto (`in_store`: dirección, localidad, teléfono, link) van en `data_json`, sin columnas nuevas.
+- **Variantes** (`product_variants`): `size` es el talle normalizado (`M`, `42`, `US 9`, `ÚNICO`). La etiqueta de la tienda (`size_label`) queda en `data_json`.
+- **Carrito**: `set_cart_item_price_snapshot()` rechaza un producto sin precio con un error explícito (`22023`): un local físico no se compra online.
+
 ## Índices principales
 
 - `jobs_queue_idx (priority desc, scheduled_at) where status = 'QUEUED'` — índice parcial para `claim_next_job`.
@@ -259,17 +268,17 @@ Rutas: `<user_id>/<...>`. Las políticas comparan la primera carpeta con `auth.u
 
 ## Funciones SQL
 
-| Función                          | Quién la ejecuta | Qué hace                                         |
-| -------------------------------- | ---------------- | ------------------------------------------------ |
-| `handle_new_user()`              | Trigger          | Crea `profiles` al registrarse                   |
-| `set_cart_item_price_snapshot()` | Trigger          | Fija precio y moneda del ítem desde el catálogo  |
-| `current_user_is_premium()`      | RLS              | Regla Premium                                    |
-| `current_user_is_admin()`        | RLS / servidor   | Rol admin                                        |
-| `can_read_generated_look(name)`  | Política Storage | Imagen generada visible según look y plan        |
-| `enqueue_job(...)`               | service_role     | Encola (idempotente con `idempotency_key`)       |
-| `claim_next_job(...)`            | service_role     | Toma el próximo job con `FOR UPDATE SKIP LOCKED` |
-| `complete_job(...)`              | service_role     | Marca COMPLETED (solo el worker que lo tomó)     |
-| `fail_job(...)`                  | service_role     | Reintenta con delay o marca FAILED               |
-| `retry_job(id)`                  | service_role     | Reintento manual de un FAILED                    |
-| `admin_overview_metrics()`       | service_role     | Métricas del overview de `/admin`                |
-| `admin_event_counts(days)`       | service_role     | Conteo de eventos para `/admin/analytics`        |
+| Función                          | Quién la ejecuta | Qué hace                                                                      |
+| -------------------------------- | ---------------- | ----------------------------------------------------------------------------- |
+| `handle_new_user()`              | Trigger          | Crea `profiles` al registrarse                                                |
+| `set_cart_item_price_snapshot()` | Trigger          | Fija precio y moneda del ítem desde el catálogo; rechaza productos sin precio |
+| `current_user_is_premium()`      | RLS              | Regla Premium                                                                 |
+| `current_user_is_admin()`        | RLS / servidor   | Rol admin                                                                     |
+| `can_read_generated_look(name)`  | Política Storage | Imagen generada visible según look y plan                                     |
+| `enqueue_job(...)`               | service_role     | Encola (idempotente con `idempotency_key`)                                    |
+| `claim_next_job(...)`            | service_role     | Toma el próximo job con `FOR UPDATE SKIP LOCKED`                              |
+| `complete_job(...)`              | service_role     | Marca COMPLETED (solo el worker que lo tomó)                                  |
+| `fail_job(...)`                  | service_role     | Reintenta con delay o marca FAILED                                            |
+| `retry_job(id)`                  | service_role     | Reintento manual de un FAILED                                                 |
+| `admin_overview_metrics()`       | service_role     | Métricas del overview de `/admin`                                             |
+| `admin_event_counts(days)`       | service_role     | Conteo de eventos para `/admin/analytics`                                     |

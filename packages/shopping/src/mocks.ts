@@ -32,14 +32,30 @@ export function renderProductPage(product: Product): string {
     material: product.materials.join(", "),
     offers: {
       "@type": "Offer",
-      price: product.price.amount,
-      priceCurrency: product.price.currency,
+      price: product.price?.amount,
+      priceCurrency: product.price?.currency,
       availability: AVAILABILITY_URL[product.availability] ?? undefined,
+      // Las tiendas ficticias (.test) dicen que venden en Uruguay, como lo haría una real.
+      eligibleRegion: "UY",
+      availableAtOrFrom: product.in_store
+        ? {
+            "@type": "Store",
+            name: product.store.name,
+            telephone: product.in_store.phone ?? undefined,
+            url: product.in_store.contact_url ?? undefined,
+            address: {
+              "@type": "PostalAddress",
+              streetAddress: product.in_store.address ?? undefined,
+              addressLocality: product.in_store.locality ?? undefined,
+              addressCountry: "UY",
+            },
+          }
+        : undefined,
     },
     hasVariant: product.variants.map((v) => ({
       "@type": "Product",
       sku: v.sku ?? v.id,
-      size: v.size ?? undefined,
+      size: v.size_label ?? v.size ?? undefined,
       color: v.color ?? undefined,
       offers: { "@type": "Offer", availability: AVAILABILITY_URL[v.availability] ?? undefined },
     })),

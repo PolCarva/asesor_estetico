@@ -1,6 +1,13 @@
 import { type MicrodataItem, type PageData, parseHtml } from "./html";
 import { normalizeAvailability, parsePrice } from "./normalize";
-import type { ExtractSource, FetchedPage, RawField, RawProduct, RawVariant } from "./types";
+import type {
+  ExtractSource,
+  FetchedPage,
+  RawField,
+  RawPlace,
+  RawProduct,
+  RawVariant,
+} from "./types";
 
 /**
  * Extracción genérica en cascada, como pide el SPEC: 1) JSON-LD (`Product` o
@@ -99,6 +106,7 @@ const isProductNode = (node: Json) =>
 /** Partes de un producto que puede dar una fuente. */
 interface Part {
   externalId: string | null;
+  sku: string | null;
   title: string | null;
   brand: string | null;
   description: string | null;
@@ -110,6 +118,8 @@ interface Part {
   material: string | null;
   category: string | null;
   variants: RawVariant[];
+  regions: string[];
+  inStore: RawPlace | null;
 }
 
 interface Offer {
@@ -118,6 +128,40 @@ interface Offer {
   availability: string | null;
   sku: string | null;
   url: string | null;
+  /** `eligibleRegion` / `areaServed`. */
+  regions: string[];
+  /** `availableAtOrFrom`: el local donde está. */
+  place: unknown;
+}
+
+/** Regiones como texto: `"UY"`, `{ name: "Uruguay" }`, `{ addressCountry: "UY" }`. */
+function regionsOf(value: unknown): string[] {
+  return asArray(value).flatMap((item) => {
+    const region = isObject(item)
+      ? (text(item.name) ?? countryOf(item.addressCountry) ?? text(item.identifier))
+      : text(item);
+    return region ? [region] : [];
+  });
+}
+
+const countryOf = (value: unknown): string | null =>
+  isObject(value) ? text(value.name) : text(value);
+
+/** Lugar físico (Place, Store, LocalBusiness): dirección, teléfono y link, si los declara. */
+function readPlace(value: unknown, base: string): RawPlace | null {
+  const node = asArray(value).find(isObject);
+  if (!node) return null;
+  const rawAddress = asArray(node.address)[0];
+  const address = isObject(rawAddress) ? rawAddress : null;
+  const place: RawPlace = {
+    name: text(node.name),
+    address: address ? text(address.streetAddress) : text(rawAddress),
+    locality: address ? (text(address.addressLocality) ?? text(address.addressRegion)) : null,
+    country: address ? countryOf(address.addressCountry) : null,
+    phone: text(node.telephone),
+    url: absoluteUrl(text(node.url), base),
+  };
+  return place.address || place.phone ? place : null;
 }
 
 function readOffers(value: unknown): Offer[] {
@@ -132,7 +176,17 @@ function readOffers(value: unknown): Offer[] {
         }));
         if (inner.length > 0) return inner;
         const price = (offer.lowPrice ?? offer.price ?? null) as number | string | null;
-        return [{ price, currency, availability: text(offer.availability), sku: null, url: null }];
+        return [
+          {
+            price,
+            currency,
+            availability: text(offer.availability),
+            sku: null,
+            url: null,
+            regions: regionsOf(offer.eligibleRegion ?? offer.areaServed),
+            place: offer.availableAtOrFrom,
+          },
+        ];
       }
       const spec = asArray(offer.priceSpecification).find(isObject);
       const price = (offer.price ?? spec?.price ?? offer.lowPrice ?? null) as
@@ -144,6 +198,8 @@ function readOffers(value: unknown): Offer[] {
           availability: text(offer.availability),
           sku: text(offer.sku),
           url: text(offer.url),
+          regions: regionsOf(offer.eligibleRegion ?? offer.areaServed),
+          place: offer.availableAtOrFrom,
         },
       ];
     });
@@ -217,6 +273,7 @@ function readProductNode(node: Json, base: string): Part {
 
   return {
     externalId: text(node.productGroupID) ?? text(node.productID),
+    sku: text(node.sku),
     title: text(node.name),
     brand: firstText(node.brand),
     description: text(node.description),
@@ -235,7 +292,31 @@ function readProductNode(node: Json, base: string): Part {
     material: asArray(node.material).map(text).filter(Boolean).join(", ") || null,
     category: firstText(node.category),
     variants,
+    regions: [...new Set(offers.flatMap((o) => o.regions))],
+    inStore: offers.map((o) => readPlace(o.place, base)).find(Boolean) ?? null,
   };
+}
+
+const PLACE_TYPE = /^(LocalBusiness|Store|[A-Za-z]+Store|Organization|Place)$/;
+
+/** Nodos JSON-LD de primer nivel (con `@graph` aplanado). */
+function topNodes(blocks: unknown[]): Json[] {
+  return blocks
+    .flatMap((b) => asArray(isObject(b) && b["@graph"] ? b["@graph"] : b))
+    .filter(isObject);
+}
+
+/** Locales que declara la página (JSON-LD o microdata `LocalBusiness`, `Store`…). */
+function pagePlace(data: PageData, base: string): RawPlace | null {
+  const nodes = [
+    ...topNodes(data.jsonLd),
+    ...allItems(data.items).map((item) => microdataToJson(item)),
+  ].filter((node) => typesOf(node).some((t) => PLACE_TYPE.test(t)));
+  for (const node of nodes) {
+    const place = readPlace(node, base);
+    if (place) return place;
+  }
+  return null;
 }
 
 /** Nodos de producto del JSON-LD (en `@graph`, arrays o `mainEntity`), sin entrar en listas. */
@@ -330,6 +411,9 @@ function fromOpenGraph(data: PageData, base: string): Part | null {
     material: get("product:material"),
     category: data.meta.get("product:category")?.join(" / ") ?? null,
     variants: [],
+    sku: get("product:retailer_item_id"),
+    regions: [],
+    inStore: null,
   };
 }
 
@@ -337,6 +421,7 @@ const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 const SIMPLE_FIELDS = [
   "externalId",
+  "sku",
   "title",
   "brand",
   "description",
@@ -366,9 +451,14 @@ export function extractProduct(page: FetchedPage): RawProduct | null {
   ).filter((p): p is [ExtractSource, Part] => p[1] !== null);
   if (parts.length === 0) return null;
 
+  const place = parts.map(([, part]) => part.inStore).find(Boolean) ?? pagePlace(data, page.url);
+  // `og:locale` "es_UY" también dice dónde vende.
+  const locales = (data.meta.get("og:locale") ?? []).map((l) => l.split(/[_-]/)[1] ?? "");
   const raw: RawProduct = {
     url: page.url,
+    canonicalUrl: absoluteUrl(data.canonical, page.url),
     externalId: null,
+    sku: null,
     title: null,
     brand: null,
     description: null,
@@ -380,6 +470,14 @@ export function extractProduct(page: FetchedPage): RawProduct | null {
     material: null,
     category: null,
     variants: [],
+    regions: [
+      ...new Set(
+        [...parts.flatMap(([, part]) => part.regions), place?.country, ...locales].filter(
+          (r): r is string => Boolean(r),
+        ),
+      ),
+    ],
+    inStore: place,
     sources: {},
   };
   const take = (field: RawField, source: ExtractSource) => {
