@@ -33,6 +33,8 @@ function row(
     breakdown: {},
     sizeStatus,
     userSize,
+    list: "MAIN",
+    cheaperThan: null,
     product: {
       id: `${slot}-${rank}`,
       product: { ...product, fetched_at: HOURS(fetchedHoursAgo) },
@@ -206,6 +208,77 @@ describe("buildLookResults", () => {
     });
     expect(view.pieces[0]!.recommended?.imageUrl).toBeNull();
     expect(view.pieces[0]!.alternatives[0]?.imageUrl).toBe("https://tienda.test/b.jpg");
+  });
+});
+
+describe("más baratas (paso 09)", () => {
+  const cheap = (
+    rank: number,
+    product: Product,
+    max = { amount: 1890, currency: "UYU" as const },
+  ): LookProductResult => ({
+    ...row("top", rank, product),
+    product: { id: `cheap-${rank}`, product: { ...product, fetched_at: HOURS(1) } },
+    list: "CHEAPER",
+    cheaperThan: { productId: "top-1", maxPrice: max },
+  });
+
+  it("van aparte del ranking, con el precio de referencia y cuánto menos cuestan", () => {
+    const view = buildLookResults({
+      pieces,
+      rows: [
+        row("top", 1, crudo!),
+        row("top", 2, blanca!),
+        cheap(1, {
+          ...blanca!,
+          url: "https://otra.test/a",
+          price: { amount: 990, currency: "UYU" },
+        }),
+        cheap(2, {
+          ...blanca!,
+          url: "https://otra.test/b",
+          price: { amount: 30, currency: "USD" },
+        }),
+      ],
+      summary: null,
+      sizes,
+      now: NOW,
+    });
+    const top = view.pieces[0]!;
+    expect(top.alternatives.map((a) => a.productId)).toEqual(["top-2"]);
+    expect(top.cheaper).toMatchObject({
+      state: "results",
+      referenceTitle: crudo!.title,
+      converted: true,
+    });
+    expect(spaces(top.cheaper.limit)).toBe("$ 1.890");
+    expect(top.cheaper.options.map((o) => [spaces(o.price), spaces(o.saving)])).toEqual([
+      ["$ 990", "$ 900 menos"],
+      // En dólares: sin diferencia (no se convierte para mostrar).
+      ["US$ 30", undefined],
+    ]);
+    // El total sigue siendo el de los recomendados del ranking principal.
+    expect(view.totals.map((t) => spaces(t.amount))).toEqual(["$ 1.890"]);
+  });
+
+  it("estado honesto: buscando, sin resultados y búsquedas que ya no valen", () => {
+    const base = { pieces, rows: [row("top", 1, crudo!)], summary: null, sizes, now: NOW };
+    const at = (h: number) => HOURS(h);
+    const state = (
+      search: { status: "QUEUED" | "RUNNING" | "COMPLETED" | "FAILED"; createdAt: string },
+      look: string | null,
+    ) =>
+      buildLookResults({
+        ...base,
+        slotSearches: new Map([["top", search]]),
+        lookSearchCreatedAt: look,
+      }).pieces[0]!.cheaper.state;
+    expect(state({ status: "RUNNING", createdAt: at(0) }, at(1))).toBe("running");
+    expect(state({ status: "COMPLETED", createdAt: at(0) }, at(1))).toBe("empty");
+    expect(state({ status: "FAILED", createdAt: at(0) }, at(1))).toBe("failed");
+    // Una búsqueda del look más nueva descartó esas más baratas.
+    expect(state({ status: "COMPLETED", createdAt: at(2) }, at(1))).toBe("none");
+    expect(buildLookResults(base).pieces[0]!.cheaper.state).toBe("none");
   });
 });
 

@@ -409,9 +409,13 @@ export type Database = {
           created_at: string;
           garment_slot: string;
           id: string;
+          list: string;
           look_id: string;
+          max_price_amount: number | null;
+          max_price_currency: Database["public"]["Enums"]["currency_code"] | null;
           product_id: string;
           rank: number;
+          reference_product_id: string | null;
           score: number;
           score_breakdown: NonNullable<Json>;
           size_status: string | null;
@@ -421,9 +425,13 @@ export type Database = {
           created_at?: string;
           garment_slot: string;
           id?: string;
+          list?: string;
           look_id: string;
+          max_price_amount?: number | null;
+          max_price_currency?: Database["public"]["Enums"]["currency_code"] | null;
           product_id: string;
           rank: number;
+          reference_product_id?: string | null;
           score: number;
           score_breakdown?: NonNullable<Json>;
           size_status?: string | null;
@@ -433,9 +441,13 @@ export type Database = {
           created_at?: string;
           garment_slot?: string;
           id?: string;
+          list?: string;
           look_id?: string;
+          max_price_amount?: number | null;
+          max_price_currency?: Database["public"]["Enums"]["currency_code"] | null;
           product_id?: string;
           rank?: number;
+          reference_product_id?: string | null;
           score?: number;
           score_breakdown?: NonNullable<Json>;
           size_status?: string | null;
@@ -452,6 +464,13 @@ export type Database = {
           {
             foreignKeyName: "look_products_product_id_fkey";
             columns: ["product_id"];
+            isOneToOne: false;
+            referencedRelation: "products";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "look_products_reference_product_id_fkey";
+            columns: ["reference_product_id"];
             isOneToOne: false;
             referencedRelation: "products";
             referencedColumns: ["id"];
@@ -1087,6 +1106,17 @@ export type Database = {
           isOneToOne: true;
           isSetofReturn: false;
         };
+      };
+      replace_cheaper_look_products: {
+        Args: {
+          p_items: Json;
+          p_look_id: string;
+          p_max_price_amount: number;
+          p_max_price_currency: Database["public"]["Enums"]["currency_code"];
+          p_reference_product_id: string;
+          p_slot: string;
+        };
+        Returns: number;
       };
       replace_look_products: {
         Args: { p_items: Json; p_look_id: string; p_slot: string };

@@ -95,7 +95,10 @@ export const ShoppingQuerySchema = z.object({
   /** Términos en español rioplatense, del más específico al más general. */
   search_terms: z.array(z.string().min(1).max(80)).max(8).default([]),
   audience: ShoppingAudienceSchema.nullable().default(null),
-  /** true: `max_price` es un tope duro (se descarta lo que lo supera), no solo un factor. */
+  /**
+   * true: `max_price` es un tope duro ("más barato que"): se descarta lo que cuesta lo mismo
+   * o más, no es solo un factor.
+   */
   strict_max_price: z.boolean().default(false),
 });
 export type ShoppingQuery = z.infer<typeof ShoppingQuerySchema>;

@@ -1,4 +1,4 @@
-import type { LookProductResult } from "@asesor/db";
+import type { LookProductResult, LookSearchState } from "@asesor/db";
 import {
   type Currency,
   type Garment,
@@ -43,6 +43,29 @@ export interface ProductOptionView {
   inStore: InStoreInfo | null;
 }
 
+export interface CheaperOptionView extends ProductOptionView {
+  /** "$ 400 menos"; null si está en otra moneda (se comparó con una conversión aproximada). */
+  saving: string | null;
+}
+
+/**
+ * "Buscar más barato" de la prenda (paso 09):
+ * - `running`: buscando;
+ * - `results`: alternativas guardadas;
+ * - `empty`: se buscó y no hubo nada más barato que conserve el estilo;
+ * - `failed`: la búsqueda falló;
+ * - `none`: nunca se pidió (o una búsqueda nueva del look la descartó).
+ */
+export interface CheaperView {
+  state: "none" | "running" | "results" | "empty" | "failed";
+  /** "$ 1.399": el precio del producto de referencia (el tope estricto). */
+  limit: string | null;
+  referenceTitle: string | null;
+  options: CheaperOptionView[];
+  /** Hay alternativas en otra moneda que la del tope. */
+  converted: boolean;
+}
+
 export interface PieceResultsView {
   slot: GarmentSlot;
   garment: Garment;
@@ -50,6 +73,7 @@ export interface PieceResultsView {
   status: "results" | "empty" | "failed";
   recommended: ProductOptionView | null;
   alternatives: ProductOptionView[];
+  cheaper: CheaperView;
 }
 
 export interface LookResultsView {
@@ -151,18 +175,73 @@ function option(row: LookProductResult, now: Date) {
   } satisfies ProductOptionView;
 }
 
+function cheaperView(
+  rows: LookProductResult[],
+  all: LookProductResult[],
+  search: Pick<LookSearchState, "status" | "createdAt"> | undefined,
+  lookSearchCreatedAt: string | null,
+  now: Date,
+): CheaperView {
+  const none: CheaperView = {
+    state: "none",
+    limit: null,
+    referenceTitle: null,
+    options: [],
+    converted: false,
+  };
+  if (search && (search.status === "QUEUED" || search.status === "RUNNING")) {
+    return { ...none, state: "running" };
+  }
+  const cheaper = rows.filter((r) => r.list === "CHEAPER").sort((a, b) => a.rank - b.rank);
+  const first = cheaper[0]?.cheaperThan;
+  if (first) {
+    const limit = first.maxPrice;
+    const reference = all.find((r) => r.product.id === first.productId);
+    const options = cheaper.map((row): CheaperOptionView => {
+      const price = row.product.product.price;
+      const same = price?.currency === limit.currency;
+      return {
+        ...option(row, now),
+        saving:
+          price && same
+            ? `${formatMoney({ currency: limit.currency, amount: Math.round((limit.amount - price.amount) * 100) / 100 })} menos`
+            : null,
+      };
+    });
+    return {
+      state: "results",
+      limit: formatMoney(limit),
+      referenceTitle: reference?.product.product.title ?? null,
+      options,
+      converted: options.some((o) => o.saving === null),
+    };
+  }
+  // Sin filas: solo cuenta una búsqueda más nueva que la del look (que descarta las viejas).
+  const recent =
+    search &&
+    (!lookSearchCreatedAt || Date.parse(search.createdAt) > Date.parse(lookSearchCreatedAt));
+  if (recent && search.status === "COMPLETED") return { ...none, state: "empty" };
+  if (recent && search.status === "FAILED") return { ...none, state: "failed" };
+  return none;
+}
+
 export function buildLookResults(input: {
   pieces: Array<{ slot: GarmentSlot; garment: Garment }>;
   rows: LookProductResult[];
   summary: ShoppingSearchSummary | null;
   sizes: UserSizes;
   now: Date;
+  /** Búsquedas de una sola prenda ("más barato"), por slot, y cuándo se buscó el look. */
+  slotSearches?: Map<string, Pick<LookSearchState, "status" | "createdAt">>;
+  lookSearchCreatedAt?: string | null;
 }): LookResultsView {
   const failed = new Set(input.summary?.failed_slots ?? []);
   const fetched: string[] = [];
   let sizesChanged = false;
+  const mainRows = input.rows.filter((r) => r.list === "MAIN");
   const pieces = input.pieces.map(({ slot, garment }): PieceResultsView => {
-    const rows = input.rows.filter((r) => r.slot === slot).sort((a, b) => a.rank - b.rank);
+    const slotRows = input.rows.filter((r) => r.slot === slot);
+    const rows = slotRows.filter((r) => r.list === "MAIN").sort((a, b) => a.rank - b.rank);
     const options = rows.map((row) => option(row, input.now));
     const current = sizeForCategory(input.sizes, garment.category);
     if (rows.some((r) => r.userSize !== null && r.userSize !== current)) sizesChanged = true;
@@ -174,13 +253,20 @@ export function buildLookResults(input: {
       status: options.length > 0 ? "results" : failed.has(slot) ? "failed" : "empty",
       recommended,
       alternatives,
+      cheaper: cheaperView(
+        slotRows,
+        input.rows,
+        input.slotSearches?.get(slot),
+        input.lookSearchCreatedAt ?? null,
+        input.now,
+      ),
     };
   });
 
   const recommended = pieces.flatMap((p) => (p.recommended ? [p] : []));
   const byCurrency = new Map<Currency, { amount: number; count: number }>();
   for (const piece of recommended) {
-    const row = input.rows.find((r) => r.product.id === piece.recommended?.productId);
+    const row = mainRows.find((r) => r.product.id === piece.recommended?.productId);
     const price = row?.product.product.price;
     if (!price) continue;
     const sum = byCurrency.get(price.currency) ?? { amount: 0, count: 0 };

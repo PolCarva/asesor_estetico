@@ -1,13 +1,28 @@
-import { EMPTY_USER_SIZES, splitStyleProfile, type UserSizes } from "@asesor/shared";
-import { FIXTURE_LOOK_SPECS, FIXTURE_STYLE_PROFILE } from "@asesor/shared/fixtures";
+import {
+  EMPTY_USER_SIZES,
+  type Product,
+  type RankedProduct,
+  splitStyleProfile,
+  type UserSizes,
+} from "@asesor/shared";
+import {
+  FIXTURE_IN_STORE_PRODUCT,
+  FIXTURE_LOOK_SPECS,
+  FIXTURE_PRODUCTS,
+  FIXTURE_STYLE_PROFILE,
+} from "@asesor/shared/fixtures";
 import { afterAll, beforeAll, expect, it } from "vitest";
 
 import { enqueueJob, updateJobProgress } from "../../src/jobs";
+import { getLookProducts, saveCheaperProducts, saveLookProducts } from "../../src/shopping";
 import {
   getLatestLookSearch,
+  getSlotSearches,
   MISSING_SIZES,
+  NO_PRICE,
   SHOPPING_SEARCH_MAX_ATTEMPTS,
   SHOPPING_SEARCH_PRIORITY,
+  startCheaperSearch,
   startLookShopping,
 } from "../../src/shopping-jobs";
 import { toJson } from "../../src/types";
@@ -82,9 +97,33 @@ describeIntegration("shopping: inicio de la búsqueda y progreso", () => {
     await makePremium(other.id);
   });
 
+  const tag = crypto.randomUUID().slice(0, 8);
+  const tagged = (p: Product, suffix = ""): Product => ({
+    ...p,
+    id: `${p.id}-${tag}${suffix}`,
+    url: `${p.url}-${tag}${suffix}`,
+  });
+  const ranked = (list: Product[]): RankedProduct[] =>
+    list.map((product, i) => ({
+      product,
+      score: 0.9 - i / 10,
+      breakdown: {
+        category_match: 1,
+        visual_similarity: 0.8,
+        color_match: 1,
+        fit_match: 1,
+        material_match: 0.5,
+        size_available: 1,
+        stock: 1,
+        price: 1,
+      },
+      size_status: "AVAILABLE",
+    }));
+
   afterAll(async () => {
-    // Los jobs se borran en cascada con el usuario.
+    // Jobs y resultados se borran en cascada con el usuario; los productos, por su URL.
     for (const user of [premium, free, other]) if (user) await deleteTestUser(user.id);
+    await admin.from("products").delete().like("url", `%-${tag}%`);
   });
 
   it("un usuario free recibe PREMIUM_REQUIRED y no se encola nada", async () => {
@@ -254,5 +293,128 @@ describeIntegration("shopping: inicio de la búsqueda y progreso", () => {
     expect(write.error?.code).toBe("42501");
     const { data: after } = await admin.from("jobs").select("progress").eq("id", jobId).single();
     expect(after?.progress).toEqual(progress);
+  });
+
+  it("más barato: encola solo la prenda del producto, con su precio como tope estricto", async () => {
+    const [crudo, blanca] = [tagged(FIXTURE_PRODUCTS[0]!), tagged(FIXTURE_PRODUCTS[1]!)];
+    const local = tagged(FIXTURE_IN_STORE_PRODUCT);
+    const look = looks[1]!;
+    await saveLookProducts(admin, {
+      lookId: look,
+      slot: "top",
+      items: ranked([crudo, blanca, local]),
+    });
+    const rows = await getLookProducts(admin, look);
+    const id = (p: Product) => rows.find((r) => r.product.product.url === p.url)!.product.id;
+    const cheaper = (productId: string, client = premium.client) =>
+      startCheaperSearch({
+        userClient: client,
+        serviceClient: admin,
+        lookId: look,
+        productId,
+        sizes,
+        requestId: crypto.randomUUID(),
+      });
+
+    const first = await cheaper(id(crudo));
+    expect(first).toMatchObject({
+      alreadyRunning: false,
+      mode: "SLOT",
+      slot: "top",
+      price: { amount: 1890, currency: "UYU" },
+    });
+    const { data: job } = await admin
+      .from("jobs")
+      .select("payload, garment_slot")
+      .eq("id", first.jobId)
+      .single();
+    // La misma prenda del look (sus atributos los arma el worker desde el LookSpec), con el
+    // precio actual como máximo y el producto de referencia.
+    expect(job).toMatchObject({
+      garment_slot: "top",
+      payload: {
+        slot: "top",
+        max_price: { amount: 1890, currency: "UYU" },
+        reference_product_id: id(crudo),
+        sizes,
+      },
+    });
+    // Idempotente: otra vez (o con otro producto de la misma prenda) devuelve la activa.
+    expect(await cheaper(id(crudo))).toMatchObject({ jobId: first.jobId, alreadyRunning: true });
+    expect((await cheaper(id(blanca))).jobId).toBe(first.jobId);
+    expect((await getSlotSearches(premium.client, look)).get("top")?.jobId).toBe(first.jobId);
+
+    // Sin precio no aplica; productos que no son de este look, tampoco.
+    await expect(cheaper(id(local))).rejects.toMatchObject({ message: NO_PRICE });
+    await expect(cheaper(crypto.randomUUID())).rejects.toMatchObject({ code: "NOT_FOUND" });
+    await expect(cheaper(id(crudo), other.client)).rejects.toMatchObject({ code: "NOT_FOUND" });
+    // Free: rechazado antes de mirar nada, y sin jobs.
+    await expect(cheaper(id(crudo), free.client)).rejects.toMatchObject({
+      code: "PREMIUM_REQUIRED",
+    });
+    expect(await searchJobs(free.id)).toEqual([]);
+  });
+
+  it("las más baratas van aparte: no pisan el ranking, no lo repiten y se reemplazan", async () => {
+    const look = looks[2]!;
+    const [crudo, blanca, chino] = [0, 1, 2].map((i) => tagged(FIXTURE_PRODUCTS[i]!, "-c"));
+    const barata = {
+      ...tagged(FIXTURE_PRODUCTS[1]!, "-barata"),
+      price: { amount: 590, currency: "UYU" as const },
+    };
+    await saveLookProducts(admin, { lookId: look, slot: "top", items: ranked([crudo!, blanca!]) });
+    const main = await getLookProducts(admin, look);
+    const ref = main.find((r) => r.product.product.url === crudo!.url)!.product.id;
+
+    // blanca ya está en el ranking principal: no se repite; las más baratas se renumeran.
+    const saved = await saveCheaperProducts(admin, {
+      lookId: look,
+      slot: "top",
+      referenceProductId: ref,
+      maxPrice: { amount: 1890, currency: "UYU" },
+      items: ranked([blanca!, barata, chino!]),
+      userSize: "M",
+    });
+    expect(saved).toBe(2);
+    const rows = await getLookProducts(premium.client, look);
+    const lists = rows.map((r) => [r.list, r.rank, r.product.product.url]);
+    expect(lists).toEqual([
+      ["MAIN", 1, crudo!.url],
+      ["MAIN", 2, blanca!.url],
+      ["CHEAPER", 1, barata.url],
+      ["CHEAPER", 2, chino!.url],
+    ]);
+    expect(rows.find((r) => r.list === "CHEAPER")?.cheaperThan).toEqual({
+      productId: ref,
+      maxPrice: { amount: 1890, currency: "UYU" },
+    });
+
+    // Otro pedido reemplaza las más baratas de la prenda; el ranking principal queda.
+    await saveCheaperProducts(admin, {
+      lookId: look,
+      slot: "top",
+      referenceProductId: ref,
+      maxPrice: { amount: 1890, currency: "UYU" },
+      items: ranked([barata]),
+    });
+    expect((await getLookProducts(admin, look)).map((r) => r.list)).toEqual([
+      "MAIN",
+      "MAIN",
+      "CHEAPER",
+    ]);
+    // Una búsqueda nueva de la prenda (ranking principal) descarta sus más baratas.
+    await saveLookProducts(admin, { lookId: look, slot: "top", items: ranked([crudo!]) });
+    expect((await getLookProducts(admin, look)).map((r) => r.list)).toEqual(["MAIN"]);
+
+    // Nadie las escribe desde el cliente.
+    const rpc = await premium.client.rpc("replace_cheaper_look_products", {
+      p_look_id: look,
+      p_slot: "top",
+      p_reference_product_id: ref,
+      p_max_price_amount: 1,
+      p_max_price_currency: "UYU",
+      p_items: [],
+    });
+    expect(rpc.error?.code).toBe("42501");
   });
 });

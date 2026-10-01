@@ -154,6 +154,40 @@ describe("ranking con productos reales", () => {
     expect(sizeStatusFor(query(pantalonRelaxed), hunter)).toBe("NOT_REQUESTED");
   });
 
+  it("más barato (paso 09): estrictamente menor, entre monedas solo para filtrar, por parecido", () => {
+    const [lisa] = remeras; // Legacy "REMERA LISA DE ALGODÓN - Negro", UYU 1290
+    const cheaper = rankProducts(
+      [
+        ...remeras,
+        // Mismo precio que el máximo: no es más barato.
+        { ...lisa!, url: `${lisa!.url}?igual`, id: "igual" },
+        // En dólares: se compara con la conversión aproximada (USD 20 ≈ UYU 800).
+        { ...lisa!, url: `${lisa!.url}?usd`, id: "usd", price: { amount: 20, currency: "USD" } },
+        {
+          ...lisa!,
+          url: `${lisa!.url}?usd-caro`,
+          id: "usd-caro",
+          price: { amount: 40, currency: "USD" },
+        },
+      ],
+      query(remeraNegraLisa, { max_price: lisa!.price, strict_max_price: true }),
+    );
+    const ids = cheaper.map((r) => r.product.id);
+    expect(ids).not.toContain(lisa!.id);
+    expect(ids).not.toContain("igual");
+    expect(ids).toContain("usd");
+    expect(ids).not.toContain("usd-caro");
+    expect(
+      cheaper.every((r) => r.product.price!.currency === "USD" || r.product.price!.amount < 1290),
+    ).toBe(true);
+    // El orden sigue siendo por parecido, no por precio: primero las lisas y básicas
+    // (estilo 1), las estampadas al final, y la más barata (UYU 99) no encabeza.
+    const style = cheaper.map((r) => r.breakdown.visual_similarity);
+    expect(style.slice(0, 4)).toEqual([1, 1, 1, 1]);
+    expect(cheaper.slice(-2).every((r) => /ESTAMPADA/.test(r.product.title))).toBe(true);
+    expect(cheaper[0]!.product.price!.amount).not.toBe(99);
+  });
+
   it("precio: secundario, filtro estricto opcional y sin factor de precio cuando no hay", () => {
     const strict = rankProducts(
       remeras,
@@ -163,7 +197,7 @@ describe("ranking con productos reales", () => {
       }),
     );
     expect(strict.length).toBeGreaterThan(0);
-    expect(strict.every((r) => r.product.price !== null && r.product.price.amount <= 700)).toBe(
+    expect(strict.every((r) => r.product.price !== null && r.product.price.amount < 700)).toBe(
       true,
     );
 

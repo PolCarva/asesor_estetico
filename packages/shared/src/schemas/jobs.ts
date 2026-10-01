@@ -21,8 +21,10 @@ export type JobStatus = z.infer<typeof JobStatusSchema>;
 
 /**
  * Búsqueda de productos de un look (paso 06). Sin `slot`, busca todas las prendas y
- * reemplaza los resultados del look entero; con `slot`, solo esa prenda (paso 09), y
- * `max_price` es un tope estricto. Los talles van en el pedido: la búsqueda no lee el perfil.
+ * reemplaza los resultados del look entero; con `slot`, solo esa prenda, y `max_price` es un
+ * tope estricto (precio menor). Con `reference_product_id` es "Buscar más barato" (paso 09):
+ * las alternativas se guardan aparte, como "más baratas" que ese producto, sin tocar el
+ * ranking principal. Los talles van en el pedido: la búsqueda no lee el perfil.
  */
 export const SearchProductsPayloadSchema = z
   .object({
@@ -33,10 +35,15 @@ export const SearchProductsPayloadSchema = z
     max_price: z
       .object({ amount: z.number().positive().max(10_000_000), currency: CurrencySchema })
       .optional(),
+    reference_product_id: z.uuid().optional(),
   })
   .refine((p) => !p.max_price || p.slot, {
     message: "El precio máximo es por prenda: requiere slot.",
     path: ["max_price"],
+  })
+  .refine((p) => !p.reference_product_id || p.max_price, {
+    message: "Más barato que un producto: requiere su precio como máximo.",
+    path: ["reference_product_id"],
   });
 
 /** Payload validado de cada tipo de job. El worker lo vuelve a validar antes de procesar. */

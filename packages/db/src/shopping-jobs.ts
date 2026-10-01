@@ -33,6 +33,8 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** Mensaje de `VALIDATION_FAILED` cuando faltan talles relevantes: la UI los pide. */
 export const MISSING_SIZES = "MISSING_SIZES";
+/** Mensaje de `VALIDATION_FAILED` cuando el producto no tiene precio ("más barato" no aplica). */
+export const NO_PRICE = "NO_PRICE";
 
 export interface StartLookShoppingInput {
   /** Cliente con la sesión del usuario: Premium y dueño del look pasan por su RLS. */
@@ -45,6 +47,8 @@ export interface StartLookShoppingInput {
   slot?: GarmentSlot;
   /** Tope estricto de precio (solo con slot). */
   maxPrice?: { amount: number; currency: Currency };
+  /** "Buscar más barato" (paso 09): las alternativas se guardan aparte, más baratas que este. */
+  referenceProductId?: string;
   /** Id del pedido (idempotencia): el mismo pedido no encola dos veces. */
   requestId: string;
   now?: Date;
@@ -96,6 +100,7 @@ export async function startLookShopping(
     sizes: input.sizes,
     slot: input.slot,
     max_price: input.maxPrice,
+    reference_product_id: input.referenceProductId,
   });
   if (!payload.success || !UUID.test(input.requestId)) {
     throw new AppError("VALIDATION_FAILED", "Pedido de búsqueda inválido.");
@@ -186,4 +191,97 @@ export async function getLatestLookSearch(
     createdAt: data.created_at,
     finishedAt: data.finished_at,
   };
+}
+
+export interface StartCheaperSearchInput {
+  userClient: TypedSupabaseClient;
+  serviceClient: TypedSupabaseClient;
+  lookId: string;
+  /** uuid de `products`: un resultado (principal o "más barato") de ese look. */
+  productId: string;
+  sizes: UserSizes;
+  requestId: string;
+  now?: Date;
+}
+
+export interface StartCheaperSearchResult extends StartLookShoppingResult {
+  slot: GarmentSlot;
+  /** Precio del producto de referencia: el tope estricto de la búsqueda. */
+  price: { amount: number; currency: Currency };
+}
+
+/**
+ * "Buscar más barato" (paso 09, D17): una sola prenda, con los mismos atributos estéticos de
+ * la prenda del look y el precio del producto como tope estricto (menor). No regenera el look
+ * ni toca el ranking principal: el worker guarda las alternativas como "más baratas". El
+ * producto tiene que ser un resultado de ese look (RLS: dueño Premium) y tener precio.
+ * Errores: los de `startLookShopping` y VALIDATION_FAILED con `NO_PRICE`.
+ */
+export async function startCheaperSearch(
+  input: StartCheaperSearchInput,
+): Promise<StartCheaperSearchResult> {
+  await requirePremium(input.userClient, input.now);
+  if (!UUID.test(input.lookId) || !UUID.test(input.productId)) {
+    throw new AppError("VALIDATION_FAILED", "Pedido de búsqueda inválido.");
+  }
+  const { data, error } = await input.userClient
+    .from("look_products")
+    .select("garment_slot, products!look_products_product_id_fkey (price_amount, currency)")
+    .eq("look_id", input.lookId)
+    .eq("product_id", input.productId)
+    .limit(1)
+    .maybeSingle();
+  if (error) throw new AppError("INTERNAL", "No se pudo leer el producto.", { cause: error });
+  if (!data) throw new AppError("NOT_FOUND", "Ese producto no está en el look.");
+  const amount = data.products?.price_amount;
+  const currency = data.products?.currency;
+  if (amount === null || amount === undefined || !currency) {
+    throw new AppError("VALIDATION_FAILED", NO_PRICE);
+  }
+  const price = { amount: Number(amount), currency };
+  const slot = data.garment_slot;
+  const started = await startLookShopping({
+    userClient: input.userClient,
+    serviceClient: input.serviceClient,
+    lookId: input.lookId,
+    sizes: input.sizes,
+    slot,
+    maxPrice: price,
+    referenceProductId: input.productId,
+    requestId: input.requestId,
+    now: input.now,
+  });
+  return { ...started, slot, price };
+}
+
+/**
+ * Última búsqueda de cada prenda suelta de un look ("más barato"), por slot. Con el cliente
+ * del usuario: la RLS solo devuelve sus jobs.
+ */
+export async function getSlotSearches(
+  client: TypedSupabaseClient,
+  lookId: string,
+): Promise<Map<string, LookSearchState>> {
+  const { data, error } = await client
+    .from("jobs")
+    .select("id, status, progress, created_at, finished_at, garment_slot")
+    .eq("type", "SEARCH_PRODUCTS")
+    .eq("look_id", lookId)
+    .not("garment_slot", "is", null)
+    .order("created_at", { ascending: false })
+    .limit(50);
+  if (error) throw new AppError("INTERNAL", "No se pudieron leer las búsquedas.", { cause: error });
+  const bySlot = new Map<string, LookSearchState>();
+  for (const row of data ?? []) {
+    if (!row.garment_slot || bySlot.has(row.garment_slot)) continue;
+    const progress = ShoppingProgressSchema.safeParse(row.progress);
+    bySlot.set(row.garment_slot, {
+      jobId: row.id,
+      status: row.status,
+      progress: progress.success ? progress.data : null,
+      createdAt: row.created_at,
+      finishedAt: row.finished_at,
+    });
+  }
+  return bySlot;
 }

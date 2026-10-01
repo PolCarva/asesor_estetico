@@ -7,6 +7,7 @@ import {
   type LookSpec,
   missingSizesForLook,
 } from "@asesor/shared";
+import type { LookSearchState } from "@asesor/db";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -20,7 +21,7 @@ import { requireUser } from "@/lib/auth";
 import { getLook, getLookSummaries, getPlan, getSizes } from "@/lib/data";
 import { CATEGORY_LABEL, REASON_ASPECT_LABEL, twoDigits } from "@/lib/labels";
 import { buildLookResults } from "@/lib/look-results";
-import { getLookResultRows, getLookShoppingState } from "@/lib/shopping";
+import { getLookResultRows, getLookShoppingState, getLookSlotSearches } from "@/lib/shopping";
 
 import { LookShopping } from "./look-shopping";
 import { LookTotals, PieceResultsRow, PieceRow } from "./piece-results";
@@ -162,13 +163,14 @@ export default async function LookDetailPage({ params }: { params: Promise<{ id:
   const { spec } = look;
   const generating = look.status === "PENDING" || look.status === "GENERATING";
   // Shopping (pasos 07–08): solo Premium tiene búsquedas, talles y resultados.
-  const [search, sizes, rows] = plan.isPremium
+  const [search, sizes, rows, slotSearches] = plan.isPremium
     ? await Promise.all([
         getLookShoppingState(look.id),
         getSizes(user.id),
         getLookResultRows(look.id),
+        getLookSlotSearches(look.id),
       ])
-    : [null, EMPTY_USER_SIZES, []];
+    : [null, EMPTY_USER_SIZES, [], new Map<string, LookSearchState>()];
   const pieces = lookPieces(spec);
   // Resultados: con una búsqueda hecha y algo guardado (las filas viejas de una prenda que
   // ya no está en el look no aparecen: se arma por las piezas del look).
@@ -180,6 +182,8 @@ export default async function LookDetailPage({ params }: { params: Promise<{ id:
           summary: search.progress?.summary ?? null,
           sizes,
           now: new Date(),
+          slotSearches,
+          lookSearchCreatedAt: search.createdAt,
         })
       : null;
   const showPins = Boolean(look.imageUrl) && spec.image_prompt_data.framing === "FULL_BODY";
@@ -287,7 +291,12 @@ export default async function LookDetailPage({ params }: { params: Promise<{ id:
                 </li>
                 {results
                   ? results.pieces.map((piece) => (
-                      <PieceResultsRow key={piece.slot} piece={piece} lookId={look.id} />
+                      <PieceResultsRow
+                        key={piece.slot}
+                        piece={piece}
+                        lookId={look.id}
+                        cheaperSearch={slotSearches.get(piece.slot) ?? null}
+                      />
                     ))
                   : pieces.map(({ slot, garment }) => <PieceRow key={slot} garment={garment} />)}
               </ul>

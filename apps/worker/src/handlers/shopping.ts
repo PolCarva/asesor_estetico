@@ -1,5 +1,6 @@
 import {
   getLookForUser,
+  getLookProducts,
   getProductById,
   getStyleProfileCore,
   isUserPremium,
@@ -8,6 +9,7 @@ import {
   markProductUnverified,
   markProductVerified,
   removeLookProductsExcept,
+  saveCheaperProducts,
   saveLookProducts,
   toJson,
 } from "@asesor/db";
@@ -35,6 +37,8 @@ import { type JobContext, NonRetryableJobError, parsePayload } from "./types";
 
 /** Tope de una búsqueda de look: el usuario espera, y los pools cacheados la acortan. */
 export const SEARCH_JOB_TIMEOUT_MS = 4 * 60_000;
+/** "Más baratas" que se guardan por pedido (las mejores por parecido, como el ranking). */
+export const CHEAPER_LIMIT = 4;
 export const REFRESH_JOB_TIMEOUT_MS = 60_000;
 
 // --- Progreso --------------------------------------------------------------------------
@@ -160,6 +164,13 @@ export async function searchLookProducts(job: JobRow, ctx: JobContext): Promise<
     }
   }
 
+  // "Buscar más barato" (paso 09): el producto de referencia tiene que ser un resultado de
+  // este look. Lo del ranking principal de la prenda no se repite entre las más baratas.
+  const cheaper = payload.reference_product_id
+    ? await cheaperContext(db, look.id, payload.slot, payload.reference_product_id)
+    : null;
+  if (cheaper) for (const { query } of queries) query.limit = 20;
+
   const started = Date.now();
   const signal = AbortSignal.any([ctx.signal, AbortSignal.timeout(SEARCH_JOB_TIMEOUT_MS)]);
   const tracker = createStageTracker(queries.length, (p) => ctx.reportProgress(toJson(p)));
@@ -182,6 +193,20 @@ export async function searchLookProducts(job: JobRow, ctx: JobContext): Promise<
             webSearch.count++;
           },
         });
+        if (cheaper && payload.max_price) {
+          const items = result.items
+            .filter((item) => !cheaper.exclude.has(item.product.url))
+            .slice(0, CHEAPER_LIMIT);
+          const saved = await saveCheaperProducts(db, {
+            lookId: look.id,
+            slot,
+            referenceProductId: cheaper.referenceProductId,
+            maxPrice: payload.max_price,
+            items,
+            userSize: query.size,
+          });
+          return { slot, ok: true, result: { ...result, items }, saved };
+        }
         const saved = await saveLookProducts(db, {
           lookId: look.id,
           slot,
@@ -244,6 +269,7 @@ export async function searchLookProducts(job: JobRow, ctx: JobContext): Promise<
       look_id: look.id,
       mode,
       slot: payload.slot ?? null,
+      cheaper: Boolean(cheaper),
       slots: summary.slots,
       slots_with_results: summary.slots_with_results,
       failed_slots: summary.failed_slots.length,
@@ -257,6 +283,30 @@ export async function searchLookProducts(job: JobRow, ctx: JobContext): Promise<
     },
   });
   return toJson(summary);
+}
+
+/**
+ * Producto de referencia de "más barato" y lo que no se repite: el propio producto y el
+ * ranking principal de la prenda. Si no es un resultado de este look, el pedido no vale.
+ */
+async function cheaperContext(
+  db: JobContext["deps"]["db"],
+  lookId: string,
+  slot: GarmentSlot | undefined,
+  referenceProductId: string,
+) {
+  const rows = await getLookProducts(db, lookId);
+  const reference = rows.find((r) => r.product.id === referenceProductId);
+  if (!slot || !reference || reference.slot !== slot) {
+    throw new NonRetryableJobError("El producto de referencia no es un resultado de esa prenda.");
+  }
+  const exclude = new Set(
+    rows
+      .filter((r) => r.slot === slot && r.list === "MAIN")
+      .map((r) => r.product.product.url)
+      .concat(reference.product.product.url),
+  );
+  return { referenceProductId, exclude };
 }
 
 // --- REFRESH_PRODUCT -------------------------------------------------------------------

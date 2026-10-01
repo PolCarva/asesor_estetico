@@ -1,3 +1,4 @@
+import type { LookSearchState } from "@asesor/db";
 import type { Garment } from "@asesor/shared";
 
 import {
@@ -10,11 +11,15 @@ import {
 import { Pebble } from "@/components/swatches";
 import { CATEGORY_LABEL } from "@/lib/labels";
 import type {
+  CheaperOptionView,
+  CheaperView,
   LookResultsView,
   PieceResultsView,
   ProductOptionView,
   Tone,
 } from "@/lib/look-results";
+
+import { CheaperButton, CheaperProgress } from "./cheaper";
 
 const TONE: Record<Tone, string> = {
   ok: "text-moss",
@@ -101,18 +106,24 @@ function ref(option: ProductOptionView, lookId: string, slot: string): ProductRe
   };
 }
 
-/** Una alternativa compacta (dentro de "Ver N opciones más"). */
+/**
+ * Una opción compacta: alternativa (dentro de "Ver N opciones más") o más barata (con cuánto
+ * menos cuesta). Con precio, también se puede buscar más barato a partir de ella.
+ */
 function Alternative({
   option,
   garment,
   lookId,
   slot,
+  cheaperBusy,
 }: {
-  option: ProductOptionView;
+  option: ProductOptionView | CheaperOptionView;
   garment: Garment;
   lookId: string;
   slot: string;
+  cheaperBusy: boolean;
 }) {
+  const saving = "saving" in option ? option.saving : null;
   return (
     <li className="grid grid-cols-[2.75rem_minmax(0,1fr)_auto] items-center gap-3 rounded-[16px] bg-ivory/60 p-2">
       <ProductThumb src={option.imageUrl} hex={garment.color.hex} size="md" />
@@ -121,11 +132,21 @@ function Alternative({
         <p className="text-[0.6875rem] text-stone">{option.storeName}</p>
         <Facts option={option} />
         <InStore option={option} />
+        {option.price ? (
+          <div className="mt-1.5">
+            <CheaperButton lookId={lookId} productId={option.productId} disabled={cheaperBusy} />
+          </div>
+        ) : null}
       </div>
       <div className="flex flex-col items-end gap-1.5">
         <p className="font-display text-base whitespace-nowrap">
           {option.price ?? <span className="text-xs text-stone">A consultar</span>}
         </p>
+        {saving ? (
+          <p className="font-mono text-[0.625rem] tracking-[0.04em] whitespace-nowrap text-moss uppercase">
+            {saving}
+          </p>
+        ) : null}
         <StoreLink product={ref(option, lookId, slot)} className={chip}>
           Ver ↗
         </StoreLink>
@@ -135,12 +156,82 @@ function Alternative({
 }
 
 /**
+ * "Más baratas que $X" de la prenda (paso 09), dentro de su fila: buscando, resultados
+ * ordenados por parecido con cuánto menos cuestan, o un estado honesto si no hubo.
+ */
+function CheaperGroup({
+  cheaper,
+  search,
+  garment,
+  lookId,
+  slot,
+}: {
+  cheaper: CheaperView;
+  search: LookSearchState | null;
+  garment: Garment;
+  lookId: string;
+  slot: string;
+}) {
+  if (cheaper.state === "running") {
+    return <CheaperProgress key={search?.jobId} lookId={lookId} slot={slot} initial={search} />;
+  }
+  if (cheaper.state === "empty" || cheaper.state === "failed") {
+    return (
+      <p role="status" className="mt-2 rounded-[14px] bg-sand/60 px-3 py-2 text-xs text-bark">
+        {cheaper.state === "empty"
+          ? "No encontramos opciones más baratas que conserven el estilo."
+          : "No pudimos buscar más barato ahora. Probá de nuevo en un rato."}
+      </p>
+    );
+  }
+  if (cheaper.state !== "results") return null;
+  return (
+    <section aria-label={`Más baratas que ${cheaper.limit}`} className="mt-2.5">
+      <p className="font-mono text-[0.625rem] tracking-[0.08em] text-moss uppercase">
+        Más baratas que {cheaper.limit}
+        {cheaper.referenceTitle ? (
+          <span className="text-stone normal-case"> · frente a {cheaper.referenceTitle}</span>
+        ) : null}
+      </p>
+      <ul className="mt-1.5 flex flex-col gap-1.5">
+        {cheaper.options.map((option) => (
+          <Alternative
+            key={option.productId}
+            option={option}
+            garment={garment}
+            lookId={lookId}
+            slot={slot}
+            cheaperBusy={false}
+          />
+        ))}
+      </ul>
+      {cheaper.converted ? (
+        <p className="mt-1 text-[0.6875rem] text-stone">
+          Las que están en otra moneda se compararon con una conversión aproximada, solo para
+          filtrar: el precio que ves es el de la tienda.
+        </p>
+      ) : null}
+    </section>
+  );
+}
+
+/**
  * Fila de una prenda con sus resultados (diseño 2h): el RECOMENDADO a la vista (foto, nombre,
  * tienda, talle, stock, precio y "Comprar ↗") y las alternativas dentro de la misma fila.
  * Sin opciones, lo dice.
  */
-export function PieceResultsRow({ piece, lookId }: { piece: PieceResultsView; lookId: string }) {
-  const { garment, recommended, alternatives, slot } = piece;
+export function PieceResultsRow({
+  piece,
+  lookId,
+  cheaperSearch = null,
+}: {
+  piece: PieceResultsView;
+  lookId: string;
+  /** Última búsqueda "más barato" de la prenda (para el progreso compacto). */
+  cheaperSearch?: LookSearchState | null;
+}) {
+  const { garment, recommended, alternatives, slot, cheaper } = piece;
+  const busy = cheaper.state === "running";
   if (!recommended) {
     return (
       <li className="grid grid-cols-[3.75rem_minmax(0,1fr)] items-center gap-3.5 rounded-[20px] glass p-2.5">
@@ -187,7 +278,19 @@ export function PieceResultsRow({ piece, lookId }: { piece: PieceResultsView; lo
       </div>
       <div className="sm:pl-[4.625rem]">
         <InStore option={recommended} />
-        {/* Paso 09: "Buscar más barato" · Paso 10b: "Agregar al carrito". */}
+        {/* Paso 10b: "Agregar al carrito". */}
+        {recommended.price ? (
+          <div className="mt-2">
+            <CheaperButton lookId={lookId} productId={recommended.productId} disabled={busy} />
+          </div>
+        ) : null}
+        <CheaperGroup
+          cheaper={cheaper}
+          search={cheaperSearch}
+          garment={garment}
+          lookId={lookId}
+          slot={slot}
+        />
         {alternatives.length ? (
           <AlternativesDisclosure
             count={alternatives.length}
@@ -201,6 +304,7 @@ export function PieceResultsRow({ piece, lookId }: { piece: PieceResultsView; lo
                   garment={garment}
                   lookId={lookId}
                   slot={slot}
+                  cheaperBusy={busy}
                 />
               ))}
             </ul>

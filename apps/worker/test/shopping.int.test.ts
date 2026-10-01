@@ -167,7 +167,9 @@ describeIntegration("jobs de shopping (catálogo ficticio + Supabase local)", ()
   async function lookRows(lookId: string) {
     const { data } = await db
       .from("look_products")
-      .select("garment_slot, rank, size_status, user_size, products (url, price_amount, currency)")
+      .select(
+        "garment_slot, rank, size_status, user_size, products!look_products_product_id_fkey (url, price_amount, currency)",
+      )
       .eq("look_id", lookId)
       .order("garment_slot")
       .order("rank");
@@ -349,6 +351,68 @@ describeIntegration("jobs de shopping (catálogo ficticio + Supabase local)", ()
       top.every((r) => r.products?.currency === "UYU" && Number(r.products.price_amount) <= 1000),
     ).toBe(true);
     expect(after.filter((r) => r.garment_slot !== "top")).toEqual(before);
+  });
+
+  it("más barato: guarda aparte solo lo más barato que el producto, sin tocar el ranking principal", async () => {
+    const lookId = premiumLooks[0]!;
+    const { data: mainTop } = await db
+      .from("look_products")
+      .select("product_id, rank, products!look_products_product_id_fkey (url, price_amount)")
+      .eq("look_id", lookId)
+      .eq("garment_slot", "top")
+      .eq("list", "MAIN")
+      .order("rank");
+    const reference = mainTop![0]!; // la camisa blanca (UYU 990) del test anterior
+    const blanca = catalog.find((p) => p.url === reference.products?.url)!;
+    const extra = (suffix: string, amount: number): Product => ({
+      ...blanca,
+      id: `${blanca.id}-${suffix}`,
+      url: `${blanca.url}-${suffix}`,
+      price: { amount, currency: "UYU" },
+    });
+    // Una más barata, una al mismo precio y una más cara que la de referencia.
+    const pool = [...catalog, extra("barata", 590), extra("igual", 990), extra("cara", 1200)];
+    const job = await runningJob("SEARCH_PRODUCTS", premiumId, {
+      user_id: premiumId,
+      look_id: lookId,
+      sizes,
+      slot: "top",
+      max_price: { amount: 990, currency: "UYU" },
+      reference_product_id: reference.product_id,
+    });
+    const { result } = await run(job, {
+      searchProvider: new MockSearchProvider(pool),
+      fetcher: new MockProductFetcher(pool, () => new Date()),
+      // Sin cache: el pool de la prenda cambió para esta prueba.
+      searchCache: { getPool: async () => null, savePool: async () => {} },
+    });
+    expect(result).toMatchObject({ mode: "SLOT", slots: 1, saved: 1, partial: false });
+
+    const { data: rows } = await db
+      .from("look_products")
+      .select(
+        "list, rank, reference_product_id, max_price_amount, max_price_currency, products!look_products_product_id_fkey (url, price_amount)",
+      )
+      .eq("look_id", lookId)
+      .eq("garment_slot", "top")
+      .order("list")
+      .order("rank");
+    const cheaper = rows!.filter((r) => r.list === "CHEAPER");
+    expect(cheaper.map((r) => r.products?.url)).toEqual([`${blanca.url}-barata`]);
+    expect(cheaper.every((r) => Number(r.products?.price_amount) < 990)).toBe(true);
+    expect(cheaper[0]).toMatchObject({
+      reference_product_id: reference.product_id,
+      max_price_amount: 990,
+      max_price_currency: "UYU",
+    });
+    // El ranking principal de la prenda quedó igual.
+    expect(rows!.filter((r) => r.list === "MAIN").map((r) => r.products?.url)).toEqual(
+      mainTop!.map((r) => r.products?.url),
+    );
+    expect(analytics.events.at(-1)).toMatchObject({
+      name: "shopping_completed",
+      properties: { mode: "SLOT", cheaper: true, saved: 1 },
+    });
   });
 
   it("si todas las prendas fallan, el job falla y los resultados anteriores quedan como estaban", async () => {

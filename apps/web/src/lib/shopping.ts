@@ -3,6 +3,7 @@ import "server-only";
 import {
   getLatestLookSearch,
   getLookProducts,
+  getSlotSearches,
   type LookProductResult,
   type LookSearchState,
 } from "@asesor/db";
@@ -29,4 +30,10 @@ export async function getLookShoppingState(
 export async function getLookResultRows(lookId: string): Promise<LookProductResult[]> {
   const supabase = await createServerSupabaseClient();
   return getLookProducts(supabase, lookId);
+}
+
+/** Última búsqueda de cada prenda suelta ("Buscar más barato") de un look, por slot. */
+export async function getLookSlotSearches(lookId: string): Promise<Map<string, LookSearchState>> {
+  const supabase = await createServerSupabaseClient();
+  return getSlotSearches(supabase, lookId);
 }

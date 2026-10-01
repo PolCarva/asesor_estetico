@@ -19,6 +19,8 @@ export const rateLimiters = {
   webhook: createMemoryRateLimiter({ limit: 120, windowMs: 60_000 }),
   // Cada búsqueda de productos recorre tiendas reales y puede pagar búsquedas web.
   shoppingSearch: createMemoryRateLimiter({ limit: 10, windowMs: 60 * 60_000 }),
+  // "Buscar más barato": una prenda por pedido, casi siempre sobre el pool cacheado.
+  cheaperSearch: createMemoryRateLimiter({ limit: 20, windowMs: 60 * 60_000 }),
 } satisfies Record<string, RateLimiter>;
 
 export async function enforceRateLimit(limiter: RateLimiter, key: string) {

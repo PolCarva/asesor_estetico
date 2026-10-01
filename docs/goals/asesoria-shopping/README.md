@@ -118,7 +118,7 @@ source ~/.nvm/nvm.sh && nvm use >/dev/null && pnpm format && pnpm lint && pnpm t
 | 06  | [Shopping: jobs reales, progreso y Premium server-side](pasos/06-shopping-jobs-premium.md)         | 14, 19         | 05         | ✅     |
 | 07  | [Talles, CTA "Encontrar este look" y progreso](pasos/07-talles-cta-progreso.md)                    | 16, 15         | 02, 06     | ✅     |
 | 08  | [UI de resultados de shopping](pasos/08-resultados-ui.md)                                          | 15             | 07         | ✅     |
-| 09  | ["Buscar más barato"](pasos/09-buscar-mas-barato.md)                                               | 17             | 08         | ⬜     |
+| 09  | ["Buscar más barato"](pasos/09-buscar-mas-barato.md)                                               | 17             | 08         | ✅     |
 | 10a | [Carrito: datos y acciones](pasos/10a-carrito-backend.md)                                          | 18             | 06         | ⬜     |
 | 10b | [Carrito y favoritos: UI y prueba real](pasos/10b-carrito-ui.md)                                   | 18             | 08, 10a    | ⬜     |
 | 11  | [Auditoría: analytics, fallas parciales y seguridad](pasos/11-auditoria-analytics-errores.md)      | 20             | 09, 10b    | ⬜     |
@@ -664,3 +664,76 @@ source ~/.nvm/nvm.sh && nvm use >/dev/null && pnpm format && pnpm lint && pnpm t
   - 12a: E2E de resultados con `SHOPPING_PROVIDER=mock` (recomendado + alternativas, local físico, prenda vacía, link por `/api/products/[id]/open`).
   - `pnpm db:reset` de la verificación final borró las cuentas `estilo07@asesor.test` y `estilo07-free@asesor.test`; para recrearlas: `scripts/local-test-account.ts`.
 - Commit: `feat(asesoria-shopping): paso 08 — UI de resultados de shopping`
+
+### Paso 09 — "Buscar más barato" · 2026-10-01 · ✅
+
+- Hecho:
+  - **Persistencia aparte (D17):** migración `20261001000600_cheaper_alternatives.sql`.
+    - `look_products.list` (`MAIN` | `CHEAPER`), `reference_product_id` y `max_price_amount` / `max_price_currency`, con un check de coherencia;
+    - `replace_cheaper_look_products(...)`, solo service role: reemplaza las más baratas de una prenda, sin tocar ni repetir el ranking principal y renumerando el rank.
+
+    `db:reset` y `db:types`. Los embeds desde `look_products` pasan a `products!look_products_product_id_fkey`, porque ahora hay dos FKs.
+
+  - **Filtro:** precio **menor** estricto (`<`, antes `<=`) en `rankProducts`; entre monedas compara con la conversión aproximada solo para filtrar. `SearchProductsPayloadSchema.reference_product_id` (requiere `max_price`).
+  - **`packages/db`:**
+    - `startCheaperSearch`: Premium; el producto tiene que ser un resultado del look (RLS) y tener precio, si no `NO_PRICE`; encola el modo de una prenda con el precio como tope y el producto de referencia;
+    - `saveCheaperProducts`;
+    - `getLookProducts` devuelve `list` y `cheaperThan`;
+    - `getSlotSearches`.
+  - **Worker:** con `reference_product_id`, valida que sea un resultado de esa prenda, pide hasta 20 y saca el ranking principal y la referencia. Guarda las 4 mejores como `CHEAPER` (`CHEAPER_LIMIT`) y no toca el ranking. `shopping_completed` lleva `cheaper: true`.
+  - **Web:**
+    - `findCheaperAlternativeAction`: `requirePremium` (si no, `paywall`), Zod, rate limit `cheaperSearch` 20/hora, `startCheaperSearch` y `cheaper_alternative_requested` (`look_id`, `slot`, `product_id`, `price`, `currency`) una vez y desde el servidor;
+    - `GET /api/looks/[id]/shopping?slot=`;
+    - "Buscar más barato" (vidrio) en cada producto con precio (oculto sin precio), progreso compacto en la fila (`CheaperProgress`) y el grupo "Más baratas que $ X · frente a <producto>", con "$ N menos" o la aclaración de otra moneda;
+    - estados honestos: "No encontramos opciones más baratas que conserven el estilo." y "No pudimos buscar más barato ahora";
+    - view model: lista principal y más baratas separadas, y el estado de la búsqueda de la prenda (las viejas no cuentan si el look se volvió a buscar).
+  - **Tests:**
+    - `rank.test.ts` (+1, pool real): estrictamente menor, igual afuera, USD convertido solo para filtrar, orden por parecido;
+    - `look-results.test.ts` (+2): grupo aparte, diferencia, otra moneda, total intacto; estados `running` / `empty` / `failed` / `none`;
+    - integración db `shopping-jobs.int.test.ts` (+2):
+      - `startCheaperSearch` encola la prenda con el precio como tope y la referencia;
+      - es idempotente, incluso desde otro producto de la prenda;
+      - un producto sin precio da `NO_PRICE`; uno ajeno o inexistente, `NOT_FOUND`;
+      - un usuario free da `PREMIUM_REQUIRED` sin jobs;
+      - las más baratas no repiten el ranking, se reemplazan y una búsqueda nueva de la prenda las descarta;
+      - nadie ejecuta la función desde el cliente;
+    - integración worker (+1): solo guarda la de $ 590 frente a la de referencia de $ 990 (la de $ 990 y la de $ 1.200 quedan afuera) y el ranking principal queda igual.
+  - **Docs:** `SHOPPING_ENGINE.md`, `DATA_MODEL.md`, `PRODUCT_SPEC.md`, `SECURITY_PRIVACY.md`, `DESIGN_SYSTEM.md` y `DECISIONES.md` (D17 + notas).
+- Prueba real (cuenta nueva `estilo09@asesor.test`, Premium, talles M / 42 / 42 EU, worker `AI_PROVIDER=mock SHOPPING_PROVIDER=live`). Búsqueda del look 1 "Smart casual cálido" desde la UI: 5 prendas × 4 resultados reales. "Buscar más barato" desde la UI en dos prendas:
+  - **Camisa** (recomendada: Indian "Camisa Xavro - Crudo / Natural", **$ 1.399**). Panel "BUSCANDO MÁS BARATO · EN LA FILA" y después "Más baratas que $ 1.399 · frente a Camisa Xavro":
+
+    | #   | Tienda           | Producto                                         | Precio  | Menos | Por qué se parece (breakdown)                               |
+    | --- | ---------------- | ------------------------------------------------ | ------- | ----- | ----------------------------------------------------------- |
+    | 1   | minot.uy         | CAMISA MARU CRUDO                                | $ 800   | $ 599 | categoría 1 · color 1 (crudo) · estilo 0,625 · talle M ✓    |
+    | 2   | indian.com.uy    | Camisa Finae - Crudo / Natural                   | $ 1.299 | $ 100 | categoría 1 · color 1 · estilo 0,625 · talle M ✓            |
+    | 3   | jackjones.com.uy | CAMISA CLÁSICA REGULAR OXFORD - Crockery Stripes | $ 1.299 | $ 100 | fit 1 (regular) · material 1 (oxford) · estilo 0,4 (rayada) |
+    | 4   | decathlon.com.uy | CAMISA HOMBRE TRAVEL100                          | $ 805   | $ 594 | material 1 · estilo 0,625 · color 0,36                      |
+
+    La Kiabi de $ 1.199, que ya estaba en el ranking principal, no se repitió.
+
+  - **Sobrecamisa** (recomendada: guapa.com.uy "SOBRECAMISA ANTONIO - CAMEL", **$ 1.498**):
+
+    | #   | Tienda           | Producto                                          | Precio | Menos   | Breakdown                                              |
+    | --- | ---------------- | ------------------------------------------------- | ------ | ------- | ------------------------------------------------------ |
+    | 1   | jackjones.com.uy | SOBRECAMISA RELAXED TEDDY LEECKER - Antique White | $ 999  | $ 499   | estilo 1 · categoría 1 · talle M ✓ · color 0,23        |
+    | 2   | indian.com.uy    | Sobrecamisa Insani - Estampado 1                  | $ 399  | $ 1.099 | estilo 0,4 (estampada) · color 0,5                     |
+    | 3   | indian.com.uy    | Sobrecamisa Fradel - Estampado 1                  | $ 399  | $ 1.099 | estilo 0,4 · color 0,5                                 |
+    | 4   | bas.com.uy       | SOBRECAMISA SHERPA MARRÓN                         | $ 899  | $ 599   | estilo 1 · color 0,40 · talle sin verificar, sin stock |
+
+    El orden es por parecido, no por precio: las de $ 399 (estampadas) quedan debajo de la lisa de $ 999.
+
+  - **Base:**
+    - "0 de 8" alternativas con precio ≥ tope;
+    - el ranking principal sigue con 20 filas `MAIN`;
+    - las dos búsquedas salieron del pool cacheado (`cache_hits` 1) en 0,48 s y 0,42 s;
+    - `cheaper_alternative_requested` quedó registrado dos veces (`top` $ 1.399 y `layering:0` $ 1.498).
+  - **Sin resultados** (reloj recomendado, diego.com.uy, $ 249,90): "No encontramos opciones más baratas que conserven el estilo." Lo único más barato del pool era "RELOJ DESPERTADOR MULTICOLOR" ($ 99), que el ranking descarta por categoría.
+  - **Vista:** Playwright (Chromium real, 1280 y 390 px) sin errores de consola ni scroll horizontal.
+- Verificación: format ✓ · lint ✓ · typecheck ✓ · test ✓ (405 unit, 52 integración ejecutados: db 40, worker 12) · build ✓ · e2e ✓ (10, desktop + mobile, contra `pnpm dev`) · db:reset ✓ · db:types ✓ (regenerado sin diferencias)
+- Decisiones: D17 confirmada (lista `CHEAPER` en `look_products`, pool cacheado vía job, precio menor estricto, orden por parecido, sin duplicados). Detalle en `DECISIONES.md`.
+- Para pasos siguientes:
+  - 10a/10b: "Agregar al carrito" también para las más baratas (son productos como los demás; vienen en `getLookProducts` con `list: "CHEAPER"`).
+  - 11: si el pool no tiene nada más barato, hoy no se busca en vivo con más candidatos (anotado en `SHOPPING_ENGINE.md`, "Próximos pasos"). Auditar que `cheaper_alternative_requested` siga saliendo solo del servidor.
+  - 12a: E2E de "Buscar más barato" con `SHOPPING_PROVIDER=mock` (grupo aparte, sin duplicados, empty).
+  - El `db:reset` de la verificación final borró `estilo09@asesor.test`; para recrearla: `scripts/local-test-account.ts --email … --premium`.
+- Commit: `feat(asesoria-shopping): paso 09 — "Buscar más barato"`

@@ -2,6 +2,7 @@ import {
   AppError,
   type GarmentSlot,
   GarmentSlotSchema,
+  type Money,
   type Product,
   ProductSchema,
   type ProductVariant,
@@ -236,6 +237,52 @@ export async function saveLookProducts(
 }
 
 /**
+ * "Buscar más barato" (paso 09, D17): guarda las alternativas más baratas que un producto
+ * como la lista CHEAPER de la prenda, sin tocar el ranking principal. Reemplaza la lista
+ * anterior de esa prenda y no repite productos del ranking principal (función SQL).
+ */
+export async function saveCheaperProducts(
+  db: TypedSupabaseClient,
+  input: {
+    lookId: string;
+    slot: GarmentSlot;
+    referenceProductId: string;
+    maxPrice: Money;
+    items: RankedProduct[];
+    userSize?: string | null;
+  },
+): Promise<number> {
+  const ids = await upsertProducts(
+    db,
+    input.items.map((i) => i.product),
+  );
+  const items = input.items.flatMap((item) => {
+    const productId = ids.get(item.product.url);
+    return productId
+      ? [
+          {
+            product_id: productId,
+            score: item.score,
+            score_breakdown: item.breakdown,
+            size_status: item.size_status,
+            user_size: input.userSize ?? null,
+          },
+        ]
+      : [];
+  });
+  const { data, error } = await db.rpc("replace_cheaper_look_products", {
+    p_look_id: input.lookId,
+    p_slot: input.slot,
+    p_reference_product_id: input.referenceProductId,
+    p_max_price_amount: input.maxPrice.amount,
+    p_max_price_currency: input.maxPrice.currency,
+    p_items: toJson(items),
+  });
+  if (error) fail("No se pudieron guardar las alternativas más baratas.", error);
+  return data ?? 0;
+}
+
+/**
  * Borra los resultados de las prendas que ya no están en el look (una búsqueda completa
  * reemplaza el look entero: no quedan productos viejos en slots que no volvieron).
  */
@@ -262,6 +309,9 @@ export interface LookProductResult {
   sizeStatus: SizeStatus | null;
   /** Talle con el que se calculó `sizeStatus` (null: sin talle o filas anteriores). */
   userSize: string | null;
+  /** Ranking principal o "más baratas" que `cheaperThan.productId` (paso 09). */
+  list: "MAIN" | "CHEAPER";
+  cheaperThan: { productId: string; maxPrice: Money } | null;
   product: StoredProduct;
 }
 
@@ -276,10 +326,11 @@ export async function getLookProducts(
   const { data, error } = await db
     .from("look_products")
     .select(
-      `garment_slot, rank, score, score_breakdown, size_status, user_size, products (${PRODUCT_COLUMNS})`,
+      `garment_slot, rank, score, score_breakdown, size_status, user_size, list, reference_product_id, max_price_amount, max_price_currency, products!look_products_product_id_fkey (${PRODUCT_COLUMNS})`,
     )
     .eq("look_id", lookId)
     .order("garment_slot")
+    .order("list", { ascending: false })
     .order("rank");
   if (error) fail("No se pudieron leer los productos del look.", error);
   return (data ?? []).flatMap((row) => {
@@ -294,6 +345,20 @@ export async function getLookProducts(
         breakdown: row.score_breakdown as Partial<ScoreBreakdown>,
         sizeStatus: status.success ? status.data : null,
         userSize: row.user_size,
+        list: row.list === "CHEAPER" ? "CHEAPER" : "MAIN",
+        cheaperThan:
+          row.list === "CHEAPER" &&
+          row.reference_product_id &&
+          row.max_price_amount !== null &&
+          row.max_price_currency
+            ? {
+                productId: row.reference_product_id,
+                maxPrice: {
+                  amount: Number(row.max_price_amount),
+                  currency: row.max_price_currency,
+                },
+              }
+            : null,
         product: stored,
       },
     ];

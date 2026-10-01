@@ -83,7 +83,7 @@ De las respuestas solo se usan los datos de producto extraídos (validados con Z
 
 ## Rate limiting
 
-Interfaz `RateLimiter` (`@asesor/shared`) con implementación en memoria. Límites actuales: auth 10/min por IP en producción (200/min en desarrollo, para los E2E), subida de fotos 20/hora por usuario, analytics 60/min por IP, webhooks 120/min por IP, búsqueda de productos 10/hora por usuario (recorre tiendas reales y puede pagar búsquedas web; además, una sola búsqueda activa por look y prenda). Pendiente: implementación compartida en Postgres para múltiples instancias.
+Interfaz `RateLimiter` (`@asesor/shared`) con implementación en memoria. Límites actuales: auth 10/min por IP en producción (200/min en desarrollo, para los E2E), subida de fotos 20/hora por usuario, analytics 60/min por IP, webhooks 120/min por IP, búsqueda de productos 10/hora por usuario (recorre tiendas reales y puede pagar búsquedas web; además, una sola búsqueda activa por look y prenda), "Buscar más barato" 20/hora por usuario (Premium verificado en la action, en `startCheaperSearch` y en el worker). Pendiente: implementación compartida en Postgres para múltiples instancias.
 
 ## Headers de seguridad
 

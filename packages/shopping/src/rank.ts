@@ -271,10 +271,14 @@ function priceScore(price: Money, query: ShoppingQuery, range: { min: number; ma
   return 1 - (amount - range.min) / (range.max - range.min);
 }
 
-/** ¿Respeta el precio máximo estricto? Sin precio no se puede saber: queda afuera. */
+/**
+ * ¿Es más barato que el máximo estricto ("Buscar más barato": precio menor, no igual)? Sin
+ * precio no se puede saber: queda afuera. Entre monedas distintas compara con la conversión
+ * aproximada: solo para filtrar, nunca para mostrar.
+ */
 function withinStrictMax(product: Product, query: ShoppingQuery) {
   if (!query.strict_max_price || !query.max_price) return true;
-  return product.price !== null && toUyu(product.price) <= toUyu(query.max_price);
+  return product.price !== null && toUyu(product.price) < toUyu(query.max_price);
 }
 
 /** Reordena levemente para que una tienda no acapare el top (el score no cambia). */
