@@ -64,6 +64,17 @@ Y en la base, RLS en todas las tablas (detalle en `DATA_MODEL.md`). Los permisos
   - **no activa Premium** con el contenido del webhook: solo se actualiza una suscripción si el proveedor confirma el estado consultando su API (hoy no implementado → el evento queda `IGNORED`).
 - Errores de API: respuesta con código estable (`AUTH_REQUIRED`, `NOT_FOUND`...) sin detalles internos.
 
+## Requests a tiendas (SSRF)
+
+El worker descarga URLs que vienen de terceros (búsqueda web, sitemaps). Todo pasa por `PoliteHttpClient` (`packages/shopping`):
+
+- validación por nombre (`isSafeProductUrl`): solo http(s) al puerto estándar, sin credenciales, sin IPs privadas o reservadas en ninguna notación, sin `localhost`/`localhost.`/`*.localhost`, `.internal`, `.local` ni nombres de una etiqueta (servicios de Docker);
+- validación por IP al conectar (`createSafeTransport`): el `lookup` del socket rechaza si alguna IP resuelta no es pública, así que un DNS que apunta a la red interna (o que cambia entre chequeo y conexión) no llega;
+- redirects manuales, revalidados uno por uno (y por el robots.txt de su origen);
+- timeout, tope de tamaño medido mientras se lee y ritmo por dominio.
+
+De las respuestas solo se usan los datos de producto extraídos (validados con Zod); el HTML crudo no se guarda. Detalle en [`SHOPPING_ENGINE.md`](SHOPPING_ENGINE.md#descarga-segura-paso-04a).
+
 ## Rate limiting
 
 Interfaz `RateLimiter` (`@asesor/shared`) con implementación en memoria. Límites actuales: auth 10/min por IP en producción (200/min en desarrollo, para los E2E), subida de fotos 20/hora por usuario, analytics 60/min por IP, webhooks 120/min por IP. Pendiente: implementación compartida en Postgres para múltiples instancias y límites para endpoints de IA/shopping cuando existan.

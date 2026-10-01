@@ -58,7 +58,7 @@ packages/
   shared/     Dominio puro: schemas Zod, tipos, constantes, logger, rate limit, fixtures
   db/         Tipos generados, clientes Supabase, auth helpers, cola de jobs, Storage, seed
   ai/         Abstracción de IA: operaciones tipadas, OpenRouterProvider, MockAIProvider, prompts
-  shopping/   Pipeline de productos: search (registro por plataforma, sitemaps, búsqueda web) → fetch → extract → normalize → rank → cache
+  shopping/   Pipeline de productos: search (registro por plataforma, sitemaps, búsqueda web) → fetch seguro → extract (JSON-LD → microdata → OpenGraph, htmlparser2) → normalize → rank → cache
   payments/   PaymentProvider, MockPaymentProvider, esqueleto Mercado Pago, estados
   analytics/  AnalyticsService + DatabaseAnalyticsProvider, registro de uso de IA
 supabase/     config.toml, migraciones y seed.sql mínimo

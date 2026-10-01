@@ -27,9 +27,13 @@ export const ProductVariantSchema = z.object({
 });
 export type ProductVariant = z.infer<typeof ProductVariantSchema>;
 
-/** Producto normalizado de una tienda externa. */
+/**
+ * Producto normalizado de una tienda externa. `id` es el id de producto que declara la
+ * plataforma (`productGroupID`/`productID`) o, si no hay, la URL de la página: estable y
+ * único por tienda (no es el uuid de la base).
+ */
 export const ProductSchema = z.object({
-  id: z.string().min(1).max(120),
+  id: z.string().min(1).max(500),
   store: StoreSchema,
   url: z.url({ protocol: /^https?$/ }),
   title: z.string().min(1).max(200),
@@ -96,10 +100,36 @@ export const RankedProductSchema = z.object({
 });
 export type RankedProduct = z.infer<typeof RankedProductSchema>;
 
+const count = z.number().int().min(0);
+
+/**
+ * Qué pasó con las URLs candidatas de una búsqueda: sirve para mensajes honestos ("no
+ * pudimos verificar algunas tiendas") sin mostrar errores técnicos.
+ */
+export const ShoppingStatsSchema = z.object({
+  candidates: count,
+  /** Productos válidos (antes de rankear y recortar). */
+  products: count,
+  /** La tienda no dejó descargar (403/401/429 o robots.txt). */
+  blocked: count,
+  /** La página ya no existe (404/410). */
+  gone: count,
+  /** Otras fallas de descarga: timeout, 5xx, red, tamaño, URL insegura. */
+  failed: count,
+  /** Se descargó pero no es una página de producto (categoría, HTML que cambió). */
+  not_product: count,
+  /** Producto sin precio legible: no se muestra (nunca se inventa). */
+  no_price: count,
+  /** Datos incoherentes: sin título, moneda distinta de UYU/USD, fuera del schema. */
+  invalid: count,
+});
+export type ShoppingStats = z.infer<typeof ShoppingStatsSchema>;
+
 export const ShoppingResultSchema = z.object({
   query: ShoppingQuerySchema,
   items: z.array(RankedProductSchema),
   source: z.enum(["LIVE", "CACHE"]),
   generated_at: z.iso.datetime({ offset: true }),
+  stats: ShoppingStatsSchema,
 });
 export type ShoppingResult = z.infer<typeof ShoppingResultSchema>;

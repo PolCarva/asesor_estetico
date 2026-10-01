@@ -18,7 +18,7 @@
 | Jobs          | Cola en Postgres (`FOR UPDATE SKIP LOCKED`, idempotencia, backoff, locks vencidos, reintento manual)                                                                                                     |
 | Worker        | Concurrencia configurable, reintentos, errores no reintentables, apagado limpio, Docker multi-stage non-root                                                                                             |
 | IA            | 5 operaciones tipadas con output Zod, usage, timing, errores normalizados, prompts versionados                                                                                                           |
-| Shopping      | Pipeline search → fetch (anti-SSRF) → extract (JSON-LD) → normalize → rank (8 factores) → cache                                                                                                          |
+| Shopping      | Pipeline search → fetch (anti-SSRF con DNS y redirects) → extract (JSON-LD → microdata → OpenGraph) → normalize → rank (8 factores) → cache                                                              |
 | Pagos         | `PaymentProvider`, máquina de estados, webhook Mercado Pago con firma HMAC + idempotencia, sin activar Premium                                                                                           |
 | Analytics     | `AnalyticsService` + `DatabaseAnalyticsProvider`, 20 eventos, `/api/analytics` con lista blanca, `ai_usage`                                                                                              |
 | Logging       | JSON estructurado con redacción de datos sensibles en web y worker                                                                                                                                       |

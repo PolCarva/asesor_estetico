@@ -1,7 +1,13 @@
 import { type Product, type ShoppingQuery } from "@asesor/shared";
 import { FIXTURE_PRODUCTS } from "@asesor/shared/fixtures";
 
-import type { CandidateUrl, FetchedPage, ProductFetcher, SearchProvider } from "./types";
+import type {
+  CandidateUrl,
+  FetchedPage,
+  FetchOptions,
+  ProductFetcher,
+  SearchProvider,
+} from "./types";
 
 const AVAILABILITY_URL = {
   IN_STOCK: "https://schema.org/InStock",
@@ -15,6 +21,7 @@ export function renderProductPage(product: Product): string {
   const jsonLd = {
     "@context": "https://schema.org",
     "@type": "Product",
+    productID: product.id,
     sku: product.id,
     name: product.title,
     brand: product.brand ? { "@type": "Brand", name: product.brand } : undefined,
@@ -64,7 +71,7 @@ export class MockProductFetcher implements ProductFetcher {
     this.pages = new Map(catalog.map((p) => [p.url, p]));
   }
 
-  async fetch(url: string): Promise<FetchedPage> {
+  async fetch(url: string, _options?: FetchOptions): Promise<FetchedPage> {
     const product = this.pages.get(url);
     return {
       url,

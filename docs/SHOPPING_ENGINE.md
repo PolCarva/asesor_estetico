@@ -3,7 +3,7 @@
 ## Estado
 
 - **Búsqueda real** (paso 03): LookSpec → `buildShoppingQueries` → `CompositeSearchProvider` (registro de tiendas por plataforma + sitemaps + descubrimiento web) → URLs candidatas de tiendas uruguayas.
-- **Descarga**: `HttpProductFetcher` con el mismo cliente respetuoso. La extracción robusta (microdata de Fenicio, talles, stock, precios con punto de miles) es del paso 04a/04b: hoy `extractProduct` solo lee JSON-LD.
+- **Descarga, extracción y normalización reales** (paso 04a): fetcher endurecido (anti-SSRF con DNS y redirects, timeout, tamaño, robots, ritmo por dominio), extracción en cascada JSON-LD → microdata → OpenGraph y normalización de precios locales, categorías de Uruguay, fit, colores, materiales e ids estables. Talles y stock por plataforma, Validate y locales físicos son del paso 04b.
 - **Mocks** (`MockSearchProvider`, `MockProductFetcher`, catálogo ficticio `.test`): solo con `SHOPPING_PROVIDER=mock` (tests y E2E). El default del worker es `live` y en producción `mock` está prohibido por el schema de env.
 
 ## Pipeline
@@ -11,17 +11,17 @@
 ```
 ShoppingQuery
   → SearchProvider        URLs candidatas
-  → fetchProductPage      descarga (con validación anti-SSRF)
-  → extractProduct        JSON-LD schema.org/Product → RawProduct
-  → normalizeProduct      RawProduct → Product (Zod)
+  → fetchProductPage      descarga segura (HttpProductFetcher → PoliteHttpClient → transporte con IP validada)
+  → extractProduct        JSON-LD → microdata → OpenGraph → RawProduct (con la fuente de cada dato)
+  → normalizeProduct      RawProduct → Product (Zod), o el motivo del descarte
   → rankProducts          score ponderado + breakdown por factor
   → Cache
 ```
 
-Funciones públicas (`packages/shopping`): `searchProducts`, `fetchProductPage`, `extractProduct`, `normalizeProduct`, `rankProducts`, `refreshProduct`.
+Funciones públicas (`packages/shopping`): `searchProducts`, `loadCandidate(s)`, `summarizeOutcomes`, `fetchProductPage`, `extractProduct`, `normalizeProduct(Result)`, `rankProducts`, `refreshProduct`.
 
 - **ShoppingQuery**: una prenda (`Garment` del LookSpec), país (`UY`), talle opcional, precio máximo opcional, límite.
-- Una tienda caída o una página sin datos no rompe la búsqueda: ese candidato se descarta.
+- Cada candidato falla solo (`CandidateOutcome`: `product`, `failed` con motivo, `not_product` o `discarded` con motivo) y el `ShoppingResult` lleva `stats` (ver "Tolerancia a fallas").
 - Las descargas corren con concurrencia limitada (default 4) y preservan el orden.
 
 ## Búsqueda (paso 03)
@@ -49,15 +49,70 @@ Funciones públicas (`packages/shopping`): `searchProducts`, `fetchProductPage`,
 
 ### Reglas de las tiendas
 
-- `PoliteHttpClient`: user agent identificable `AsesorEsteticoBot/1.0 (…; SHOPPING_BOT_CONTACT)`, timeout 12 s con `AbortSignal`, 2 requests simultáneos por host, tope de 6 MB, bloqueo de hosts internos (también tras redirects).
+- `PoliteHttpClient`: user agent identificable `AsesorEsteticoBot/1.0 (…; SHOPPING_BOT_CONTACT)`, timeout 12 s con `AbortSignal`, 2 requests simultáneos y uno cada 300 ms por dominio, tope de 6 MB y anti-SSRF en cada salto (ver "Descarga segura").
 - robots.txt (RFC 9309): se descarga una vez cada 6 h por origen; grupo del bot o, si no lo nombran, los grupos `*`; gana la regla más larga; `*` y `$`. 4xx → todo permitido; 5xx o error → no se pide nada. Toda request (búsqueda, sitemap, descubrimiento) pasa por ahí.
 - No se evaden protecciones: un 403 o un desafío anti-bot es una falla más de esa tienda. Mercado Libre, Zara, Nike y Tienda Inglesa están en `BLOCKED_DOMAINS` y se descartan también del descubrimiento.
 - Toda respuesta externa (HTML de listados, JSON de plataformas, sitemaps, OpenRouter) se valida con Zod; un formato inesperado es `MalformedResponseError` y cuenta como falla parcial.
 
-## Extracción y normalización
+## Descarga segura (paso 04a)
 
-- `extractProduct` lee bloques `application/ld+json` (incluye `@graph` y variantes `hasVariant`). Es el formato más común en tiendas. Extractores específicos por tienda se agregarán cuando haya scraping real.
-- `normalizeProduct` mapea disponibilidad (`schema.org/InStock` → `IN_STOCK`, etc.), infiere categoría por palabras clave, normaliza colores/materiales y descarta productos sin título, precio o con moneda no soportada (solo `UYU` y `USD`).
+Las URLs candidatas vienen de terceros (búsqueda web, sitemaps), así que cada request se trata como no confiable.
+
+- **Por nombre** (`isSafeProductUrl`, sin DNS): solo `http`/`https` al puerto estándar, sin credenciales en la URL, sin IPv6 literal, sin IPv4 privadas o reservadas (loopback, 10/8, 172.16/12, 192.168/16, CGNAT 100.64/10, 0/8, link-local 169.254/16 —metadata de la nube—, multicast, documentación) en cualquier notación (`0x7f000001`, `2130706433`, `127.1`: la URL las normaliza), sin `localhost` (también `localhost.` y `*.localhost`), `.local`, `.internal`, `.lan`, `home.arpa` ni nombres de una sola etiqueta (servicios de Docker como `db`).
+- **Por IP, al conectar** (`createSafeTransport`): transporte propio sobre `node:http(s)` con un `lookup` que resuelve el DNS y rechaza si **alguna** IP no es pública (`isPublicAddress`, IPv4 e IPv6: `::1`, `fc00::/7`, `fe80::/10`, IPv4 mapeada, NAT64, 6to4…). El socket se conecta a la IP ya validada, así que no hay ventana para DNS rebinding.
+- **Redirects manuales** (`PoliteHttpClient`, hasta 5): cada destino pasa otra vez por `isSafeProductUrl`, por el `lookup` validado y por el robots.txt de su origen. Un redirect a `169.254.169.254`, a `localhost.` o a un path prohibido corta la descarga.
+- **Tiempo y tamaño**: timeout de 12 s por salto combinado con el `AbortSignal` de quien llama (`ProductFetcher.fetch(url, { signal })`); tope de 6 MB **ya descomprimido**, medido mientras se lee (se corta y se cierra el socket apenas se pasa, sin bajar el resto). Acepta gzip, deflate y br.
+- **Ritmo por dominio**: 2 requests simultáneos y uno cada 300 ms por dominio (`www.` cuenta como el mismo), con el turno reservado antes de esperar.
+- **robots.txt**: el de cada origen (ver "Reglas de las tiendas").
+- **Solo HTML**: `HttpProductFetcher` rechaza otro `content-type` (`NotHtmlError`).
+
+## Extracción en cascada (paso 04a)
+
+`parseHtml` recorre la página una sola vez con `htmlparser2` (SAX, sin armar el DOM) y junta los bloques JSON-LD, las metas (`og:*`, `product:*`) y los items de microdata anidados (valores por `content`, `src`, `href` o texto, como dice la spec de HTML). `extractProduct` arma un `RawProduct` tomando cada dato de la **primera** fuente que lo trae y anota la fuente en `sources`:
+
+1. **JSON-LD** `Product` o `ProductGroup` (también en `@graph` o `mainEntity`; se ignoran `ItemList` y `BreadcrumbList`; con 3 o más productos distintos es un listado y no cuenta).
+   - Ofertas: `Offer`, arrays de `Offer` (Shopify y VTEX: una por variante), `AggregateOffer` (con o sin `offers` adentro) y `priceSpecification`. En un `ProductGroup` sin ofertas propias se usan las de `hasVariant`.
+   - Precio: el menor entre las ofertas **disponibles**; si ninguna lo está, el menor de todas.
+   - Disponibilidad agregada: alguna variante disponible → disponible; todas agotadas → agotado; si no, sin dato.
+   - Imagen: string, array o `ImageObject` (`url`/`contentUrl`), relativa a la página; un `ProductGroup` sin imagen usa la de su primera variante.
+   - Categoría: `category` más las migas de pan (`BreadcrumbList`, sin la última, que es el producto).
+   - Entidades HTML dentro de los strings (`H&amp;M`) se decodifican.
+2. **Microdata** schema.org (`itemprop`; así publican todas las tiendas Fenicio). Se convierte a la misma forma que el JSON-LD y se lee con la misma lógica.
+3. **OpenGraph** (`og:title` sin el nombre del sitio, `og:image:secure_url`/`og:image`, `product:price:amount`/`og:price:amount`, `product:price:currency`, `product:availability`, `product:brand`, `product:category`). Solo cuenta si `og:type` es de producto o hay precio: así una home o una categoría no pasan por producto.
+
+Precio y moneda salen juntos de la primera fuente con un precio legible (la moneda puede completarse con otra fuente de la misma página). Las variantes salen de la primera fuente que las tenga.
+
+**No es una página de producto** (→ `null`): respuesta no 2xx, otro `content-type`, listado o categoría, HTML sin datos de producto o JSON-LD roto. Los endpoints de plataforma (04b) y el parsing específico van después; **Playwright no entra en el MVP**: queda como último recurso documentado para tiendas que solo rendericen en el cliente, nunca para evadir anti-bot.
+
+## Normalización (paso 04a)
+
+`normalizeProductResult(raw, { store, fetchedAt })` devuelve el `Product` (Zod) o el motivo del descarte (`no_title`, `no_price`, `unsupported_currency`, `invalid`). Nunca completa un precio, un stock ni un talle que la página no dio.
+
+- **Precios con formato local** (`parsePrice`): `1.890,00` y `1,890.00` → 1890; un solo separador seguido de 3 dígitos y con 1–3 dígitos adelante es de miles (`6.390` de Decathlon, `1,499` de Jack & Jones); si no, es decimal (`4690.00`, `1490.000`, `12,5`). Ignora símbolos y texto (`UYU 1.690`, `$ 3.890`). Cero, negativo o ilegible → sin precio (BAS publica `0` en agotados: no se muestra).
+- **Moneda**: la declarada (`UYU`, `USD`, `$U`, `U$S`, `US$`…) o la escrita junto al precio. Un `$` solo no alcanza: no se supone UYU. Otra moneda (ARS, EUR) → descartado.
+- **Categoría** (`inferCategory`): gana el sustantivo de prenda que aparece **primero** en el título, con plurales y términos de Uruguay (championes, remeras, pantalones, buzo, canguro, campera, sobrecamisa, pollera, musculosa, bermuda, chomba, cadena, anillo, lentes…): "Sobrecamisa jean" es abrigo, "Camisa de jean" es camisa. "Pantalón de jean" → `JEANS`; "saco tejido" → `KNITWEAR`. Si el título no dice nada se mira la categoría declarada y las migas de pan. "Reloj despertador" o "almohadón" → `OTHER`.
+- **Fit** (`inferFit`), solo explícito: en el título ("Jean slim", "Pantalón recto", "Wide Leg") o en la descripción con contexto ("modelo Slim", "corte entallado", "regular fit"). Valores: `oversize`, `skinny`, `slim`, `relajado`, `ancho`, `recto`, `regular`, `boxy`. "fit cómodo" o "mejor ajuste" no son un fit.
+- **Colores** (`inferColors`): los declarados (JSON-LD, microdata, variantes) o los del título, en español (`Black` → negro, `Navy` → azul marino, "GRIS OSCURO" → gris). Fenicio pone el color al final ("Pantalón - Negro - Blanco"). Del título solo salen colores del vocabulario: un nombre de fantasía ("Forest River") queda sin dato.
+- **Materiales** (`inferMaterials`): declarados o nombrados en título o descripción (algodón, lino, lana, cuero, cuero sintético, gamuza, poliéster, viscosa, elastano…). "jean" solo cuenta en el título.
+- **Ids**: `Product.id` es el id de producto que declara la plataforma (`productGroupID`, `productID`) o, si no hay, la URL de la página (el SKU no sirve: VTEX FastStore usa `"1"` en todos los productos de H&M). Variantes: id de la plataforma (`?variant=` de Shopify) o SKU; sin ninguno, la variante se descarta (nunca el índice).
+- **Fechas honestas**: `fetched_at` es el momento de la descarga exitosa. `refreshProduct` devuelve `verified` (datos y fecha nuevos), `gone` (404/410) o `failed` (con motivo); en los dos últimos la disponibilidad pasa a `UNKNOWN` y **`fetched_at` no cambia**: una falla no cuenta como verificación.
+
+## Tolerancia a fallas (paso 04a)
+
+Cada URL candidata se procesa por separado (`loadCandidate`) y su falla no afecta a las demás. `ShoppingResult.stats` lleva los conteos para los mensajes honestos de la UI ("no pudimos verificar algunas tiendas"), sin errores técnicos:
+
+| Conteo        | Qué cuenta                                                        |
+| ------------- | ----------------------------------------------------------------- |
+| `candidates`  | URLs candidatas (sin duplicados)                                  |
+| `products`    | productos válidos, antes de rankear y recortar                    |
+| `blocked`     | 401/403/429 o robots.txt que no deja                              |
+| `gone`        | 404/410: el producto desapareció                                  |
+| `failed`      | timeout, 5xx, red, tamaño, demasiados redirects, URL insegura     |
+| `not_product` | no es página de producto (categoría, HTML que cambió, no es HTML) |
+| `no_price`    | producto sin precio legible                                       |
+| `invalid`     | sin título, moneda distinta de UYU/USD o datos fuera del schema   |
+
+Prueba real: `apps/worker/scripts/real-product-extraction.ts [look-N] [--discovery]` (tabla por tienda con fuentes, fallas y un ejemplo).
 
 ## Disponibilidad
 
@@ -93,17 +148,17 @@ Los precios en USD se convierten con una tasa aproximada (`APPROX_UYU_PER_USD`) 
 | Producto (precio / stock)    | 8 h  | URL del producto             |
 
 - Al **agregar al carrito** se revalida siempre el producto (`refreshProduct`), sin cache.
-- Si la revalidación falla, la disponibilidad pasa a `UNKNOWN` (no se muestran datos viejos como ciertos).
+- Si la revalidación falla, la disponibilidad pasa a `UNKNOWN` (no se muestran datos viejos como ciertos) y la fecha de verificación no avanza (`refreshProduct` → `gone` o `failed`).
 - Hoy existe `createMemoryCache()` (dev/tests). En producción la cache irá en Postgres: `products.last_fetched_at` para productos y una tabla de búsquedas cacheadas, con jobs `REFRESH_PRODUCT`.
 
 ## Seguridad
 
-- `isSafeProductUrl` bloquea `localhost`, IPs privadas/link-local, IPv6 literal, credenciales en la URL y esquemas que no sean http(s) (anti-SSRF).
+- Anti-SSRF en dos capas: `isSafeProductUrl` por nombre y `createSafeTransport` por IP al conectar (sin DNS rebinding), y cada redirect revalidado. Detalle en "Descarga segura".
 - Los links a tiendas se abren con `rel="noopener noreferrer nofollow"`.
 - El precio del carrito lo fija la base (trigger), nunca el cliente.
 
 ## Próximos pasos
 
-1. Extracción y normalización de páginas reales (04a) y talles/stock por plataforma (04b).
+1. Talles y stock por plataforma, etapa Validate y locales físicos (04b).
 2. Cache en Postgres y jobs de refresco (05).
 3. `visual_similarity` con embeddings de imagen.

@@ -4,7 +4,9 @@
 export * from "./cache";
 export * from "./extract";
 export * from "./fetch";
+export * from "./html";
 export * from "./mocks";
+export * from "./net";
 export * from "./normalize";
 export * from "./providers/http";
 export * from "./providers/live";
@@ -17,3 +19,4 @@ export * from "./providers/web-search";
 export * from "./rank";
 export * from "./search";
 export * from "./types";
+export * from "./vocabulary";

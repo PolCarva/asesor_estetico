@@ -1,4 +1,7 @@
-import type { FetchedPage, ProductFetcher, SearchProvider } from "../types";
+import { isHtmlContentType } from "../extract";
+import { NotHtmlError } from "../fetch";
+import type { FetchLike } from "../net";
+import type { FetchedPage, FetchOptions, ProductFetcher, SearchProvider } from "../types";
 import { buildUserAgent, PoliteHttpClient } from "./http";
 import {
   CompositeSearchProvider,
@@ -10,22 +13,30 @@ import { SitemapIndex } from "./sitemap";
 import type { WebSearchClient } from "./web-search";
 
 /**
- * Descarga de páginas de producto con el mismo cliente respetuoso (robots, user agent,
- * timeout, tope de tamaño). La extracción y validación completas son del paso 04a.
+ * Descarga de páginas de producto con el mismo cliente respetuoso: robots.txt, user agent
+ * identificable, timeout y `AbortSignal`, tope de tamaño, ritmo por dominio y anti-SSRF en
+ * cada redirect. Solo acepta HTML.
  */
 export class HttpProductFetcher implements ProductFetcher {
   readonly name = "http";
 
-  constructor(private readonly http: PoliteHttpClient) {}
+  constructor(
+    private readonly http: PoliteHttpClient,
+    private readonly now: () => Date = () => new Date(),
+  ) {}
 
-  async fetch(url: string): Promise<FetchedPage> {
-    const res = await this.http.get(url, { accept: "text/html" });
+  async fetch(url: string, options: FetchOptions = {}): Promise<FetchedPage> {
+    const res = await this.http.get(url, {
+      accept: "text/html,application/xhtml+xml",
+      signal: options.signal,
+    });
+    if (!isHtmlContentType(res.contentType)) throw new NotHtmlError(res.url, res.contentType);
     return {
       url: res.url,
       status: res.status,
       contentType: res.contentType,
       body: res.body,
-      fetchedAt: new Date().toISOString(),
+      fetchedAt: this.now().toISOString(),
     };
   }
 }
@@ -37,7 +48,8 @@ export interface LiveShoppingOptions {
   webSearch?: WebSearchClient;
   onError?: SourceErrorHandler;
   onCost?: (usd: number) => void;
-  fetch?: typeof fetch;
+  /** Transporte HTTP (tests); por defecto, el seguro con IP validada al conectar. */
+  fetch?: FetchLike;
 }
 
 /** Proveedores reales: registro de tiendas + sitemaps + descubrimiento web. */

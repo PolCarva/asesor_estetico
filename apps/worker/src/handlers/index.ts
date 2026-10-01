@@ -281,6 +281,7 @@ export const handlers: HandlerRegistry = {
     return {
       slot: payload.slot,
       items: result.items.map((i) => ({ product: i.product.id, score: i.score })),
+      stats: result.stats,
     } satisfies Json;
   },
 
@@ -288,7 +289,7 @@ export const handlers: HandlerRegistry = {
     parsePayload(job, "REFRESH_PRODUCT");
     const [product] = FIXTURE_PRODUCTS;
     if (!product) throw new NonRetryableJobError("Catálogo vacío.");
-    const fresh = await refreshProduct(product, { fetcher: ctx.deps.fetcher });
-    return { availability: fresh.availability };
+    const refreshed = await refreshProduct(product, { fetcher: ctx.deps.fetcher });
+    return { status: refreshed.status, availability: refreshed.product.availability };
   },
 };

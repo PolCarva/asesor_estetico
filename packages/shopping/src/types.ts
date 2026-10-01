@@ -25,35 +25,52 @@ export interface FetchedPage {
   fetchedAt: string;
 }
 
+export interface FetchOptions {
+  signal?: AbortSignal;
+}
+
 /** Descarga la página de un producto. */
 export interface ProductFetcher {
   readonly name: string;
-  fetch(url: string): Promise<FetchedPage>;
+  fetch(url: string, options?: FetchOptions): Promise<FetchedPage>;
+}
+
+/** De dónde salió un dato: la cascada prueba JSON-LD → microdata → OpenGraph. */
+export type ExtractSource = "jsonld" | "microdata" | "opengraph";
+
+export interface RawVariant {
+  /** Id de la plataforma (p. ej. `?variant=` de Shopify) o SKU. Nunca un índice. */
+  id: string | null;
+  sku: string | null;
+  size: string | null;
+  color: string | null;
+  availability: string | null;
+  /** Tal como vino (número o texto con formato local); `normalizeProduct` lo interpreta. */
+  price: number | string | null;
+  currency: string | null;
 }
 
 /** Datos crudos extraídos de una página, antes de normalizar. */
 export interface RawProduct {
   url: string;
+  /** Id del producto en la plataforma (`productID`, `productGroupID`), si lo declara. */
   externalId: string | null;
   title: string | null;
   brand: string | null;
   description: string | null;
   imageUrl: string | null;
-  price: number | null;
+  price: number | string | null;
   currency: string | null;
   availability: string | null;
   color: string | null;
   material: string | null;
   category: string | null;
-  variants: Array<{
-    id: string | null;
-    sku: string | null;
-    size: string | null;
-    color: string | null;
-    availability: string | null;
-    price: number | null;
-  }>;
+  variants: RawVariant[];
+  /** Fuente de cada dato que se encontró. */
+  sources: Partial<Record<RawField, ExtractSource>>;
 }
+
+export type RawField = Exclude<keyof RawProduct, "url" | "variants" | "sources"> | "variants";
 
 export interface ShoppingCache {
   get<T>(key: string): Promise<T | null>;

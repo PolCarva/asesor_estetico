@@ -6,11 +6,13 @@ import {
   CACHE_TTL_MS,
   createMemoryCache,
   extractProduct,
+  HttpStatusError,
   isSafeProductUrl,
   MockProductFetcher,
   MockSearchProvider,
   normalizeAvailability,
   normalizeProduct,
+  NotHtmlError,
   rankProducts,
   refreshProduct,
   renderProductPage,
@@ -159,20 +161,68 @@ describe("searchProducts", () => {
     expect((await searchProducts(query({ limit: 2 }), deps)).source).toBe("LIVE");
   });
 
-  it("ignora candidatos que fallan", async () => {
+  it("cada candidato falla solo y el resultado lleva los conteos", async () => {
+    const catalog = await new MockSearchProvider().search();
+    const store = { name: "X", domain: "x.test" };
+    const pages: Record<string, { status: number; body: string; contentType?: string }> = {
+      "https://x.test/categoria": {
+        status: 200,
+        body: '<html><head><meta property="og:type" content="website"></head></html>',
+      },
+      "https://x.test/sin-precio": {
+        status: 200,
+        body: '<script type="application/ld+json">{"@type":"Product","name":"Camisa","offers":{"price":0,"priceCurrency":"UYU"}}</script>',
+      },
+      "https://x.test/pesos-argentinos": {
+        status: 200,
+        body: '<script type="application/ld+json">{"@type":"Product","name":"Camisa","offers":{"price":100,"priceCurrency":"ARS"}}</script>',
+      },
+      "https://x.test/pdf": { status: 200, body: "%PDF", contentType: "application/pdf" },
+    };
+    const mock = new MockProductFetcher();
+    const fetcher = {
+      name: "mixto",
+      async fetch(url: string) {
+        if (url === "https://x.test/bloqueada") throw new HttpStatusError(url, 403);
+        if (url === "https://x.test/lenta") throw new DOMException("timeout", "TimeoutError");
+        if (url === "https://x.test/pdf") throw new NotHtmlError(url, "application/pdf");
+        const page = pages[url];
+        if (!page) return mock.fetch(url);
+        return {
+          url,
+          status: page.status,
+          contentType: page.contentType ?? "text/html",
+          body: page.body,
+          fetchedAt: "2026-10-01T12:00:00.000Z",
+        };
+      },
+    };
     const searchProvider = {
-      name: "broken",
+      name: "mixto",
       search: async () => [
-        { url: "https://noexiste.test/x", store: { name: "X", domain: "noexiste.test" } },
-        { url: "http://127.0.0.1/admin", store: { name: "SSRF", domain: "127.0.0.1" } },
-        ...(await new MockSearchProvider().search()),
+        { url: "https://noexiste.test/x", store },
+        { url: "http://127.0.0.1/admin", store },
+        { url: "https://x.test/bloqueada", store },
+        { url: "https://x.test/lenta", store },
+        { url: "https://x.test/categoria", store },
+        { url: "https://x.test/sin-precio", store },
+        { url: "https://x.test/pesos-argentinos", store },
+        { url: "https://x.test/pdf", store },
+        ...catalog,
       ],
     };
-    const result = await searchProducts(query(), {
-      searchProvider,
-      fetcher: new MockProductFetcher(),
-    });
+    const result = await searchProducts(query(), { searchProvider, fetcher });
     expect(result.items.length).toBeGreaterThan(0);
+    expect(result.stats).toEqual({
+      candidates: 8 + catalog.length,
+      products: catalog.length,
+      blocked: 1,
+      gone: 1, // noexiste.test: el mock responde 404
+      failed: 2, // URL insegura + timeout
+      not_product: 2, // categoría + PDF
+      no_price: 1,
+      invalid: 1, // moneda ARS
+    });
   });
 });
 
@@ -191,14 +241,55 @@ describe("seguridad y refresh", () => {
     }
   });
 
-  it("refreshProduct marca UNKNOWN si la tienda no responde", async () => {
-    const product = byId("mock-oxford-crudo");
-    const fresh = await refreshProduct(product, { fetcher: new MockProductFetcher() });
-    expect(fresh.availability).toBe("IN_STOCK");
+  it("refreshProduct: verificado renueva la fecha; una falla no", async () => {
+    const product = { ...byId("mock-oxford-crudo"), fetched_at: "2025-12-01T00:00:00.000Z" };
+    const fetcher = new MockProductFetcher(
+      FIXTURE_PRODUCTS,
+      () => new Date("2026-10-01T12:00:00Z"),
+    );
+
+    const fresh = await refreshProduct(product, { fetcher });
+    expect(fresh.status).toBe("verified");
+    expect(fresh.product.availability).toBe("IN_STOCK");
+    expect(fresh.product.fetched_at).toBe("2026-10-01T12:00:00.000Z");
+    expect(fresh.product.id).toBe(product.id);
+
+    // 404: la página ya no existe. No es una verificación: la fecha no avanza.
     const gone = await refreshProduct(
       { ...product, url: "https://centro.tienda.test/p/borrado" },
-      { fetcher: new MockProductFetcher() },
+      { fetcher },
     );
-    expect(gone.availability).toBe("UNKNOWN");
+    expect(gone.status).toBe("gone");
+    expect(gone.product.availability).toBe("UNKNOWN");
+    expect(gone.product.fetched_at).toBe(product.fetched_at);
+
+    // Tienda caída (error de red): igual, UNKNOWN con la fecha de la última verificación buena.
+    const down = await refreshProduct(product, {
+      fetcher: {
+        name: "caida",
+        fetch: async () => {
+          throw new TypeError("fetch failed");
+        },
+      },
+    });
+    expect(down).toMatchObject({ status: "failed", reason: "network" });
+    expect(down.product.availability).toBe("UNKNOWN");
+    expect(down.product.fetched_at).toBe(product.fetched_at);
+
+    // Página que cambió (sin datos de producto): tampoco renueva.
+    const changed = await refreshProduct(product, {
+      fetcher: {
+        name: "cambio",
+        fetch: async (url) => ({
+          url,
+          status: 200,
+          contentType: "text/html",
+          body: "<html><body>Nuevo diseño</body></html>",
+          fetchedAt: "2026-10-01T12:00:00.000Z",
+        }),
+      },
+    });
+    expect(changed).toMatchObject({ status: "failed", reason: "not_product" });
+    expect(changed.product.fetched_at).toBe(product.fetched_at);
   });
 });

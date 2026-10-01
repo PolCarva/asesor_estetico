@@ -111,7 +111,7 @@ source ~/.nvm/nvm.sh && nvm use >/dev/null && pnpm format && pnpm lint && pnpm t
 | 01  | [Asesoría: schema, prompt y persistencia](pasos/01-asesoria-schema-prompt.md)                      | 1–5            | —          | ✅     |
 | 02  | [Asesoría: UI, Free/Premium y detalle de look](pasos/02-asesoria-ui-detalle-look.md)               | 6              | 01         | ✅     |
 | 03  | [Shopping: queries desde el LookSpec y búsqueda real](pasos/03-shopping-queries-busqueda.md)       | 7–9            | —          | ✅     |
-| 04a | [Shopping: fetcher seguro, extracción y normalización](pasos/04a-fetch-extraccion.md)              | 10–11          | 03         | ⬜     |
+| 04a | [Shopping: fetcher seguro, extracción y normalización](pasos/04a-fetch-extraccion.md)              | 10–11          | 03         | ✅     |
 | 04b | [Shopping: adaptadores de talles/stock, validación y locales](pasos/04b-adaptadores-validacion.md) | 10–11          | 04a        | ⬜     |
 | 05  | [Shopping: ranking y cache persistente](pasos/05-shopping-ranking-cache.md)                        | 12–13          | 04b        | ⬜     |
 | 06  | [Shopping: jobs reales, progreso y Premium server-side](pasos/06-shopping-jobs-premium.md)         | 14, 19         | 05         | ⬜     |
@@ -246,3 +246,47 @@ source ~/.nvm/nvm.sh && nvm use >/dev/null && pnpm format && pnpm lint && pnpm t
   - 06: el job tiene que armar las queries con `buildShoppingQueries` (audience con `audienceForProfile`) y registrar el costo de descubrimiento (`onCost`, ~USD 0.01 por prenda) en `ai_usage` o similar.
   - 09: `strict_max_price` ya existe en la query.
 - Commit: `feat(asesoria-shopping): paso 03 — queries desde el LookSpec y búsqueda real`
+
+### Paso 04a — Shopping: fetcher seguro, extracción y normalización · 2026-10-01 · ✅
+
+- Hecho:
+  - **Fetcher endurecido** (`packages/shopping`):
+    - `isSafeProductUrl` (`net.ts`): suma `localhost.`, `*.localhost`, `.local`/`.internal`/`.lan`/`home.arpa`, nombres de una etiqueta (servicios Docker), CGNAT, 0/8, rangos reservados en cualquier notación de IPv4, IPv4 mapeada y puertos no estándar.
+    - `createSafeTransport`: `node:http(s)` con `lookup` que rechaza si alguna IP resuelta no es pública (IPv4/IPv6); el socket usa la IP validada, sin ventana de DNS rebinding. Descomprime gzip/deflate/br.
+    - `PoliteHttpClient`: redirects manuales (hasta 5) revalidados por SSRF y por el robots.txt del destino; tope de 6 MB medido mientras lee (corta y cierra); timeout + `AbortSignal` del que llama; ritmo por dominio (2 simultáneos, uno cada 300 ms, `www.` = mismo dominio).
+    - `HttpProductFetcher.fetch(url, { signal })` solo acepta HTML (`NotHtmlError`). `ProductFetcher.fetch` recibe `FetchOptions`.
+  - **Extracción en cascada** (`html.ts` + `extract.ts`): una pasada SAX con `htmlparser2` (JSON-LD, metas, microdata anidada). JSON-LD `Product`/`ProductGroup` (`@graph`, `mainEntity`, `hasVariant`, `AggregateOffer`, un `Offer` por variante, `priceSpecification`, `ImageObject`, migas de pan), precio = menor oferta disponible, disponibilidad agregada ("alguna variante disponible"); microdata schema.org (convertida a la forma del JSON-LD); OpenGraph/`product:*` solo si la página es de producto. `RawProduct.sources` dice de qué fuente salió cada dato. Listados, categorías, no-HTML, 404 y JSON-LD roto → `null`.
+  - **Normalización** (`normalize.ts` + `vocabulary.ts`): `parsePrice` (`1.890,00`, `1,890.00`, `6.390`, `1,499`, `UYU 1.690`, `4690.00`, `1490.000`; 0 → sin precio), `parseCurrency`/`currencyInText` (un `$` solo no alcanza), `inferCategory` por el primer sustantivo del título con plurales y términos de Uruguay (+ categoría declarada y migas; "pantalón de jean" → JEANS, "reloj despertador" → OTHER), `inferFit` explícito (título o descripción con contexto), `inferColors` (vocabulario en español, segmentos finales tipo Fenicio, sin nombres de fantasía), `inferMaterials`. `normalizeProductResult` devuelve el producto o el motivo (`no_title`, `no_price`, `unsupported_currency`, `invalid`).
+  - **Ids**: `Product.id` = `productGroupID`/`productID` o la URL (el SKU no es único: H&M usa `"1"`); `ProductSchema.id` hasta 500. Variantes: `?variant=` de Shopify o SKU; sin ninguno se descartan (nunca el índice).
+  - **Fallas y fechas**: `loadCandidate(s)` → `CandidateOutcome` por candidato; `ShoppingResult.stats` (`shared`, aditivo): `candidates`, `products`, `blocked`, `gone`, `failed`, `not_product`, `no_price`, `invalid`. `refreshProduct` → `verified | gone | failed`; solo `verified` renueva `fetched_at` (las fallas dejan `UNKNOWN` y la fecha anterior). Worker: `SEARCH_PRODUCTS` devuelve `stats` y `REFRESH_PRODUCT` el `status`.
+  - **Parser**: `htmlparser2` ^12.0.0 en `catalog` (D24), `pnpm-lock.yaml` actualizado, bundle del worker 1,69 MB.
+  - **Tests** (153 en `@asesor/shopping`): `net.test.ts` (22 URLs inseguras una por una, 17 IPs no públicas, DNS a IP privada, transporte real contra un servidor local), `http.test.ts` (redirect a metadata, a `localhost.` y a CGNAT, robots del destino, bucles, tamaño declarado y en streaming, timeout, `AbortSignal`, ritmo y concurrencia por dominio, solo HTML), `extract.test.ts` (fixtures reales recortados: Fenicio Legacy y Hering, VTEX Adidas y BAS, Shopify Jack & Jones y Decathlon, OpenGraph, categoría), `normalize.test.ts` (precios, moneda, 22 categorías, fit, colores, materiales, motivos, ids estables) y `shopping.test.ts` (conteos de fallas; "una falla no renueva la fecha").
+  - Script `apps/worker/scripts/real-product-extraction.ts [look-N] [--discovery]`.
+  - Fuera del paso pero necesario para la verificación: `enqueueJob` (`packages/db/src/jobs.ts`) ya no manda `scheduled_at` con el reloj de Node cuando no hay fecha (usa el `now()` de la base). Con unos ms de desfasaje entre la Mac y la VM de Docker, `jobs.int.test.ts` fallaba 1–2 tests por corrida (`claimNextJob` → `null` justo después de encolar); se descartó un consumidor externo encolando un job a mano (siguió `QUEUED`). Después del cambio, 3 corridas seguidas 18/18.
+  - Docs: `SHOPPING_ENGINE.md` (descarga segura, cascada, normalización, fallas), `SECURITY_PRIVACY.md` (requests a tiendas), `ARCHITECTURE.md`, `SETUP_STATUS.md`, `TIENDAS_UY.md` (verificado en 04a), `DECISIONES.md` (D9 y D24).
+- Prueba real (`real-product-extraction.ts`, user agent `AsesorEsteticoBot/1.0`, transporte seguro):
+  - Look 1 sin descubrimiento (USD 0): **59 de 59 candidatas con producto válido** (nombre, precio, moneda e imagen), **8 tiendas en 3 plataformas**, 30 s:
+
+    | Tienda           | Plataforma | Candidatas | Válidos | Fuente    | Ejemplo                                                       |
+    | ---------------- | ---------- | ---------- | ------- | --------- | ------------------------------------------------------------- |
+    | decathlon.com.uy | SHOPIFY    | 12         | 12      | jsonld    | CAMISA HOMBRE TRAVEL100 · UYU 805                             |
+    | bas.com.uy       | VTEX       | 10         | 10      | jsonld    | CAMISA DE VESTIR OXFORD CUADROS CRUDO · UYU 599               |
+    | indian.com.uy    | FENICIO    | 9          | 9       | microdata | Camisa Mustafa - Crudo / Natural · UYU 1699                   |
+    | jackjones.com.uy | SHOPIFY    | 9          | 9       | jsonld    | CAMISA CLÁSICA REGULAR OXFORD - Crockery Stripes · UYU 1299   |
+    | laisla.com.uy    | FENICIO    | 7          | 7       | microdata | Camisa Rusty Volus - Crudo · UYU 590                          |
+    | legacy.com.uy    | FENICIO    | 6          | 6       | microdata | CAMISA OXFORD LISA - Rosa · UYU 2490                          |
+    | hering.com.uy    | FENICIO    | 3          | 3       | microdata | PANTALÓN MODELO CHINO SLIM - VERDE · UYU 2099                 |
+    | stadium.com.uy   | FENICIO    | 3          | 3       | microdata | Pantalon de Hombre Adidas Tiro26L Football - Negro · UYU 2790 |
+
+    Normalización en vivo: "PANTALÓN MODELO CHINO SLIM - VERDE" → PANTS, fit slim, verde; "Pantalon … - Negro - Blanco" → negro/blanco; "SOBRECAMISA RELAXED TEDDY" → OUTERWEAR, fit relajado; "RELOJ DESPERTADOR MULTICOLOR" (BAS) → OTHER (el ranker lo descarta).
+
+  - Look 3 con descubrimiento (USD 0.0217, 55 s): **55 de 60 válidos en 16 tiendas**, 6 fuera del registro (Santander, Peppos, Piece of Cake, Canva Store, New Balance UY, Less is More: todas Fenicio por `X-Powered-By: MV`). Conteos: `{"candidates":60,"products":55,"blocked":0,"gone":1,"failed":0,"not_product":3,"no_price":1,"invalid":0}`: 3 páginas de categoría citadas por el buscador (Triny, Inbox, Peppos), un 404 (Pricebox) y un producto de BAS con precio `0` en JSON-LD y OpenGraph (no se muestra). Una búsqueda de OpenRouter dio 504 y se toleró.
+- Verificación: format ✓ · lint ✓ · typecheck ✓ · test ✓ (261 unit —153 de shopping—, 21 integración ejecutados: db 18, worker 3) · build ✓ (`pnpm build`; worker con `htmlparser2` en el bundle) · e2e — (sin cambios de UI)
+- Decisiones: D9 confirmada para 04a; D24 nueva (parser `htmlparser2`, transporte con IP validada al conectar, ids). Detalle en `DECISIONES.md`.
+- Para pasos siguientes:
+  - 04b: talles y stock por variante siguen sin dato (solo `size` del JSON-LD, que casi ninguna tienda trae). Para cruzar con la plataforma ya están `RawProduct.externalId` (Shopify `productGroupID`), los ids de variante `?variant=` (Shopify) y los SKU (VTEX). Decathlon pone talle y color en el nombre de la variante ("… / XS / Rojo vino"): mejor `products.json`. Validate todavía no compara el host final (después de redirects) con la tienda. BAS: precio `0` en agotados → hoy `no_price`.
+  - 05: `fetched_at` solo es nuevo en `verified`: `last_fetched_at` tiene que avanzar solo con eso. El fit del producto es canónico (`slim`, `relajado`, `recto`, `ancho`, `regular`, `oversize`, `skinny`, `boxy`) y los LookSpecs escriben cosas como "entallado sin ajustar" o "relajado": el ranking necesita sinónimos. Colores en español del vocabulario; sin dato → `[]` (hoy `listScore` da 0.5).
+  - 06: `SEARCH_PRODUCTS` ya devuelve `stats`; `REFRESH_PRODUCT` devuelve `status`.
+  - 08: `ShoppingResult.stats` alcanza para los mensajes honestos ("no pudimos verificar algunas tiendas").
+  - Al empezar la verificación había un `pnpm --filter @asesor/worker dev` prendido desde las 08:51; se apagó según el protocolo. Volver a levantarlo con `pnpm worker:dev` si hace falta.
+- Commit: `feat(asesoria-shopping): paso 04a — fetcher seguro, extracción y normalización`

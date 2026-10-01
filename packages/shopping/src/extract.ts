@@ -1,92 +1,417 @@
-import type { FetchedPage, RawProduct } from "./types";
+import { type MicrodataItem, type PageData, parseHtml } from "./html";
+import { normalizeAvailability, parsePrice } from "./normalize";
+import type { ExtractSource, FetchedPage, RawField, RawProduct, RawVariant } from "./types";
+
+/**
+ * Extracción genérica en cascada, como pide el SPEC: 1) JSON-LD (`Product` o
+ * `ProductGroup`), 2) microdata schema.org (`itemprop`, típico de Fenicio), 3) OpenGraph
+ * y `product:*`. Cada dato sale de la primera fuente que lo trae y queda anotado en
+ * `sources`. Nunca se completa lo que la página no dice.
+ */
 
 type Json = Record<string, unknown>;
 
-const asString = (v: unknown): string | null =>
-  typeof v === "string" && v.trim() ? v.trim() : null;
-const asNumber = (v: unknown): number | null => {
-  const n = typeof v === "number" ? v : typeof v === "string" ? Number(v.replace(",", ".")) : NaN;
-  return Number.isFinite(n) ? n : null;
-};
-const first = (v: unknown): unknown => (Array.isArray(v) ? v[0] : v);
 const isObject = (v: unknown): v is Json =>
   typeof v === "object" && v !== null && !Array.isArray(v);
+const asArray = (v: unknown): unknown[] =>
+  Array.isArray(v) ? v : v === undefined || v === null ? [] : [v];
 
-function readJsonLdBlocks(html: string): unknown[] {
-  const blocks: unknown[] = [];
-  const pattern = /<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi;
-  for (const match of html.matchAll(pattern)) {
-    try {
-      blocks.push(JSON.parse(match[1] ?? ""));
-    } catch {
-      // JSON-LD roto: se ignora ese bloque.
+const ENTITIES: Record<string, string> = {
+  amp: "&",
+  quot: '"',
+  apos: "'",
+  lt: "<",
+  gt: ">",
+  nbsp: " ",
+  aacute: "á",
+  eacute: "é",
+  iacute: "í",
+  oacute: "ó",
+  uacute: "ú",
+  ntilde: "ñ",
+  uuml: "ü",
+  Aacute: "Á",
+  Eacute: "É",
+  Iacute: "Í",
+  Oacute: "Ó",
+  Uacute: "Ú",
+  Ntilde: "Ñ",
+  ordm: "º",
+  deg: "°",
+};
+
+/** El JSON-LD a veces trae entidades HTML adentro de los strings (`H&amp;M`). */
+function decodeEntities(s: string): string {
+  return s.replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, (match, code: string) => {
+    if (code.startsWith("#x") || code.startsWith("#X")) {
+      return String.fromCodePoint(parseInt(code.slice(2), 16));
     }
-  }
-  return blocks;
+    if (code.startsWith("#")) return String.fromCodePoint(Number(code.slice(1)));
+    return ENTITIES[code] ?? match;
+  });
 }
 
-function findProductNode(value: unknown): Json | null {
-  if (Array.isArray(value)) {
-    for (const item of value) {
-      const found = findProductNode(item);
-      if (found) return found;
-    }
+/** Texto limpio: sin etiquetas, entidades ni espacios de más. */
+function text(v: unknown): string | null {
+  if (typeof v === "number") return String(v);
+  if (typeof v !== "string") return null;
+  const clean = decodeEntities(v.replace(/<[^>]*>/g, " "))
+    .replace(/\s+/g, " ")
+    .trim();
+  return clean || null;
+}
+
+const firstText = (v: unknown): string | null => {
+  for (const item of asArray(v)) {
+    const t = isObject(item) ? text(item.name) : text(item);
+    if (t) return t;
+  }
+  return null;
+};
+
+function absoluteUrl(raw: string | null, base: string): string | null {
+  if (!raw) return null;
+  try {
+    const url = new URL(raw.trim(), base);
+    return url.protocol === "https:" || url.protocol === "http:" ? url.toString() : null;
+  } catch {
     return null;
   }
-  if (!isObject(value)) return null;
-  const type = value["@type"];
-  if (type === "Product" || (Array.isArray(type) && type.includes("Product"))) return value;
-  if (value["@graph"]) return findProductNode(value["@graph"]);
+}
+
+function imageOf(value: unknown, base: string): string | null {
+  for (const item of asArray(value)) {
+    const raw = isObject(item) ? (text(item.url) ?? text(item.contentUrl)) : text(item);
+    const url = absoluteUrl(raw, base);
+    if (url) return url;
+  }
   return null;
 }
 
-function readOffer(offers: unknown) {
-  const offer = first(isObject(offers) && Array.isArray(offers.offers) ? offers.offers : offers);
-  if (!isObject(offer)) return { price: null, currency: null, availability: null };
+const typesOf = (node: Json): string[] =>
+  asArray(node["@type"])
+    .filter((t): t is string => typeof t === "string")
+    .map((t) => t.replace(/^https?:\/\/schema\.org\//i, ""));
+
+const isProductNode = (node: Json) =>
+  typesOf(node).some((t) => t === "Product" || t === "ProductGroup" || t === "IndividualProduct");
+
+/** Partes de un producto que puede dar una fuente. */
+interface Part {
+  externalId: string | null;
+  title: string | null;
+  brand: string | null;
+  description: string | null;
+  imageUrl: string | null;
+  price: number | string | null;
+  currency: string | null;
+  availability: string | null;
+  color: string | null;
+  material: string | null;
+  category: string | null;
+  variants: RawVariant[];
+}
+
+interface Offer {
+  price: number | string | null;
+  currency: string | null;
+  availability: string | null;
+  sku: string | null;
+  url: string | null;
+}
+
+function readOffers(value: unknown): Offer[] {
+  return asArray(value)
+    .filter(isObject)
+    .flatMap((offer): Offer[] => {
+      const currency = text(offer.priceCurrency);
+      if (typesOf(offer).includes("AggregateOffer")) {
+        const inner = readOffers(offer.offers).map((o) => ({
+          ...o,
+          currency: o.currency ?? currency,
+        }));
+        if (inner.length > 0) return inner;
+        const price = (offer.lowPrice ?? offer.price ?? null) as number | string | null;
+        return [{ price, currency, availability: text(offer.availability), sku: null, url: null }];
+      }
+      const spec = asArray(offer.priceSpecification).find(isObject);
+      const price = (offer.price ?? spec?.price ?? offer.lowPrice ?? null) as
+        number | string | null;
+      return [
+        {
+          price: typeof price === "number" || typeof price === "string" ? price : null,
+          currency: currency ?? (spec ? text(spec.priceCurrency) : null),
+          availability: text(offer.availability),
+          sku: text(offer.sku),
+          url: text(offer.url),
+        },
+      ];
+    });
+}
+
+/** Precio del producto: el menor entre las ofertas disponibles (o entre todas, si ninguna lo está). */
+function pickOffer(offers: Offer[]): Offer | null {
+  const priced = offers
+    .map((offer) => ({ offer, amount: parsePrice(offer.price) }))
+    .filter((o): o is { offer: Offer; amount: number } => o.amount !== null);
+  const inStock = priced.filter((o) => normalizeAvailability(o.offer.availability) === "IN_STOCK");
+  const pool = inStock.length > 0 ? inStock : priced;
+  if (pool.length === 0) return offers[0] ?? null;
+  return pool.reduce((best, o) => (o.amount < best.amount ? o : best)).offer;
+}
+
+/** "Alguna variante disponible" = disponible; todas agotadas = agotado; si no, no se sabe. */
+function aggregateAvailability(values: Array<string | null>): string | null {
+  const states = values.map(normalizeAvailability);
+  if (states.includes("IN_STOCK")) return "InStock";
+  if (states.length > 0 && states.every((s) => s === "OUT_OF_STOCK")) return "OutOfStock";
+  if (states.includes("IN_STORE_ONLY")) return "InStoreOnly";
+  return null;
+}
+
+/** Id de variante de la plataforma en la URL (`?variant=123` de Shopify). */
+function variantParam(raw: string | null, base: string): string | null {
+  if (!raw) return null;
+  try {
+    return new URL(raw, base).searchParams.get("variant");
+  } catch {
+    return null;
+  }
+}
+
+function readProductNode(node: Json, base: string): Part {
+  const isGroup = typesOf(node).includes("ProductGroup");
+  const variantNodes = asArray(node.hasVariant).filter(isObject);
+  const ownOffers = readOffers(node.offers);
+  const variantOffers = variantNodes.flatMap((v) => readOffers(v.offers));
+  const offers = ownOffers.length > 0 ? ownOffers : variantOffers;
+  const chosen = pickOffer(offers);
+
+  let variants: RawVariant[] = [];
+  if (variantNodes.length > 0) {
+    variants = variantNodes.map((v) => {
+      const offer = pickOffer(readOffers(v.offers));
+      const sku = text(v.sku);
+      return {
+        id: variantParam(text(v["@id"]), base) ?? variantParam(offer?.url ?? null, base) ?? sku,
+        sku,
+        size: firstText(v.size),
+        color: firstText(v.color),
+        availability: offer?.availability ?? null,
+        price: offer?.price ?? null,
+        currency: offer?.currency ?? null,
+      };
+    });
+  } else if (ownOffers.length > 1) {
+    // Shopify y VTEX: un Offer por variante.
+    variants = ownOffers.map((o) => ({
+      id: variantParam(o.url, base) ?? o.sku,
+      sku: o.sku,
+      size: null,
+      color: null,
+      availability: o.availability,
+      price: o.price,
+      currency: o.currency,
+    }));
+  }
+
   return {
-    price: asNumber(offer.price ?? offer.lowPrice),
-    currency: asString(offer.priceCurrency),
-    availability: asString(offer.availability),
+    externalId: text(node.productGroupID) ?? text(node.productID),
+    title: text(node.name),
+    brand: firstText(node.brand),
+    description: text(node.description),
+    imageUrl:
+      imageOf(node.image, base) ??
+      (isGroup
+        ? imageOf(
+            variantNodes.map((v) => v.image),
+            base,
+          )
+        : null),
+    price: chosen?.price ?? null,
+    currency: chosen?.currency ?? offers.find((o) => o.currency)?.currency ?? null,
+    availability: aggregateAvailability(offers.map((o) => o.availability)),
+    color: asArray(node.color).map(text).filter(Boolean).join(", ") || null,
+    material: asArray(node.material).map(text).filter(Boolean).join(", ") || null,
+    category: firstText(node.category),
+    variants,
   };
 }
 
+/** Nodos de producto del JSON-LD (en `@graph`, arrays o `mainEntity`), sin entrar en listas. */
+function productNodes(value: unknown, depth = 0): Json[] {
+  if (depth > 4) return [];
+  if (Array.isArray(value)) return value.flatMap((v) => productNodes(v, depth + 1));
+  if (!isObject(value)) return [];
+  if (isProductNode(value)) return [value];
+  if (typesOf(value).some((t) => t === "ItemList" || t === "BreadcrumbList")) return [];
+  return [value["@graph"], value.mainEntity].flatMap((v) => productNodes(v, depth + 1));
+}
+
+function breadcrumbNames(blocks: unknown[]): string[] {
+  const names = blocks
+    .flatMap((b) => asArray(isObject(b) && b["@graph"] ? b["@graph"] : b))
+    .filter((b): b is Json => isObject(b) && typesOf(b).includes("BreadcrumbList"))
+    .flatMap((b) => asArray(b.itemListElement).filter(isObject))
+    .map((item) => text(item.name) ?? (isObject(item.item) ? text(item.item.name) : null));
+  // La última miga es el propio producto.
+  return [...new Set(names.slice(0, -1).filter((n): n is string => Boolean(n)))];
+}
+
+function fromJsonLd(data: PageData, base: string): Part | null {
+  const nodes = data.jsonLd.flatMap((b) => productNodes(b));
+  // Tres o más productos distintos: es un listado, no la página de un producto.
+  if (new Set(nodes.map((n) => text(n.name))).size >= 3) return null;
+  const node = nodes.find((n) => typesOf(n).includes("ProductGroup")) ?? nodes[0];
+  if (!node) return null;
+  const part = readProductNode(node, base);
+  const crumbs = breadcrumbNames(data.jsonLd);
+  const category = [part.category, ...crumbs].filter(Boolean);
+  return { ...part, category: category.length > 0 ? [...new Set(category)].join(" / ") : null };
+}
+
+/** Item de microdata → objeto con forma de JSON-LD, para leerlo con la misma lógica. */
+function microdataToJson(item: MicrodataItem, depth = 0): Json {
+  const node: Json = {
+    "@type": item.types.map((t) => t.replace(/^https?:\/\/schema\.org\//i, "")),
+  };
+  for (const [name, values] of item.props) {
+    const converted = values.map((v) =>
+      typeof v === "string" ? v : depth < 4 ? microdataToJson(v, depth + 1) : null,
+    );
+    node[name] = converted.length === 1 ? converted[0] : converted;
+  }
+  return node;
+}
+
+function allItems(items: MicrodataItem[], depth = 0): MicrodataItem[] {
+  if (depth > 4) return [];
+  return items.flatMap((item) => [
+    item,
+    ...allItems(
+      [...item.props.values()].flat().filter((v): v is MicrodataItem => typeof v !== "string"),
+      depth + 1,
+    ),
+  ]);
+}
+
+function fromMicrodata(data: PageData, base: string): Part | null {
+  const item = allItems(data.items)
+    .map((i) => microdataToJson(i))
+    .find(isProductNode);
+  return item ? readProductNode(item, base) : null;
+}
+
+function fromOpenGraph(data: PageData, base: string): Part | null {
+  const get = (...keys: string[]) => {
+    for (const key of keys) {
+      const value = data.meta.get(key)?.find((v) => v.trim());
+      if (value) return value.trim();
+    }
+    return null;
+  };
+  const type = get("og:type")?.toLowerCase() ?? "";
+  const price = get("product:price:amount", "og:price:amount");
+  // Sin og:type de producto ni precio, OpenGraph describe otra cosa (home, categoría).
+  if (!type.includes("product") && price === null) return null;
+  const site = get("og:site_name");
+  let title = get("og:title");
+  if (title && site) title = title.replace(new RegExp(`\\s*[—|–-]\\s*${escapeRegExp(site)}$`), "");
+  return {
+    externalId: null,
+    title,
+    brand: get("product:brand", "og:brand"),
+    description: get("og:description"),
+    imageUrl: absoluteUrl(get("og:image:secure_url", "og:image", "og:image:url"), base),
+    price,
+    currency: get("product:price:currency", "og:price:currency"),
+    availability: get("product:availability", "og:availability"),
+    color: get("product:color"),
+    material: get("product:material"),
+    category: data.meta.get("product:category")?.join(" / ") ?? null,
+    variants: [],
+  };
+}
+
+const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+const SIMPLE_FIELDS = [
+  "externalId",
+  "title",
+  "brand",
+  "description",
+  "imageUrl",
+  "color",
+  "material",
+  "category",
+] as const;
+
+export function isHtmlContentType(contentType: string): boolean {
+  return /text\/html|application\/xhtml\+xml/i.test(contentType);
+}
+
 /**
- * Extrae un producto de una página usando JSON-LD (schema.org/Product), que es el
- * formato estándar de la mayoría de las tiendas. Devuelve null si no hay producto.
- * Extractores específicos por tienda se agregarán cuando haya scraping real.
+ * Extrae un producto de una página. Devuelve null si no es una página de producto
+ * (respuesta de error, listado, home o HTML sin datos de producto).
  */
 export function extractProduct(page: FetchedPage): RawProduct | null {
-  if (page.status < 200 || page.status >= 300 || !page.contentType.includes("html")) return null;
-  const node = readJsonLdBlocks(page.body).map(findProductNode).find(Boolean) ?? null;
-  if (!node) return null;
+  if (page.status < 200 || page.status >= 300 || !isHtmlContentType(page.contentType)) return null;
+  const data = parseHtml(page.body);
+  const parts = (
+    [
+      ["jsonld", fromJsonLd(data, page.url)],
+      ["microdata", fromMicrodata(data, page.url)],
+      ["opengraph", fromOpenGraph(data, page.url)],
+    ] as Array<[ExtractSource, Part | null]>
+  ).filter((p): p is [ExtractSource, Part] => p[1] !== null);
+  if (parts.length === 0) return null;
 
-  const offer = readOffer(node.offers);
-  const variantsSource = Array.isArray(node.hasVariant) ? node.hasVariant : [];
-  const brand = first(node.brand);
-
-  return {
+  const raw: RawProduct = {
     url: page.url,
-    externalId: asString(node.sku) ?? asString(node.productID) ?? null,
-    title: asString(node.name),
-    brand: isObject(brand) ? asString(brand.name) : asString(brand),
-    description: asString(node.description),
-    imageUrl: asString(first(node.image)),
-    price: offer.price,
-    currency: offer.currency,
-    availability: offer.availability,
-    color: asString(node.color),
-    material: asString(node.material),
-    category: asString(node.category),
-    variants: variantsSource.filter(isObject).map((variant) => {
-      const vOffer = readOffer(variant.offers);
-      return {
-        id: asString(variant.sku) ?? asString(variant["@id"]),
-        sku: asString(variant.sku),
-        size: asString(variant.size),
-        color: asString(variant.color),
-        availability: vOffer.availability,
-        price: vOffer.price,
-      };
-    }),
+    externalId: null,
+    title: null,
+    brand: null,
+    description: null,
+    imageUrl: null,
+    price: null,
+    currency: null,
+    availability: null,
+    color: null,
+    material: null,
+    category: null,
+    variants: [],
+    sources: {},
   };
+  const take = (field: RawField, source: ExtractSource) => {
+    raw.sources[field] = source;
+  };
+  for (const field of SIMPLE_FIELDS) {
+    const hit = parts.find(([, part]) => part[field]);
+    if (hit) {
+      raw[field] = hit[1][field];
+      take(field, hit[0]);
+    }
+  }
+  // Precio y moneda salen juntos de la primera fuente con precio legible.
+  const priced = parts.find(([, part]) => parsePrice(part.price) !== null);
+  if (priced) {
+    raw.price = priced[1].price;
+    take("price", priced[0]);
+    const currency = [priced, ...parts].find(([, part]) => part.currency);
+    if (currency) {
+      raw.currency = currency[1].currency;
+      take("currency", currency[0]);
+    }
+  }
+  const availability = [...(priced ? [priced] : []), ...parts].find(([, p]) => p.availability);
+  if (availability) {
+    raw.availability = availability[1].availability;
+    take("availability", availability[0]);
+  }
+  const withVariants = parts.find(([, part]) => part.variants.length > 0);
+  if (withVariants) {
+    raw.variants = withVariants[1].variants;
+    take("variants", withVariants[0]);
+  }
+  return raw;
 }

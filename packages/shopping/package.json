@@ -20,6 +20,7 @@
   },
   "dependencies": {
     "@asesor/shared": "workspace:*",
+    "htmlparser2": "catalog:",
     "zod": "catalog:"
   }
 }

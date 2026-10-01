@@ -100,6 +100,7 @@ describe("WorkerRunner", () => {
       "REFRESH_PRODUCT",
     ]);
     expect(completed.find((c) => c.job.type === "REFRESH_PRODUCT")?.result).toEqual({
+      status: "verified",
       availability: "IN_STOCK",
     });
   });

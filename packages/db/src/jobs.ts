@@ -33,9 +33,11 @@ export async function enqueueJob<T extends JobType>(
     p_type: input.type as JobType,
     p_payload: payload as Json,
     p_max_attempts: input.maxAttempts ?? 3,
-    p_scheduled_at: (input.scheduledAt ?? new Date()).toISOString(),
     p_priority: input.priority ?? 0,
   };
+  // Sin fecha explícita manda el `now()` de la base: con el reloj de Node, unos ms de
+  // desfasaje dejaban un job recién encolado fuera del alcance de `claim_next_job`.
+  if (input.scheduledAt) args.p_scheduled_at = input.scheduledAt.toISOString();
   if (input.userId) args.p_user_id = input.userId;
   if (input.idempotencyKey) args.p_idempotency_key = input.idempotencyKey;
   const { data, error } = await client.rpc("enqueue_job", args);
