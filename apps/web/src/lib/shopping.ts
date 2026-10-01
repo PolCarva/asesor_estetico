@@ -1,6 +1,11 @@
 import "server-only";
 
-import { getLatestLookSearch, type LookSearchState } from "@asesor/db";
+import {
+  getLatestLookSearch,
+  getLookProducts,
+  type LookProductResult,
+  type LookSearchState,
+} from "@asesor/db";
 import { createServerSupabaseClient } from "@asesor/db/server";
 import type { GarmentSlot } from "@asesor/shared";
 
@@ -15,4 +20,13 @@ export async function getLookShoppingState(
 ): Promise<LookSearchState | null> {
   const supabase = await createServerSupabaseClient();
   return getLatestLookSearch(supabase, lookId, { slot });
+}
+
+/**
+ * Productos guardados para un look (paso 08), por prenda y en orden. Con el cliente del
+ * usuario: la RLS de `look_products` solo se los devuelve al dueño Premium.
+ */
+export async function getLookResultRows(lookId: string): Promise<LookProductResult[]> {
+  const supabase = await createServerSupabaseClient();
+  return getLookProducts(supabase, lookId);
 }

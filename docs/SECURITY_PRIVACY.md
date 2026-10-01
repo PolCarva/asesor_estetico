@@ -87,7 +87,7 @@ Interfaz `RateLimiter` (`@asesor/shared`) con implementación en memoria. Límit
 
 ## Headers de seguridad
 
-Configurados en `next.config.ts` para todas las rutas: `Content-Security-Policy` (orígenes propios + Supabase, `frame-ancestors 'none'`, `object-src 'none'`, `form-action 'self'`), `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: strict-origin-when-cross-origin`, `Permissions-Policy` restrictiva, `Cross-Origin-Opener-Policy`, `Strict-Transport-Security` en producción. `/app`, `/admin` y `/api` con `Cache-Control: private, no-store`. Sin header `X-Powered-By`.
+Configurados en `next.config.ts` para todas las rutas: `Content-Security-Policy` (orígenes propios + Supabase, `img-src` también `https:` para las fotos de productos —ver abajo—, `frame-ancestors 'none'`, `object-src 'none'`, `form-action 'self'`), `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: strict-origin-when-cross-origin`, `Permissions-Policy` restrictiva, `Cross-Origin-Opener-Policy`, `Strict-Transport-Security` en producción. `/app`, `/admin` y `/api` con `Cache-Control: private, no-store`. Sin header `X-Powered-By`.
 
 ## Logging
 
@@ -120,3 +120,8 @@ Con `AI_PROVIDER=openrouter`, el worker envía las fotos (como data URL, sin nom
 - ¿Toca datos de usuarios? → RLS + test de integración.
 - ¿Nuevo endpoint? → Zod, `requireAuth`/`requirePremium`, rate limit si es caro, sin datos sensibles en logs.
 - ¿Nueva variable de entorno? → schema en `packages/config/src/env`, `.env.example`, y nunca `NEXT_PUBLIC_` si es secreta.
+
+## Fotos y links de productos de tiendas (paso 08, D16)
+
+- **Fotos:** se cargan directo de la tienda. La CSP permite `img-src https:` (las tiendas se descubren dinámicamente y `next/image` con `remotePatterns` no escala). Mitigaciones: solo se muestran URLs `https` que salen de páginas de producto ya validadas (`Product.image_url`), las `<img>` van con `referrerPolicy="no-referrer"` (la tienda no ve desde qué página se pidió), `loading="lazy"` y un respaldo (el color de la prenda) si la foto no carga. No hay proxy propio: evitaría exponer la IP del usuario a la tienda, pero suma superficie de SSRF, ancho de banda y cache; queda como alternativa si hace falta.
+- **Links:** "Comprar ↗" va a `GET /api/products/[id]/open`, que exige sesión, busca el producto con el cliente del usuario y redirige (303) a su URL guardada; nunca a un destino que venga en la request (sin open redirect). Si el dato tiene más de 8 h y el usuario es Premium, antes encola `REFRESH_PRODUCT` (una vez por producto y hora). Los links abren en otra pestaña con `rel="noopener noreferrer nofollow"`.

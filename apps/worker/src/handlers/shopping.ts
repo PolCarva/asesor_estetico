@@ -182,7 +182,12 @@ export async function searchLookProducts(job: JobRow, ctx: JobContext): Promise<
             webSearch.count++;
           },
         });
-        const saved = await saveLookProducts(db, { lookId: look.id, slot, items: result.items });
+        const saved = await saveLookProducts(db, {
+          lookId: look.id,
+          slot,
+          items: result.items,
+          userSize: query.size,
+        });
         return { slot, ok: true, result, saved };
       } catch (error) {
         ctx.logger.warn("la búsqueda de una prenda falló", { slot, error });

@@ -167,7 +167,7 @@ describeIntegration("jobs de shopping (catálogo ficticio + Supabase local)", ()
   async function lookRows(lookId: string) {
     const { data } = await db
       .from("look_products")
-      .select("garment_slot, rank, size_status, products (url, price_amount, currency)")
+      .select("garment_slot, rank, size_status, user_size, products (url, price_amount, currency)")
       .eq("look_id", lookId)
       .order("garment_slot")
       .order("rank");
@@ -262,6 +262,9 @@ describeIntegration("jobs de shopping (catálogo ficticio + Supabase local)", ()
     expect(rows.length).toBe((result as { saved: number }).saved);
     // Talle del usuario por producto: la camisa crudo tiene M en stock.
     expect(rows.every((r) => r.size_status !== null)).toBe(true);
+    // Cada resultado guarda el talle con el que se rankeó (el de la query de su prenda).
+    const userSizes = Object.fromEntries(rows.map((r) => [r.garment_slot, r.user_size]));
+    expect(userSizes).toMatchObject({ top: "M", bottom: "42", shoes: "42", "layering:0": "M" });
     const { data: stored } = await db.from("products").select("url").like("url", `%-${tag}`);
     expect(stored?.length).toBe(catalog.length);
 

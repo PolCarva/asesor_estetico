@@ -160,7 +160,12 @@ describeIntegration("shopping: persistencia y cache de búsquedas", () => {
     const list = products(`look-${tag}`);
     expect(await saveLookProducts(admin, { lookId, slot: "top", items: ranked(list) })).toBe(3);
     expect(
-      await saveLookProducts(admin, { lookId, slot: "top", items: ranked(list.slice(0, 2)) }),
+      await saveLookProducts(admin, {
+        lookId,
+        slot: "top",
+        items: ranked(list.slice(0, 2)),
+        userSize: "M",
+      }),
     ).toBe(2);
     const ids = await upsertProducts(admin, list);
     created.push(...ids.values());
@@ -171,6 +176,8 @@ describeIntegration("shopping: persistencia y cache de búsquedas", () => {
       ["top", 2, list[1]!.url, "UNVERIFIED"],
     ]);
     expect(rows[0]!.breakdown.color_match).toBe(1);
+    // El talle con el que se rankeó viaja con cada resultado (paso 08).
+    expect(rows.map((r) => r.userSize)).toEqual(["M", "M"]);
 
     // RLS: el dueño sin Premium no ve resultados; con Premium sí; otro usuario nunca.
     expect(await getLookProducts(owner.client, lookId)).toEqual([]);

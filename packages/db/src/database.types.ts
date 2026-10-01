@@ -415,6 +415,7 @@ export type Database = {
           score: number;
           score_breakdown: NonNullable<Json>;
           size_status: string | null;
+          user_size: string | null;
         };
         Insert: {
           created_at?: string;
@@ -426,6 +427,7 @@ export type Database = {
           score: number;
           score_breakdown?: NonNullable<Json>;
           size_status?: string | null;
+          user_size?: string | null;
         };
         Update: {
           created_at?: string;
@@ -437,6 +439,7 @@ export type Database = {
           score?: number;
           score_breakdown?: NonNullable<Json>;
           size_status?: string | null;
+          user_size?: string | null;
         };
         Relationships: [
           {

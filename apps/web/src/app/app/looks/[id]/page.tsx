@@ -14,14 +14,16 @@ import { notFound } from "next/navigation";
 import { AutoRefresh } from "@/components/auto-refresh";
 import { LockedLookCard, LookCard } from "@/components/look-card";
 import { PaywallCard } from "@/components/paywall-card";
-import { PaletteRing, Pebble } from "@/components/swatches";
+import { PaletteRing } from "@/components/swatches";
 import { TrackEvent } from "@/components/track-event";
 import { requireUser } from "@/lib/auth";
 import { getLook, getLookSummaries, getPlan, getSizes } from "@/lib/data";
 import { CATEGORY_LABEL, REASON_ASPECT_LABEL, twoDigits } from "@/lib/labels";
-import { getLookShoppingState } from "@/lib/shopping";
+import { buildLookResults } from "@/lib/look-results";
+import { getLookResultRows, getLookShoppingState } from "@/lib/shopping";
 
 import { LookShopping } from "./look-shopping";
+import { LookTotals, PieceResultsRow, PieceRow } from "./piece-results";
 
 export const metadata: Metadata = { title: "Look" };
 
@@ -63,30 +65,6 @@ function Pin({ n, label, at }: { n: number; label: string; at: { left: number; t
       </span>
       {label}
     </span>
-  );
-}
-
-/** Fila de vidrio de una pieza. El lado derecho queda para el producto (pasos 07–08). */
-function PieceRow({ garment }: { garment: Garment }) {
-  const details = [
-    CATEGORY_LABEL[garment.category],
-    garment.color.name,
-    garment.fit,
-    garment.material,
-  ]
-    .filter(Boolean)
-    .join(" · ");
-  return (
-    <li className="grid grid-cols-[3.75rem_minmax(0,1fr)] items-center gap-3.5 rounded-[20px] glass p-2.5">
-      <span className="grid size-[3.75rem] place-items-center rounded-[14px] bg-sand/80">
-        <Pebble hex={garment.color.hex} size="lg" />
-      </span>
-      <div className="min-w-0">
-        <p className="text-sm font-medium">{garment.description}</p>
-        <p className="mt-0.5 text-xs text-stone">{details}</p>
-      </div>
-      {/* Pasos 07–08: precio del producto recomendado y "Comprar ↗" a la derecha de la fila. */}
-    </li>
   );
 }
 
@@ -183,11 +161,27 @@ export default async function LookDetailPage({ params }: { params: Promise<{ id:
 
   const { spec } = look;
   const generating = look.status === "PENDING" || look.status === "GENERATING";
-  // Shopping (paso 07): solo Premium tiene búsquedas y usa talles.
-  const [search, sizes] = plan.isPremium
-    ? await Promise.all([getLookShoppingState(look.id), getSizes(user.id)])
-    : [null, EMPTY_USER_SIZES];
+  // Shopping (pasos 07–08): solo Premium tiene búsquedas, talles y resultados.
+  const [search, sizes, rows] = plan.isPremium
+    ? await Promise.all([
+        getLookShoppingState(look.id),
+        getSizes(user.id),
+        getLookResultRows(look.id),
+      ])
+    : [null, EMPTY_USER_SIZES, []];
   const pieces = lookPieces(spec);
+  // Resultados: con una búsqueda hecha y algo guardado (las filas viejas de una prenda que
+  // ya no está en el look no aparecen: se arma por las piezas del look).
+  const results =
+    search && rows.length > 0
+      ? buildLookResults({
+          pieces,
+          rows,
+          summary: search.progress?.summary ?? null,
+          sizes,
+          now: new Date(),
+        })
+      : null;
   const showPins = Boolean(look.imageUrl) && spec.image_prompt_data.framing === "FULL_BODY";
   // El pelo es la pieza 1; las prendas siguen en el orden de la lista.
   const pins = showPins
@@ -291,10 +285,13 @@ export default async function LookDetailPage({ params }: { params: Promise<{ id:
                     </div>
                   </details>
                 </li>
-                {pieces.map(({ slot, garment }) => (
-                  <PieceRow key={slot} garment={garment} />
-                ))}
+                {results
+                  ? results.pieces.map((piece) => (
+                      <PieceResultsRow key={piece.slot} piece={piece} lookId={look.id} />
+                    ))
+                  : pieces.map(({ slot, garment }) => <PieceRow key={slot} garment={garment} />)}
               </ul>
+              {results ? <LookTotals view={results} /> : null}
               <p className="mt-5 text-[0.8125rem] text-bark">
                 <span className="font-medium text-ink">Fit: </span>
                 {spec.fit.overall}

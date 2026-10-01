@@ -169,5 +169,5 @@ Detalle del look: "Encontrar este look" (pide los talles que falten, paso 07)
 - **Sin ORM.** Tipos generados por Supabase (`pnpm db:types`) + supabase-js. Menos capas, RLS nativo.
 - **Seed en TypeScript** (`packages/db/scripts/seed.ts`) en lugar de SQL: usa la API de Auth, valida con los mismos schemas Zod y reutiliza los fixtures.
 - **Rate limiting en memoria** detrás de una interfaz (`RateLimiter`). Alcanza para una instancia; con varias, reemplazar por una implementación en Postgres.
-- **CSP sin nonces** (Next necesita `'unsafe-inline'` para hidratar). Se restringen orígenes, frames, formularios y objetos.
+- **CSP sin nonces** (Next necesita `'unsafe-inline'` para hidratar). Se restringen orígenes, frames, formularios y objetos. Las fotos de productos vienen de las tiendas (`img-src https:`, D16; ver `SECURITY_PRIVACY.md`).
 - **Imágenes privadas con `<img>`**, no `next/image`, para que no pasen por el cache del optimizador.

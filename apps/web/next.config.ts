@@ -23,7 +23,9 @@ const csp = [
   "default-src 'self'",
   `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ""}`,
   "style-src 'self' 'unsafe-inline'",
-  `img-src 'self' data: blob: ${supabaseUrl}`,
+  // Fotos de productos de las tiendas (D16): cualquier origen https; las <img> van con
+  // referrerPolicy="no-referrer" y solo con URLs https de páginas de producto validadas.
+  `img-src 'self' data: blob: ${supabaseUrl} https:`,
   "font-src 'self'",
   `connect-src 'self' ${supabaseUrl}${isDev ? " ws:" : ""}`,
   "frame-ancestors 'none'",

@@ -117,7 +117,7 @@ source ~/.nvm/nvm.sh && nvm use >/dev/null && pnpm format && pnpm lint && pnpm t
 | 05  | [Shopping: ranking y cache persistente](pasos/05-shopping-ranking-cache.md)                        | 12–13          | 04b        | ✅     |
 | 06  | [Shopping: jobs reales, progreso y Premium server-side](pasos/06-shopping-jobs-premium.md)         | 14, 19         | 05         | ✅     |
 | 07  | [Talles, CTA "Encontrar este look" y progreso](pasos/07-talles-cta-progreso.md)                    | 16, 15         | 02, 06     | ✅     |
-| 08  | [UI de resultados de shopping](pasos/08-resultados-ui.md)                                          | 15             | 07         | ⬜     |
+| 08  | [UI de resultados de shopping](pasos/08-resultados-ui.md)                                          | 15             | 07         | ✅     |
 | 09  | ["Buscar más barato"](pasos/09-buscar-mas-barato.md)                                               | 17             | 08         | ⬜     |
 | 10a | [Carrito: datos y acciones](pasos/10a-carrito-backend.md)                                          | 18             | 06         | ⬜     |
 | 10b | [Carrito y favoritos: UI y prueba real](pasos/10b-carrito-ui.md)                                   | 18             | 08, 10a    | ⬜     |
@@ -614,3 +614,53 @@ source ~/.nvm/nvm.sh && nvm use >/dev/null && pnpm format && pnpm lint && pnpm t
   - Las cuentas `estilo07@asesor.test` (Premium, con búsquedas reales en los 3 looks) y `estilo07-free@asesor.test` quedan en la base local para el paso 08; `pnpm db:reset` las borra.
   - En desarrollo, `TrackEvent` y `PaywallCard` emiten dos veces por el doble efecto de `StrictMode` (no pasa en producción).
 - Commit: `feat(asesoria-shopping): paso 07 — talles, CTA "Encontrar este look" y progreso`
+
+### Paso 08 — UI de resultados de shopping · 2026-10-01 · ✅
+
+- Hecho:
+  - **View model** `apps/web/src/lib/look-results.ts` (puro, 9 tests): por prenda del look, RECOMENDADO + alternativas (las 3–5 opciones guardadas); precio en su moneda real (`$ 1.399`, `US$ 79`, o "Precio a consultar"); talle ("Talle M ✓", "Talle 42 agotado", "No hay talle 42", "Talle sin verificar"); stock honesto; "verificado hace X" y aviso de más de 8 h; prendas `empty` / `failed`; total por moneda sin convertir.
+  - **UI** en `/app/looks/[id]` (diseño 2h):
+    - cada fila de pieza muestra el RECOMENDADO (foto, "RECOMENDADO · prenda", nombre, tienda, talle · stock · verificación, precio en Familjen y chip "Comprar ↗");
+    - "Ver N opciones más" abre las alternativas compactas en la misma fila;
+    - local físico con "Disponible en tienda física", dirección, teléfono, "Consultar en el local" y "Ver local ↗";
+    - prenda sin opciones: "No encontramos opciones para esta prenda todavía." (o "No pudimos revisar las tiendas…" si falló);
+    - tarjeta con el total de los recomendados por moneda y la fecha de verificación;
+    - lugares marcados para "Buscar más barato" (09) y "Agregar al carrito" (10b).
+
+    Sin polling con resultados. Solo Premium lee (además de la RLS).
+
+  - **Imágenes (D16):** `img-src https:` en la CSP, `<img>` con `referrerPolicy="no-referrer"`, `loading="lazy"` y respaldo de color (`ProductThumb`).
+  - **"Comprar ↗":** `GET /api/products/[id]/open`, con sesión. Redirige (303) a la URL guardada del producto; si tiene más de 8 h y el usuario es Premium, antes encola `REFRESH_PRODUCT` (una vez por producto y hora). Sin open redirect.
+  - **Analytics:** `product_viewed` (una vez por producto y sesión; alternativas al abrirlas) y `external_product_clicked` (`product_id`, `store_domain`, `look_id`, `slot`, `rank`) en `ANALYTICS_EVENTS` y `CLIENT_ANALYTICS_EVENTS`; `product_clicked`, que nadie emitía, se reemplazó.
+  - **Talle de la búsqueda:** migración `20261001000500_look_products_user_size.sql` (`look_products.user_size` + `replace_look_products` lo guarda). `saveLookProducts({ …, userSize })` y `getLookProducts` → `userSize`; el worker pasa el talle de la query. Si el perfil cambió después, la UI lo avisa. `db:reset` y `db:types`.
+  - **Tests:** `look-results.test.ts` (9); integración: `shopping.int.test.ts` de db (`userSize` guardado y leído) y del worker (cada prenda guarda su talle).
+  - **Docs:** `PRODUCT_SPEC.md`, `SECURITY_PRIVACY.md` (CSP y links de productos), `DATA_MODEL.md`, `SHOPPING_ENGINE.md`, `ARCHITECTURE.md`, `DESIGN_SYSTEM.md` y `DECISIONES.md` (D16 + notas).
+- Verificación con datos reales (cuenta `estilo07@asesor.test`, Premium, worker `AI_PROVIDER=mock SHOPPING_PROVIDER=live`; búsquedas de los looks 1 y 2 relanzadas desde la UI con M / 42 / 42 EU):
+  - **Datos:** en los dos looks, 4 opciones por prenda (recomendado + 3), todas con foto `https` y `user_size` guardado; **0 productos `.test`**.
+  - **Look 1:** 5 prendas, total "$ 7.258,90" = 1.498 + 1.399 + 1.299 + 2.813 + 249,90.
+  - **Look 2:** Sweater De Punto Azul $ 1.299 · Pantalón de vestir Gris $ 2.199 · Mocasines Freeway Logan X6 $ 2.590; total "$ 6.088".
+  - **Fotos:** forzando la carga en el navegador integrado (su panel oculto frena `lazy`), cargaron 20 de 20 (fcdn.app, Shopify, WooCommerce, Decathlon). Con Playwright (Chromium real, 1280 y 390 px) cargan la del render y las de los recomendados; las alternativas, al abrirlas. Sin errores de consola y sin scroll horizontal.
+  - **Muestra contrastada con la tienda (3 productos):**
+
+    | Producto (app)                                              | En la app                               | En la tienda                                                           |
+    | ----------------------------------------------------------- | --------------------------------------- | ---------------------------------------------------------------------- |
+    | Jean Vernier "Sweater De Punto Azul" (Woo)                  | $ 1.299 · Talle M ✓ · L/M/S/XL ✓, XXL ✗ | $ 1.299 (antes $ 1.899); variaciones `l/m/s/xl: stock`, `xxl: agotado` |
+    | Stadium "Mocasines … Logan X6 - Marrón Chocolate" (Fenicio) | $ 2.590 · Talle 42 ✓ · 39–46 ✓          | $ 2.590 (más precios con tarjeta); talles 39–46 disponibles            |
+    | Decathlon "Botas De Nieve … NH100 MID" (Shopify)            | $ 1.690 · solo 42 en stock              | `products.js`: $ 1.690; 42 disponible, 39–41 y 43–46 agotados          |
+
+  - **Links:** "Comprar ↗" pasó por `/api/products/[id]/open` y abrió la página real (jeanvernier.com.uy, stadium.com.uy, decathlon.com.uy). Con el mocasín envejecido a 10 h: la fila mostró "verificado hace 10 h" y el aviso de más de 8 h; al abrirlo se encoló `REFRESH_PRODUCT` → `COMPLETED {"status":"verified"}` y `last_fetched_at` pasó de 08:37 a 18:38 ("verificado hace 4 min" después).
+  - **Eventos:** `product_viewed` 14 veces para 14 productos distintos (sin repetidos) y `external_product_clicked` con producto, tienda, look, prenda y rank.
+  - **Tienda física y prenda vacía** (sin casos reales: fixture `FIXTURE_IN_STORE_PRODUCT` puesto a mano en el reloj del look 1 y la sobrecamisa vaciada): "Sombrero panamá natural · Disponible en tienda física · Precio a consultar · Ver local ↗ · Calle Ficticia 1234, Montevideo · Tel. …"; "No encontramos opciones para esta prenda todavía."; el total pasó a "Recomendados con precio (3 de 4)… $ 5.511". Después se restauró con una búsqueda nueva (5 × 4 opciones, 0 `.test`).
+  - **Dos problemas encontrados y corregidos en el navegador:**
+    - con el perfil cambiado a US 10, el calzado mostraba "Talle US 10 ✓" sobre un estado calculado para 42 EU (→ `user_size`);
+    - el total decía "cada moneda por separado" con una sola moneda (→ texto para "faltan precios").
+  - **Nota de la prueba:** con el panel del navegador integrado oculto, forzar `loading="eager"` por JS antes de hidratar generó avisos de hidratación en `ProductThumb`. Una carga limpia no da ninguno (overlay sin issues, 0 errores de consola en Playwright).
+- Verificación: format ✓ · lint ✓ · typecheck ✓ · test ✓ (402 unit, 49 integración ejecutados: db 38, worker 11) · build ✓ (`/api/products/[id]/open` dinámica) · e2e ✓ (10, desktop + mobile, contra `pnpm dev`) · db:reset ✓ · db:types ✓ (regenerado sin diferencias)
+- Decisiones: D16 decidida (`img-src https:` sin proxy) y D20 confirmada para los eventos de producto. Talle de la búsqueda en `look_products.user_size`. Detalle en `DECISIONES.md`.
+- Para pasos siguientes:
+  - 09: "Buscar más barato" va en la fila de cada producto (comentario en `PieceResultsRow`). El modo de una prenda de `startLookShopping` reemplaza el ranking de esa prenda: hay que guardar las alternativas baratas aparte (D17) y mostrarlas en la misma fila.
+  - 10a/10b: "Agregar al carrito" en la fila (comentario). La píldora "Comprar el look completo" reemplaza la tarjeta del total cuando exista el carrito, con total por moneda. Antes de agregar, revalidar si `stale` (el view model ya lo trae por producto).
+  - 11: las fotos de Shopify y Fenicio vienen en 1920 px para miniaturas de 60 px; achicarlas por parámetro de la plataforma (`width=` en Shopify, segmento de tamaño en fcdn) mejora la carga.
+  - 12a: E2E de resultados con `SHOPPING_PROVIDER=mock` (recomendado + alternativas, local físico, prenda vacía, link por `/api/products/[id]/open`).
+  - `pnpm db:reset` de la verificación final borró las cuentas `estilo07@asesor.test` y `estilo07-free@asesor.test`; para recrearlas: `scripts/local-test-account.ts`.
+- Commit: `feat(asesoria-shopping): paso 08 — UI de resultados de shopping`

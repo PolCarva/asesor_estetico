@@ -200,7 +200,13 @@ export async function markProductUnverified(db: TypedSupabaseClient, id: string)
  */
 export async function saveLookProducts(
   db: TypedSupabaseClient,
-  input: { lookId: string; slot: GarmentSlot; items: RankedProduct[] },
+  input: {
+    lookId: string;
+    slot: GarmentSlot;
+    items: RankedProduct[];
+    /** Talle del usuario con el que se rankeó (al que se refiere `size_status`). */
+    userSize?: string | null;
+  },
 ): Promise<number> {
   const ids = await upsertProducts(
     db,
@@ -215,6 +221,7 @@ export async function saveLookProducts(
             score: item.score,
             score_breakdown: item.breakdown,
             size_status: item.size_status,
+            user_size: input.userSize ?? null,
           },
         ]
       : [];
@@ -253,6 +260,8 @@ export interface LookProductResult {
   score: number;
   breakdown: Partial<ScoreBreakdown>;
   sizeStatus: SizeStatus | null;
+  /** Talle con el que se calculó `sizeStatus` (null: sin talle o filas anteriores). */
+  userSize: string | null;
   product: StoredProduct;
 }
 
@@ -267,7 +276,7 @@ export async function getLookProducts(
   const { data, error } = await db
     .from("look_products")
     .select(
-      `garment_slot, rank, score, score_breakdown, size_status, products (${PRODUCT_COLUMNS})`,
+      `garment_slot, rank, score, score_breakdown, size_status, user_size, products (${PRODUCT_COLUMNS})`,
     )
     .eq("look_id", lookId)
     .order("garment_slot")
@@ -284,6 +293,7 @@ export async function getLookProducts(
         score: Number(row.score),
         breakdown: row.score_breakdown as Partial<ScoreBreakdown>,
         sizeStatus: status.success ? status.data : null,
+        userSize: row.user_size,
         product: stored,
       },
     ];
