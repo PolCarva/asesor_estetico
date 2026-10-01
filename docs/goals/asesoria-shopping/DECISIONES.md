@@ -29,7 +29,7 @@ Registro vivo. Cada decisión arranca como **propuesta**, salida del relevamient
 | D23 | Tests de integración               | Serializar db → worker en turbo, para que no corran en paralelo contra la misma base. `CI=1 pnpm test` para que un Supabase caído haga fallar la corrida en vez de saltearla.                                                                                                                                                                                    | 01      | confirmada (01)         |
 | D24 | Parser HTML y red de shopping      | Un solo parser, `htmlparser2` (JS puro, SAX, tolerante con HTML roto), por `catalog`. Transporte HTTP propio sobre `node:http(s)` con `lookup` que valida la IP al conectar (anti-SSRF sin DNS rebinding) y redirects manuales revalidados. `Product.id` = id de producto de la plataforma o la URL (nunca el SKU).                                              | 04a     | confirmada (04a)        |
 | D25 | Sistema visual                     | La UI sigue el diseño "Espejo", opción 2 (`docs/DESIGN_SYSTEM.md`): tokens en `globals.css`, Familjen Grotesk + Geist + Geist Mono, vidrio, curvas de nivel y orbe. Ante un choque con el SPEC, manda el SPEC: sin puntajes, porcentajes ni medidas inventadas, y la asesoría sigue en la pantalla de resultados.                                                | diseño  | confirmada (2026-10-01) |
-| D26 | Datos visuales del perfil          | Silueta (enum), proporción torso/piernas (enum) y rasgos del rostro en el StyleProfile; razones de cada look con aspecto. La etiqueta de silueta y la de proporciones van al núcleo (visibles para free) y las notas siguen en Premium. Nada de medidas.                                                                                                         | 02b     | propuesta               |
+| D26 | Datos visuales del perfil          | Silueta (enum), proporción torso/piernas (enum) y rasgos del rostro en el StyleProfile; razones de cada look con aspecto. La etiqueta de silueta y la de proporciones van al núcleo (visibles para free) y las notas siguen en Premium. Nada de medidas.                                                                                                         | 02b     | confirmada (02b)        |
 
 ## Notas de los pasos
 
@@ -94,3 +94,19 @@ Registro vivo. Cada decisión arranca como **propuesta**, salida del relevamient
 - **Pines del render.** Posición aproximada por zona del cuerpo, solo con `framing: FULL_BODY` y con imagen. Revisado sobre renders reales del seed (look 1 de `free@` y `demo@`): caen sobre el corte, el abrigo, la remera, el jean y el calzado.
 - **Contraste.** `stone` se oscureció de `#6A6E63` (4.36:1 sobre el arena) a `#5F6358` (≥ 4.5:1). `clay` solo se usa en texto grande; en texto chico va `clay-dark`.
 - **Nombre.** El mockup usa "espejo"; la app sigue con `APP_NAME` ("Asesor Estético") hasta que se decida. El logo toma el nombre de `APP_NAME`.
+
+### Paso 02b — perfil visual
+
+- **D26 confirmada, sin cambios de RLS ni migración.** Los campos nuevos van dentro de `appearance`, que ya es núcleo (`style_profiles.profile_json`): el reparto núcleo/asesoría es por claves de primer nivel, así que `splitStyleProfile`, `create_style_profile_with_looks` y las políticas quedan igual. Free ve la silueta, las proporciones y los rasgos (como ya veía la forma de rostro). Las notas para equilibrar la silueta (`body_proportions.balance_notes`) siguen siendo Premium. Probado con integración (`rls.int.test.ts`: con su JWT, free lee `body_shape`/`torso_legs`/`face_features` y no la asesoría; Premium lee las notas).
+- **Forma (v3):**
+  - `appearance.face_features`: hasta 2 frases de ≤60 caracteres.
+  - `appearance.body_shape`: `TRAPEZOID`, `INVERTED_TRIANGLE`, `RECTANGLE`, `TRIANGLE`, `OVAL`, `HOURGLASS`, `UNKNOWN`.
+  - `appearance.torso_legs`: `LONG_TORSO`, `BALANCED`, `LONG_LEGS`, `UNKNOWN`.
+  - `UNKNOWN` es el "no aplica" de un enum (D3: sin `nullable`). Lo usa la IA si la foto de cuerpo no deja ver la silueta, y la lectura tolerante para los perfiles v1/v2, en lugar de inventar un valor "neutro".
+  - JSON Schema estricto: 5956 → 6267 bytes, 80 → 83 propiedades, sigue con 3 `anyOf`.
+- **Razones de los looks:** `reasoning` pasa a `{ aspect, qualifier, text }`. Los enums se escriben en inglés (`COLOR`, `SILHOUETTE`, `FACE`, `HAIR`, `STYLE`), como el resto del dominio (`OVAL`, `WARM`…), y la UI los traduce en `lib/labels.ts`; el plan los proponía en español.
+  - Lectura tolerante con `StoredLookSpecSchema` (unión con el formato viejo, que se transforma), no con un campo aditivo: así la IA ve un solo formato y no se duplican tokens.
+  - Las razones viejas pasan a `STYLE` sin calificativo, porque el aspecto no se puede saber. La alternativa de inferirlo por palabras clave se descartó: podía errar en silencio.
+  - Web (`getLooks`, `getLook`) y worker (`GENERATE_LOOK`) leen con ese schema.
+- **Sin medidas:** test de que el único número de `StyleProfileSchema` es `schema_version` y de que `LookSpecSchema` no tiene números; ninguna clave de puntaje, porcentaje, ratio ni medida. En la UI, la silueta se dibuja como su categoría y las proporciones como una escala de tres tramos con el tramo marcado.
+- **Prompt** `2026-10-01.1`: definición de cada silueta (relación hombros/cintura/cadera), "categorías para elegir ropa: nunca medidas, números, porcentajes ni comparaciones con un ideal", y 2 a 4 razones con al menos dos aspectos distintos.

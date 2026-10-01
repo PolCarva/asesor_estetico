@@ -161,7 +161,8 @@ describeIntegration("pipeline de análisis (MockAIProvider + Supabase local)", (
     expect(advice?.user_id).toBe(userId);
     expect(StyleAdviceSchema.parse(advice?.advice_json).hair.barber_instructions).not.toBe("");
     const stored = await getActiveStyleProfile(db, userId);
-    expect(stored?.profile.schema_version).toBe(2);
+    expect(stored?.profile.schema_version).toBe(3);
+    expect(stored?.profile.appearance.body_shape).not.toBe("UNKNOWN");
     expect(stored?.advice?.general_advice.length).toBeGreaterThan(0);
     const { data: looks } = await db
       .from("looks")
@@ -199,6 +200,23 @@ describeIntegration("pipeline de análisis (MockAIProvider + Supabase local)", (
       "GENERATE_LOOK_IMAGE",
     ]);
     expect(usage.events.map((e) => e.name)).toContain("analysis_completed");
+  });
+
+  it("genera la imagen de un look guardado con razones de texto (formato anterior)", async () => {
+    const { data: look1 } = await db
+      .from("looks")
+      .select("id, spec_json")
+      .eq("user_id", userId)
+      .eq("position", 1)
+      .single();
+    const spec = look1!.spec_json as { reasoning: Array<{ text: string }> };
+    const legacy = { ...spec, reasoning: spec.reasoning.map((r) => r.text) };
+    await db.from("looks").update({ spec_json: legacy }).eq("id", look1!.id);
+
+    const job = runningJob("GENERATE_LOOK", userId, { user_id: userId, look_id: look1!.id });
+    await expect(handlers.GENERATE_LOOK!(job, ctx)).resolves.toMatchObject({
+      look_id: look1!.id,
+    });
   });
 
   it("no genera la imagen de un look bloqueado para un usuario free", async () => {

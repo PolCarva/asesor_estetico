@@ -65,42 +65,45 @@ Viven en `apps/web/src/app/globals.css` (`@theme` de Tailwind v4).
 | `AnalysisStage` (pantalla nocturna del análisis)                                                                                  | `app/app/onboarding/analysis-stage.tsx`           |
 | `PhotoSlot` (hueco con guías, arrastrar o elegir archivo)                                                                         | `app/app/onboarding/photos/photo-slot.tsx`        |
 | `StyleAdvice` (asesoría en resultados), `PaywallCard` (bosque + orbe)                                                             | `components/style-advice.tsx`, `paywall-card.tsx` |
-| Etiquetas de los enums (rostro, subtono, contraste, categorías…)                                                                  | `lib/labels.ts`                                   |
+| Bento del perfil: `SilhouetteTile` (con `ShapeGlyph`, el dibujo de la categoría), `ProportionsTile` (escala de tres tramos)       | `app/app/profile/page.tsx`                        |
+| Etiquetas de los enums (rostro, subtono, contraste, silueta, proporciones, aspectos, categorías…)                                 | `lib/labels.ts`                                   |
 
 ## Pantallas
 
-| Diseño                                      | Ruta                                      | Estado                                                                                                                     |
-| ------------------------------------------- | ----------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| 2a · Subida, dos huecos con guías           | `/app/onboarding/photos`                  | Hecho. "Paso 1 / 3". Arrastrar o elegir archivo; en mobile, el input abre cámara o galería.                                |
-| 2b · Cámara guiada (mobile)                 | —                                         | No implementado: no hay captura con cámara ni chequeos en vivo.                                                            |
-| 2c · Fotos listas, flotando                 | `/app/onboarding` (sin análisis en curso) | Hecho, con las preferencias (nivel de cambio y tatuajes) que el mockup no tiene. "Paso 2 / 3".                             |
-| 2d · Escaneo nocturno                       | `/app/onboarding` (análisis en curso)     | Hecho. Etapas reales de los jobs y hallazgos reales cuando el perfil ya está guardado.                                     |
-| 2e · Escenario con profundidad (desktop)    | `/app/looks`                              | Hecho. Debajo va la asesoría (el SPEC la pide en la pantalla de resultados) y el paywall para free.                        |
-| 2f · Antes / después                        | —                                         | No implementado (variante alternativa de resultados).                                                                      |
-| 2g · Baraja en abanico (mobile)             | `/app/looks`                              | Hecho (`LookStage` con snap y puntos).                                                                                     |
-| 2h · Render con pines + prendas             | `/app/looks/[id]`                         | Hecho sin productos: piezas del look, ficha de pelo y grooming, "Por qué te queda bien". Productos y compra: pasos 07–10b. |
-| 2i · Bento del perfil / 2j · capas (mobile) | `/app/profile`                            | Hecho con datos reales (ver diferencias). Debajo, la cuenta (`#cuenta`).                                                   |
-| 2k · Mapa topográfico del cuerpo            | —                                         | No implementado (variante alternativa del perfil).                                                                         |
+| Diseño                                      | Ruta                                      | Estado                                                                                                                  |
+| ------------------------------------------- | ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| 2a · Subida, dos huecos con guías           | `/app/onboarding/photos`                  | Hecho. "Paso 1 / 3". Arrastrar o elegir archivo; en mobile, el input abre cámara o galería.                             |
+| 2b · Cámara guiada (mobile)                 | —                                         | No implementado: no hay captura con cámara ni chequeos en vivo.                                                         |
+| 2c · Fotos listas, flotando                 | `/app/onboarding` (sin análisis en curso) | Hecho, con las preferencias (nivel de cambio y tatuajes) que el mockup no tiene. "Paso 2 / 3".                          |
+| 2d · Escaneo nocturno                       | `/app/onboarding` (análisis en curso)     | Hecho. Etapas reales de los jobs y hallazgos reales (rostro, color, silueta, estilo) cuando el perfil ya está guardado. |
+| 2e · Escenario con profundidad (desktop)    | `/app/looks`                              | Hecho. Debajo va la asesoría (el SPEC la pide en la pantalla de resultados) y el paywall para free.                     |
+| 2f · Antes / después                        | —                                         | No implementado (variante alternativa de resultados).                                                                   |
+| 2g · Baraja en abanico (mobile)             | `/app/looks`                              | Hecho (`LookStage` con snap y puntos).                                                                                  |
+| 2h · Render con pines + prendas             | `/app/looks/[id]`                         | Hecho sin productos: piezas, ficha de pelo y grooming, "Por qué te queda bien" con aspecto. Productos y compra: 07–10b. |
+| 2i · Bento del perfil / 2j · capas (mobile) | `/app/profile`                            | Hecho con datos reales: rostro y rasgos, colorimetría, silueta, proporciones, claves y estilo. Debajo, la cuenta.       |
+| 2k · Mapa topográfico del cuerpo            | —                                         | No implementado (variante alternativa del perfil).                                                                      |
 
 **Navegación.** Arriba: "Mis looks", "Mi perfil" y "Guardados" (`/app/favorites`), más el carrito (ícono) y el avatar con iniciales, que lleva a `/app/profile#cuenta`. En mobile, una barra flotante con "Looks", "Perfil" y "Guardados". No hay "Inicio": `/app/dashboard` (entrada de la app, destino del login y de la PWA) redirige a los looks si hay análisis, y si no, a las fotos o al análisis.
 
-**Free/Premium** no está en el mockup y se diseñó con el mismo lenguaje: card de look bloqueada (curvas, candado en relieve, etiqueta "Premium"), secciones de asesoría bloqueadas en huecos y paywall en bosque con orbe.
+**Free/Premium** no está en el mockup y se diseñó con el mismo lenguaje: card de look bloqueada (curvas, candado en relieve, etiqueta "Premium"), secciones de asesoría bloqueadas en huecos y paywall en bosque con orbe. En el perfil, free ve la silueta y las proporciones y la tarjeta de silueta ofrece desbloquear "cómo equilibrarla" (las notas son Premium).
+
+**Perfiles anteriores al paso 02b** (sin silueta ni proporciones): la tarjeta de silueta muestra la contextura y sus notas (Premium) o queda bloqueada (free), no aparece la de proporciones y "Tu estilo" ocupa su lugar en la grilla. Las razones viejas de los looks se muestran como "Estilo".
+
+**"Por qué te queda bien":** etiqueta `ASPECTO · CALIFICATIVO` en mono; tarjeta arcilla para color, musgo para silueta y neutra para rostro, pelo y estilo.
 
 ## Diferencias con el mockup
 
-Cuando el mockup contradice el SPEC o muestra datos que la app no tiene, manda el SPEC. Lo que falta de datos va al plan (paso 02b).
+Cuando el mockup contradice el SPEC o muestra datos que la app no tiene, manda el SPEC. Los datos cualitativos que faltaban (silueta, proporciones, rasgos del rostro y el aspecto de cada razón) los agregó el paso 02b.
 
 | Mockup                                                                                          | En la app                                                                                      | Por qué                                                                                         |
 | ----------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
 | Puntaje de match por look (96, 91, 88) y "96% encaja con tu rostro"                             | `PaletteRing`: anillo con los colores del look y su número                                     | SPEC: "No quiero puntuaciones de atractivo"; además no existe una métrica real de encaje        |
 | "✦ Tu mejor match" en el look central                                                           | "✦ Para empezar" en el look 01                                                                 | Los looks se generan de menor a mayor riesgo (prompt de `GENERATE_LOOK_SPECS`), no por encaje   |
 | "Analizando · 62%" y barra continua                                                             | "Analizando · etapa N de 3" y barra por etapas                                                 | SPEC: "No mostrar porcentajes falsos" (D14)                                                     |
-| Medidas: hombros 47 cm, pecho 102, cintura 84, torso 44% / pierna 56%, ratio 1,38, "468 puntos" | No se muestran                                                                                 | La IA no mide desde fotos: serían números inventados                                            |
+| Medidas: hombros 47 cm, pecho 102, cintura 84, torso 44% / pierna 56%, ratio 1,38, "468 puntos" | Silueta con el dibujo de su categoría; proporciones en una escala de tres tramos sin números   | La IA no mide desde fotos: serían números inventados                                            |
 | Validación "Iluminación ÓPTIMA, Nitidez 97%…"                                                   | Estado real de cada foto (Lista, Validada, Conviene cambiarla) y los mensajes de la validación | Son los datos que devuelve `VALIDATE_PHOTOS`                                                    |
 | "Tus fotos se procesan cifradas y se borran en 24 h"                                            | "Se guardan privadas: solo vos las ves y las podés borrar cuando quieras. Nunca entrenamos…"   | La app no borra las fotos a las 24 h (`SECURITY_PRIVACY.md`)                                    |
 | "Algunos enlaces nos generan una comisión"                                                      | No se muestra                                                                                  | No hay afiliación con tiendas                                                                   |
-| Silueta "Trapecio invertido", "Piernas largas", "Mandíbula definida"                            | Forma de rostro, contraste, contextura (`frame`) y notas de proporción (Premium)               | El StyleProfile no tiene tipo de silueta ni proporción pierna/torso. Paso 02b                   |
-| "Por qué te queda bien" con aspecto (COLOR · CÁLIDO, SILUETA · TRAPECIO…)                       | Tarjetas numeradas                                                                             | `LookSpec.reasoning` es texto sin aspecto. Paso 02b                                             |
 | Pines sobre el render                                                                           | Ubicación aproximada por zona del cuerpo, solo con `framing: FULL_BODY`                        | No hay detección de prendas en la imagen                                                        |
 | Precio por prenda, "Comprar ↗", "Comprar el look completo · $ 9.960", "Ver look · ~$ 9.960"     | La fila de cada pieza deja el lado derecho libre                                               | Shopping: pasos 07–10b                                                                          |
 | "↻ Generar otras"                                                                               | No está                                                                                        | Regenerar looks es del milestone 2 (`EXECUTION_PLAN.md`)                                        |

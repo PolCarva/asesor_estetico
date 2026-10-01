@@ -1,17 +1,25 @@
 import type { LookSpec } from "../schemas/look-spec";
-import type { StyleProfile, StyleProfileV1 } from "../schemas/style-profile";
+import type { StyleProfile, StyleProfileV1, StyleProfileV2 } from "../schemas/style-profile";
+
+/** `appearance` de v1 y v2 (sin rasgos del rostro, silueta ni proporciones). */
+const APPEARANCE_V2: StyleProfileV2["appearance"] = {
+  presentation: "MASCULINE",
+  age_range: "25_34",
+  face_shape: "OVAL",
+  skin_tone: "MEDIUM",
+  skin_undertone: "WARM",
+  contrast_level: "MEDIUM",
+  eye_color: "marrón",
+};
 
 /** Datos ficticios para desarrollo, tests y mocks. No representan a ninguna persona real. */
 export const FIXTURE_STYLE_PROFILE: StyleProfile = {
-  schema_version: 2,
+  schema_version: 3,
   appearance: {
-    presentation: "MASCULINE",
-    age_range: "25_34",
-    face_shape: "OVAL",
-    skin_tone: "MEDIUM",
-    skin_undertone: "WARM",
-    contrast_level: "MEDIUM",
-    eye_color: "marrón",
+    ...APPEARANCE_V2,
+    face_features: ["mandíbula definida", "frente media"],
+    body_shape: "TRAPEZOID",
+    torso_legs: "LONG_LEGS",
   },
   hair: {
     color: "castaño oscuro",
@@ -71,7 +79,10 @@ export const FIXTURE_STYLE_PROFILE: StyleProfile = {
   },
   body_proportions: {
     frame: "AVERAGE",
-    balance_notes: ["hombros y cadera equilibrados", "piernas proporcionadas"],
+    balance_notes: [
+      "hombros apenas más anchos que la cadera: cortes rectos mantienen el equilibrio",
+      "piernas largas: admiten tiro medio y remeras por fuera",
+    ],
   },
   clothing: {
     current_style: "casual básico con prendas holgadas",
@@ -135,10 +146,17 @@ export const FIXTURE_STYLE_PROFILE: StyleProfile = {
   ],
 };
 
+/** Perfil v2 (guardado entre el 2026-09-30 y el 2026-10-01) para tests de compatibilidad. */
+export const FIXTURE_STYLE_PROFILE_V2: StyleProfileV2 = {
+  ...FIXTURE_STYLE_PROFILE,
+  schema_version: 2,
+  appearance: APPEARANCE_V2,
+};
+
 /** Perfil v1 (formato anterior, guardado antes del 2026-09-30) para tests de compatibilidad. */
 export const FIXTURE_STYLE_PROFILE_V1: StyleProfileV1 = {
   schema_version: 1,
-  appearance: FIXTURE_STYLE_PROFILE.appearance,
+  appearance: APPEARANCE_V2,
   hair: {
     color: "castaño oscuro",
     texture: "WAVY",
@@ -232,7 +250,18 @@ export const FIXTURE_LOOK_SPECS: [LookSpec, LookSpec, LookSpec] = [
       { name: "verde oliva", hex: "#6B6B3A" },
     ],
     fit: { overall: "regular con caída limpia", notes: ["arremangar la camisa dos vueltas"] },
-    reasoning: ["los tonos tierra acompañan el subtono cálido", "capas simples suman estructura"],
+    reasoning: [
+      {
+        aspect: "COLOR",
+        qualifier: "cálido",
+        text: "los tonos tierra acompañan el subtono cálido",
+      },
+      {
+        aspect: "SILHOUETTE",
+        qualifier: "trapecio",
+        text: "el overshirt abierto suma estructura sin ensanchar los hombros",
+      },
+    ],
     avoid: ["zapatillas deportivas técnicas"],
     image_prompt_data: { setting: "calle de Montevideo, fachada clara", ...identityPrompt },
   },
@@ -275,7 +304,18 @@ export const FIXTURE_LOOK_SPECS: [LookSpec, LookSpec, LookSpec] = [
       { name: "gris topo", hex: "#8B8580" },
     ],
     fit: { overall: "entallado sin ajustar", notes: [] },
-    reasoning: ["el azul petróleo da contraste medio sin endurecer"],
+    reasoning: [
+      {
+        aspect: "COLOR",
+        qualifier: "contraste medio",
+        text: "el azul petróleo da contraste medio sin endurecer",
+      },
+      {
+        aspect: "FACE",
+        qualifier: "ovalado",
+        text: "el cuello redondo acompaña el rostro ovalado",
+      },
+    ],
     avoid: ["camisa blanca debajo"],
     image_prompt_data: {
       setting: "bar con luz cálida",
@@ -322,7 +362,15 @@ export const FIXTURE_LOOK_SPECS: [LookSpec, LookSpec, LookSpec] = [
       { name: "crudo", hex: "#EFE8DA" },
     ],
     fit: { overall: "relajado", notes: ["bermuda por encima de la rodilla"] },
-    reasoning: ["la terracota realza el subtono cálido", "mostrar el tatuaje suma personalidad"],
+    reasoning: [
+      { aspect: "COLOR", qualifier: "cálido", text: "la terracota realza el subtono cálido" },
+      {
+        aspect: "SILHOUETTE",
+        qualifier: "piernas largas",
+        text: "la bermuda sobre la rodilla aprovecha el largo de las piernas",
+      },
+      { aspect: "STYLE", qualifier: "personalidad", text: "mostrar el tatuaje suma personalidad" },
+    ],
     avoid: ["medias visibles"],
     image_prompt_data: { setting: "rambla al atardecer", ...identityPrompt },
   },

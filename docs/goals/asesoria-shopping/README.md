@@ -110,7 +110,7 @@ source ~/.nvm/nvm.sh && nvm use >/dev/null && pnpm format && pnpm lint && pnpm t
 | --- | -------------------------------------------------------------------------------------------------- | -------------- | ---------- | ------ |
 | 01  | [Asesoría: schema, prompt y persistencia](pasos/01-asesoria-schema-prompt.md)                      | 1–5            | —          | ✅     |
 | 02  | [Asesoría: UI, Free/Premium y detalle de look](pasos/02-asesoria-ui-detalle-look.md)               | 6              | 01         | ✅     |
-| 02b | [Perfil visual: los datos que pide el diseño](pasos/02b-perfil-visual-datos.md)                    | 1–6            | 01, 02     | ⬜     |
+| 02b | [Perfil visual: los datos que pide el diseño](pasos/02b-perfil-visual-datos.md)                    | 1–6            | 01, 02     | ✅     |
 | 03  | [Shopping: queries desde el LookSpec y búsqueda real](pasos/03-shopping-queries-busqueda.md)       | 7–9            | —          | ✅     |
 | 04a | [Shopping: fetcher seguro, extracción y normalización](pasos/04a-fetch-extraccion.md)              | 10–11          | 03         | ✅     |
 | 04b | [Shopping: adaptadores de talles/stock, validación y locales](pasos/04b-adaptadores-validacion.md) | 10–11          | 04a        | ⬜     |
@@ -324,3 +324,54 @@ source ~/.nvm/nvm.sh && nvm use >/dev/null && pnpm format && pnpm lint && pnpm t
   - **Nombre:** el mockup usa la marca "espejo" y la app sigue con `APP_NAME` ("Asesor Estético"). Es una decisión de producto pendiente y un solo string.
   - **No implementado del diseño:** 2b (cámara guiada), 2f (antes/después), 2k (mapa del cuerpo) y "↻ Generar otras" (milestone 2).
 - Commit: `feat(ui): sistema visual Espejo (opción 2) y plan adaptado al diseño`
+
+### Paso 02b — Perfil visual: los datos que pide el diseño · 2026-10-01 · ✅
+
+- Hecho:
+  - **StyleProfile v3** (`packages/shared/src/schemas/style-profile.ts`): `appearance` suma `face_features` (hasta 2 rasgos de ≤60 caracteres), `body_shape` (`TRAPEZOID`, `INVERTED_TRIANGLE`, `RECTANGLE`, `TRIANGLE`, `OVAL`, `HOURGLASS`, `UNKNOWN`) y `torso_legs` (`LONG_TORSO`, `BALANCED`, `LONG_LEGS`, `UNKNOWN`).
+    - `StyleProfileV2Schema` + lectura tolerante: v2 → v3 con `face_features: []` y `UNKNOWN`; v1 → v3. Sin nullables nuevos (D3).
+    - `appearance` ya era núcleo, así que no hubo migración, cambio de `splitStyleProfile` ni de RLS (D26).
+  - **Razones con aspecto** (`look-spec.ts`): `reasoning` = `{ aspect: COLOR|SILHOUETTE|FACE|HAIR|STYLE, qualifier, text }`. `StoredLookSpecSchema` lee los looks guardados con razones de texto (→ `STYLE` sin calificativo). Lo usan la web (`getLooks`, `getLook`) y el worker (`GENERATE_LOOK`).
+  - **Prompts** `2026-10-01.1`: definición de cada silueta, "categorías para elegir ropa: nunca medidas, números, porcentajes ni comparaciones con un ideal", y razones con aspecto y calificativo (2 a 4, al menos dos aspectos).
+  - **Fixtures, mock y seed** en v3 (+ `FIXTURE_STYLE_PROFILE_V2`).
+  - **UI** (`docs/DESIGN_SYSTEM.md`):
+    - `/app/profile`: rostro con rasgos; "Silueta" con el tipo y el dibujo de su categoría (notas Premium; free ve "Desbloquear con Premium"); "Proporciones" con escala de tres tramos sin números; "Tu estilo" pasa a banda. Los perfiles viejos se ven como antes (contextura o tarjeta bloqueada, sin proporciones).
+    - Análisis en curso: hallazgo SILUETA ("Trapecio · piernas largas") y rasgos en ROSTRO.
+    - `/app/looks/[id]`: etiqueta `ASPECTO · CALIFICATIVO`, arcilla para color, musgo para silueta y neutra para el resto.
+  - **Tests**:
+    - `shared` (60): enums cerrados, límites de rasgos, que el único número sea `schema_version` y que no haya claves de puntaje, porcentaje, ratio ni medida; lectura v3, v2 y v1; looks viejos con `StoredLookSpecSchema`.
+    - `ai` (24): JSON Schema estricto v3 (enums de silueta y proporciones, 3 `anyOf`), schema de razones `["aspect","qualifier","text"]`, reparación si el modelo manda texto suelto, prompt.
+    - Integración `rls.int.test.ts`: free con su JWT lee la silueta, las proporciones y los rasgos pero no las notas; Premium lee las notas; un perfil v2 y un look con razones de texto guardados se leen con el JWT del usuario.
+    - Integración `pipeline.int.test.ts`: el análisis guarda v3 y `GENERATE_LOOK` genera la imagen de un look con el formato anterior.
+  - **Script** `real-style-analysis.ts`: imprime el perfil visual y las razones; `--save-for <cuenta .test>`.
+  - **Docs**: `AI_PIPELINE.md`, `DATA_MODEL.md`, `DESIGN_SYSTEM.md` (sin las filas resueltas de "Diferencias con el mockup"), `PRODUCT_SPEC.md`, `SECURITY_PRIVACY.md` y `DECISIONES.md` (D26 + notas).
+- Prueba real (`real-style-analysis.ts --save-for estilo02b@asesor.test`, fotos autorizadas de una persona ficticia):
+  - "StyleProfile v3 validado con Zod; 3 LookSpecs validados".
+  - Costo: ANALYZE_STYLE_PROFILE 3461 in / 5238 out, USD 0.0220, 29 s; GENERATE_LOOK_SPECS 2091 in / 5995 out, USD 0.0238, 26 s. **Total USD 0.0458**.
+  - Perfil visual: rostro `OVAL` · "Mandíbula definida | Frente equilibrada"; silueta `TRAPEZOID`; proporciones `BALANCED`. Coherente con la foto de cuerpo entero (hombros apenas más anchos que la cadera, piernas y torso parejos). La nota Premium dice "Hombros y cadera alineados…", un poco más cerca de `RECTANGLE`: diferencia de matiz, no contradicción.
+  - Razones con aspecto (3 ejemplos):
+    - look-1: `COLOR · otoño oscuro` — "El azul marino y el marfil generan un contraste medio que complementa tu tez clara y ojos marrones."
+    - look-2: `SILHOUETTE · proporción balanceada` — "El tiro medio del pantalón chino respeta el largo simétrico entre torso y piernas."
+    - look-2: `FACE · mandíbula definida` — "El cuello redondo prolijo despeja la mandíbula recortada y mantiene el rostro despejado."
+  - Los 3 looks usan 2 o 3 aspectos distintos. Ningún calificativo trae números.
+  - "Free (su JWT): núcleo sí (silueta TRAPEZOID, proporciones BALANCED, rasgos 2), asesoría no"; "Premium (su JWT): asesoría sí, completa". El usuario temporal se borró.
+- Navegador (`pnpm dev` + Supabase local, sin worker):
+  - **Perfil nuevo** (cuenta `estilo02b@asesor.test` con el análisis real). Free en 1280 y 390 px:
+    - bento con "Ovalado · Mandíbula definida, frente equilibrada", "Silueta · Trapecio" con su dibujo y "Desbloquear con Premium", y "Proporciones · Equilibradas";
+    - look 1 con "COLOR · OTOÑO OSCURO" (arcilla) y "SILUETA · CUERPO TRAPECIO" (musgo);
+    - el payload RSC de `/app/profile` no trae las notas Premium y el del look 2 (bloqueado) no trae sus razones.
+  - **Mismo perfil con Premium** (suscripción MOCK manual): las dos notas de la silueta y los looks 2 y 3 con razones de color, silueta, rostro y estilo, en desktop y mobile.
+  - **Análisis en curso** (fotos de fixture y un job `GENERATE_LOOK` a futuro, sin worker): "SILUETA · Trapecio · proporciones equilibradas" y "ROSTRO · Ovalado, mandíbula definida, frente equilibrada.", en desktop y mobile.
+  - **Perfiles v2 viejos:**
+    - `free@`: silueta bloqueada como antes, sin proporciones; look 1 desbloqueado con razones "ESTILO".
+    - `demo@` (Premium): "Contextura media" con 3 notas y el look 2 con razones "Estilo".
+  - Sin scroll horizontal en 390 px (`scrollWidth` = `innerWidth`).
+  - Al terminar se borraron el job, las fotos de fixture y la cuenta `estilo02b@`.
+- Verificación: format ✓ · lint ✓ · typecheck ✓ · test ✓ (270 unit, 23 integración ejecutados: db 19, worker 4) · build ✓ · e2e ✓ (10, desktop + mobile, contra `pnpm dev`; la primera corrida falló en el alta del smoke por la compilación en frío del dev server después de `pnpm build`, y la segunda dio 10/10)
+- Decisiones: D26 confirmada (reparto por `appearance`, sin RLS nueva). Enums en inglés, `UNKNOWN` como "no aplica" y razones viejas → `STYLE`. Detalle en `DECISIONES.md`.
+- Para pasos siguientes:
+  - 07–08: el detalle del look ya usa `ReasonCard`; las filas de piezas siguen con el lado derecho libre para el producto.
+  - 12a: sumar E2E del bento (silueta y proporciones visibles para free, notas solo Premium) y de las etiquetas de aspecto.
+  - 12b: revisar en la prueba de punta a punta que silueta, proporciones y notas Premium sean coherentes entre sí (en esta prueba, `TRAPEZOID` con una nota de "hombros y cadera alineados").
+  - Nombre de la marca ("espejo" vs `APP_NAME`): sigue pendiente, como dejó la adaptación visual.
+- Commit: `feat(asesoria-shopping): paso 02b — perfil visual: los datos que pide el diseño`

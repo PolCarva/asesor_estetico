@@ -53,7 +53,7 @@ Detalles:
 | Función                | Input                                       | Output validado                       |
 | ---------------------- | ------------------------------------------- | ------------------------------------- |
 | `validatePhotos`       | fotos (id, tipo, data URL o URL firmada)    | resultados por foto + `can_continue`  |
-| `analyzeStyleProfile`  | fotos + preferencias (riesgo, tatuajes)     | `StyleProfile` v2 (asesoría completa) |
+| `analyzeStyleProfile`  | fotos + preferencias (riesgo, tatuajes)     | `StyleProfile` v3 (asesoría completa) |
 | `generateLookSpecs`    | `StyleProfile` + preferencias, `count: 3`   | exactamente 3 `LookSpec`              |
 | `generateLookImage`    | `LookSpec` + fotos de referencia + variante | imagen base64 + dimensiones           |
 | `chatWithStyleAdvisor` | perfil, looks, historial, mensaje           | respuesta + sugerencias (sin UI aún)  |
@@ -68,13 +68,13 @@ Cada operación (`runOperation`) valida el input con Zod, llama al proveedor con
 - Ruteo: `provider: { data_collection: "deny", require_parameters: true }` → nunca proveedores que retengan/entrenen con datos, y solo los que soportan salida estructurada.
 - Costo: `usage.cost` de OpenRouter (real), sumado entre intentos.
 
-## StyleProfile v2: asesoría de imagen completa
+## StyleProfile v3: asesoría de imagen completa
 
-`StyleProfileSchema` (`packages/shared/src/schemas/style-profile.ts`, `schema_version: 2`) es la salida de `analyzeStyleProfile`: una sola llamada de IA devuelve el perfil para los looks y la asesoría completa (D1). Todo son listas cortas y strings breves; ningún campo de puntaje.
+`StyleProfileSchema` (`packages/shared/src/schemas/style-profile.ts`, `schema_version: 3`) es la salida de `analyzeStyleProfile`: una sola llamada de IA devuelve el perfil para los looks y la asesoría completa (D1). Todo son listas cortas y strings breves; ningún campo de puntaje.
 
 | Bloque              | Contenido                                                                                                                                                                                  |
 | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `appearance`        | presentación, rango de edad, forma de rostro, tono/subtono, contraste, ojos                                                                                                                |
+| `appearance`        | presentación, rango de edad, forma de rostro, tono/subtono, contraste, ojos + (v3) `face_features` (hasta 2 rasgos), `body_shape` (silueta) y `torso_legs` (proporciones)                  |
 | `hair`              | actual (`color`, `texture`, `length`, `current_style`) + `recommended_cut`, `recommended_length`, `sides`, `texture_tips`, `styling`, `recommended_styles`, `avoid`, `barber_instructions` |
 | `grooming`          | `current`, `facial_hair { recommended, avoid }`, `eyebrows`, `recommendations`, `avoid`                                                                                                    |
 | `colors`            | `season`, `best`, `neutrals`, `avoid` (nombre + hex)                                                                                                                                       |
@@ -89,10 +89,27 @@ Cada operación (`runOperation`) valida el input con Zod, llama al proveedor con
 | `general_advice`    | quick wins priorizados                                                                                                                                                                     |
 
 - **"No aplica"** = lista o string vacío, nunca `null` (cada `.nullable()` suma un `anyOf` a la gramática, D3). Los límites de cantidad y largo están en el texto del prompt, porque `toStrictJsonSchema` los saca.
-- **Tamaño del JSON Schema estricto** (medido con `toStrictJsonSchema`): v1 4384 bytes, 56 propiedades, 3 `anyOf` → v2 5956 bytes, 80 propiedades, 3 `anyOf`. Gemini 3.8 Flash lo acepta (prueba real del 2026-09-30: 2815 tokens de salida, USD 0.011, con `max_tokens` 8000).
+- **Perfil visual (v3, paso 02b)**: categorías para vestirse, nunca medidas, porcentajes ni puntajes (el único número del schema es `schema_version`, con test).
+  - `body_shape`: `TRAPEZOID`, `INVERTED_TRIANGLE`, `RECTANGLE`, `TRIANGLE`, `OVAL`, `HOURGLASS` o `UNKNOWN`.
+  - `torso_legs`: `LONG_TORSO`, `BALANCED`, `LONG_LEGS` o `UNKNOWN`.
+  - `face_features`: hasta 2 frases de ≤60 caracteres ("mandíbula definida").
+  - `UNKNOWN` es el "no aplica" de un enum: la foto no deja ver la silueta, o el perfil es anterior a v3.
+- **Tamaño del JSON Schema estricto** (medido con `toStrictJsonSchema`): v1 4384 bytes, 56 propiedades, 3 `anyOf` → v2 5956 bytes, 80 propiedades, 3 `anyOf` → v3 6267 bytes, 83 propiedades, 3 `anyOf`. Gemini 3.8 Flash lo acepta (prueba real del 2026-10-01: 5238 tokens de salida, USD 0.022, con `max_tokens` 8000).
 - **Guardado partido** (D4): `splitStyleProfile` separa el núcleo teaser (`schema_version`, `appearance`, `colors`, `strengths`, `avoid`, `style_direction` → `style_profiles.profile_json`) de la asesoría (`StyleAdviceSchema`, el resto → `style_advice.advice_json`, solo Premium por RLS). `mergeStyleProfile` los vuelve a unir.
-- **Lectura tolerante**: `parseStoredStyleProfile(profile_json, advice_json)` acepta v2 y v1 (lo sube a v2 con los campos nuevos vacíos). `getActiveStyleProfile(db, userId)` de `@asesor/db` la usa: con el cliente del usuario, `advice` es `null` para free.
-- **Prueba real**: `apps/worker/scripts/real-style-analysis.ts` (análisis con las fotos autorizadas, guardado y lectura free/Premium) o `--schema-check` (solo aceptación del schema, sin fotos).
+- **Lectura tolerante**: `parseStoredStyleProfile(profile_json, advice_json)` acepta v3, v2 y v1 y devuelve siempre v3: a v2 le agrega `face_features: []` y `UNKNOWN` en silueta y proporciones (nunca un valor inventado); a v1, además, la asesoría nueva vacía. La asesoría no cambió entre v2 y v3. `getActiveStyleProfile(db, userId)` de `@asesor/db` la usa: con el cliente del usuario, `advice` es `null` para free.
+- **Prueba real**: `apps/worker/scripts/real-style-analysis.ts` (análisis con las fotos autorizadas, perfil visual, razones de los looks, guardado y lectura free/Premium; `--save-for <cuenta .test>` lo guarda también en una cuenta local para verlo en el navegador) o `--schema-check` (solo aceptación del schema, sin fotos).
+
+## LookSpec: "Por qué te queda bien"
+
+`LookSpec.reasoning` es una lista de hasta 5 razones `{ aspect, qualifier, text }` (paso 02b):
+
+- `aspect`: `COLOR`, `SILHOUETTE`, `FACE`, `HAIR` o `STYLE` (la UI lo muestra en español y tiñe la tarjeta: color en arcilla, silueta en musgo y el resto neutro).
+- `qualifier`: 1 a 3 palabras para la etiqueta ("cálido", "trapecio"), ≤30 caracteres, sin números.
+- `text`: la razón, una frase.
+
+El prompt pide 2 a 4 razones con al menos dos aspectos distintos. JSON Schema estricto de los 3 looks: 5760 bytes, 74 propiedades.
+
+**Looks guardados antes del 2026-10-01** (`reasoning` como lista de strings): `StoredLookSpecSchema` los acepta y los convierte a `{ aspect: "STYLE", qualifier: "", text }`, porque el aspecto no se puede saber. La web (`getLooks`, `getLook`) y el worker (`GENERATE_LOOK`) leen `looks.spec_json` con ese schema, así que un look viejo nunca aparece bloqueado por no validar. La IA, en cambio, tiene que devolver el formato nuevo (`LookSpecSchema`).
 
 ## Errores normalizados
 
@@ -113,7 +130,7 @@ El worker reintenta con backoff exponencial (3 intentos). Si el último falla: f
 
 ## Prompts
 
-`packages/ai/src/prompts`: reglas comunes (español rioplatense, respeto; "mejor versión estética de esta misma persona": **nunca** cambiar estructura facial, altura, cuerpo, peso, musculatura ni rasgos fundamentales; **sin puntuaciones de atractivo** ni análisis médico; no inferir etnia/salud/orientación; recomendaciones concretas, breves y aplicables; solo JSON) y un prompt por operación. `ANALYZE_STYLE_PROFILE_PROMPT` recorre cada bloque del StyleProfile con sus límites (ítems ≤120 caracteres, cantidad máxima por lista, `barber_instructions` ≤400). `buildLookImagePrompt()` arma el prompt de imagen en inglés desde el LookSpec, exigiendo preservar identidad y proporciones. `PROMPT_VERSION` (hoy `2026-09-30.2`) se guarda en `ai_usage.metadata`.
+`packages/ai/src/prompts`: reglas comunes (español rioplatense, respeto; "mejor versión estética de esta misma persona": **nunca** cambiar estructura facial, altura, cuerpo, peso, musculatura ni rasgos fundamentales; **sin puntuaciones de atractivo** ni análisis médico; no inferir etnia/salud/orientación; recomendaciones concretas, breves y aplicables; solo JSON) y un prompt por operación. `ANALYZE_STYLE_PROFILE_PROMPT` recorre cada bloque del StyleProfile con sus límites (ítems ≤120 caracteres, cantidad máxima por lista, `barber_instructions` ≤400). `buildLookImagePrompt()` arma el prompt de imagen en inglés desde el LookSpec, exigiendo preservar identidad y proporciones. `GENERATE_LOOK_SPECS_PROMPT` pide las razones con aspecto y calificativo. `PROMPT_VERSION` (hoy `2026-10-01.1`) se guarda en `ai_usage.metadata`.
 
 ## Pendiente
 

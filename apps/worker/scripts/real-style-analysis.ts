@@ -5,7 +5,11 @@
  *   pnpm --filter @asesor/worker exec tsx --env-file-if-exists=../../.env scripts/real-style-analysis.ts
  *   Analiza ~/asesor-fotos-prueba/cuerpo.jpg y cara.jpg, genera los 3 LookSpecs, guarda todo
  *   para un usuario local nuevo, comprueba que la asesoría detallada solo la lee con Premium y
- *   borra el usuario. Costo de referencia: ~USD 0.05 (sin imágenes).
+ *   borra el usuario. Costo de referencia: ~USD 0.06 (sin imágenes).
+ *
+ *   --save-for <email>: además guarda el resultado como perfil activo de esa cuenta local
+ *   existente (solo dominios .test, por ejemplo una cuenta de prueba creada en la app), para
+ *   revisarlo en el navegador. Los looks quedan sin imagen.
  *
  * Solo el schema (sin fotos ni base):
  *   ... scripts/real-style-analysis.ts --schema-check
@@ -31,7 +35,12 @@ import {
   type TypedSupabaseClient,
 } from "@asesor/db";
 import { createAdminClient } from "@asesor/db/admin";
-import { splitStyleProfile, type StyleProfile, StyleProfileSchema } from "@asesor/shared";
+import {
+  type LookSpec,
+  splitStyleProfile,
+  type StyleProfile,
+  StyleProfileSchema,
+} from "@asesor/shared";
 import { createClient } from "@supabase/supabase-js";
 
 const PHOTOS_DIR = join(homedir(), "asesor-fotos-prueba");
@@ -73,6 +82,27 @@ function printAdvice(profile: StyleProfile) {
   for (const [label, value] of Object.entries(lines)) console.log(`  - ${label}: ${value}`);
 }
 
+/**
+ * Perfil visual (silueta, proporciones, rasgos). Describe a la persona: se imprime porque la
+ * prueba usa fotos de una persona que lo autorizó o ficticia, nunca de un usuario real.
+ */
+function printVisualProfile(profile: StyleProfile) {
+  const { appearance } = profile;
+  console.log("Perfil visual (fotos de prueba autorizadas):");
+  console.log(`  - rostro: ${appearance.face_shape} · ${appearance.face_features.join(" | ")}`);
+  console.log(`  - silueta: ${appearance.body_shape} · proporciones: ${appearance.torso_legs}`);
+  console.log(`  - notas (Premium): ${profile.body_proportions.balance_notes.join(" | ")}`);
+}
+
+function printReasons(looks: LookSpec[]) {
+  console.log("Por qué te queda bien (aspecto · calificativo — texto):");
+  for (const look of looks) {
+    console.log(`  ${look.id} "${look.name}":`);
+    for (const r of look.reasoning)
+      console.log(`    - ${r.aspect} · ${r.qualifier || "(sin calificativo)"} — ${r.text}`);
+  }
+}
+
 function printUsage(results: Array<AIResult<unknown>>) {
   for (const r of results)
     console.log(
@@ -91,7 +121,9 @@ async function schemaCheck() {
     country_code: "UY",
   });
   const profile = StyleProfileSchema.parse(response.output);
-  console.log(`Schema aceptado por ${response.model}; la respuesta valida con StyleProfileSchema.`);
+  console.log(
+    `Schema v${profile.schema_version} aceptado por ${response.model}; la respuesta valida con StyleProfileSchema.`,
+  );
   console.log(
     `  ${response.usage.input_tokens} in / ${response.usage.output_tokens} out · USD ${response.usage.estimated_cost_usd.toFixed(4)} · ${Date.now() - started} ms`,
   );
@@ -119,8 +151,12 @@ async function fullAnalysis() {
     preferences,
     count: 3,
   });
-  console.log("StyleProfile v2 validado con Zod; 3 LookSpecs validados.");
+  console.log(
+    `StyleProfile v${profile.data.schema_version} validado con Zod; 3 LookSpecs validados.`,
+  );
   printUsage([profile, specs]);
+  printVisualProfile(profile.data);
+  printReasons(specs.data.looks);
   printAdvice(profile.data);
 
   // Guardado real en Supabase local para un usuario nuevo, y lectura con su JWT.
@@ -162,14 +198,30 @@ async function fullAnalysis() {
     const premium = await getActiveStyleProfile(user, userId);
     const { advice } = splitStyleProfile(profile.data);
     console.log(`Guardado: style_profile ${saved.styleProfileId}, ${saved.looks.length} looks.`);
+    const visual = free?.profile.appearance;
     console.log(
-      `  Free (su JWT): núcleo ${free ? "sí" : "no"}, asesoría ${free?.advice ? "SÍ (mal)" : "no"}`,
+      `  Free (su JWT): núcleo ${free ? "sí" : "no"} (silueta ${visual?.body_shape}, proporciones ${visual?.torso_legs}, rasgos ${visual?.face_features.length}), asesoría ${free?.advice ? "SÍ (mal)" : "no"}`,
     );
     console.log(
       `  Premium (su JWT): asesoría ${JSON.stringify(premium?.advice) === JSON.stringify(advice) ? "sí, completa" : "NO (mal)"}`,
     );
   } finally {
     await admin.auth.admin.deleteUser(userId);
+  }
+
+  const saveFor = process.argv[process.argv.indexOf("--save-for") + 1];
+  if (process.argv.includes("--save-for")) {
+    if (!saveFor?.endsWith(".test"))
+      throw new Error("--save-for solo acepta cuentas .test locales.");
+    const { data } = await admin.auth.admin.listUsers({ perPage: 1000 });
+    const account = data.users.find((u) => u.email === saveFor);
+    if (!account) throw new Error(`No existe la cuenta local ${saveFor}.`);
+    const saved = await saveStyleProfileWithLooks(admin, {
+      userId: account.id,
+      profile: profile.data,
+      looks: specs.data.looks,
+    });
+    console.log(`Guardado también para ${saveFor}: style_profile ${saved.styleProfileId}.`);
   }
 }
 

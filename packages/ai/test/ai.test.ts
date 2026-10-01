@@ -8,6 +8,7 @@ import {
   analyzeStyleProfile,
   buildLookImagePrompt,
   chatWithStyleAdvisor,
+  GENERATE_LOOK_SPECS_PROMPT,
   generateLookImage,
   generateLookSpecs,
   MockAIProvider,
@@ -57,7 +58,8 @@ describe("MockAIProvider + operaciones", () => {
     });
     expect(result.data.style_direction.risk_level).toBe("BOLD");
     expect(result.data.tattoos.preference).toBe("HIGHLIGHT");
-    expect(result.data.schema_version).toBe(2);
+    expect(result.data.schema_version).toBe(3);
+    expect(result.data.appearance.body_shape).not.toBe("UNKNOWN");
     expect(result.data.hair.barber_instructions).not.toBe("");
 
     const cover = await analyzeStyleProfile(provider, {
@@ -137,7 +139,7 @@ describe("errores normalizados", () => {
 
 describe("prompts", () => {
   it("el prompt de análisis fija las reglas de la asesoría y los límites", () => {
-    expect(PROMPT_VERSION).toBe("2026-09-30.2");
+    expect(PROMPT_VERSION).toBe("2026-10-01.1");
     const prompt = ANALYZE_STYLE_PROFILE_PROMPT;
     expect(prompt).toContain("Nunca das puntuaciones ni opiniones de atractivo");
     expect(prompt).toContain("No hacés análisis médico");
@@ -145,7 +147,11 @@ describe("prompts", () => {
     expect(prompt).toContain("concreta, breve y aplicable");
     expect(prompt).toContain("máximo 120 caracteres");
     expect(prompt).toContain("barber_instructions (máximo 400");
+    expect(prompt).toContain("nunca medidas, números, porcentajes");
     for (const block of [
+      "face_features",
+      "body_shape",
+      "torso_legs",
       "recommended_cut",
       "sides",
       "texture_tips",
@@ -160,6 +166,11 @@ describe("prompts", () => {
       "general_advice",
     ])
       expect(prompt).toContain(block);
+  });
+
+  it("el prompt de looks pide razones con aspecto y calificativo", () => {
+    for (const text of ["aspect", "qualifier", "SILHOUETTE", "Sin números"])
+      expect(GENERATE_LOOK_SPECS_PROMPT).toContain(text);
   });
 
   it("arma el prompt de imagen desde el LookSpec", () => {
@@ -284,7 +295,7 @@ describe("OpenRouterProvider (fetch simulado)", () => {
     expect(looks.data.looks).toHaveLength(3);
   });
 
-  it("pide el StyleProfile v2 con JSON schema estricto (asesoría completa)", async () => {
+  it("pide el StyleProfile v3 con JSON schema estricto (asesoría completa)", async () => {
     const { fn, calls } = fakeFetch([{ body: chatReply(FIXTURE_STYLE_PROFILE) }]);
     const result = await analyzeStyleProfile(openrouter(fn), {
       photos: [dataPhoto(ID_A)],
@@ -301,7 +312,7 @@ describe("OpenRouterProvider (fetch simulado)", () => {
       };
     };
     expect(body.messages[0]?.content).toBe(ANALYZE_STYLE_PROFILE_PROMPT);
-    expect(JSON.stringify(body.messages[1]?.content)).toContain("schema_version: 2.");
+    expect(JSON.stringify(body.messages[1]?.content)).toContain("schema_version: 3.");
     const { name, strict, schema } = body.response_format.json_schema;
     expect([name, strict]).toEqual(["style_profile", true]);
     type Node = {
@@ -310,8 +321,27 @@ describe("OpenRouterProvider (fetch simulado)", () => {
       additionalProperties: boolean;
     };
     const root = schema as unknown as Node;
-    expect(root.properties.schema_version).toEqual({ type: "number", const: 2 });
+    expect(root.properties.schema_version).toEqual({ type: "number", const: 3 });
     expect(root.required).toContain("general_advice");
+    // Perfil visual: enums cerrados y obligatorios, sin medidas.
+    const appearance = root.properties.appearance!;
+    expect(appearance.required).toEqual(
+      expect.arrayContaining(["face_features", "body_shape", "torso_legs"]),
+    );
+    expect(appearance.properties.body_shape).toMatchObject({
+      enum: [
+        "TRAPEZOID",
+        "INVERTED_TRIANGLE",
+        "RECTANGLE",
+        "TRIANGLE",
+        "OVAL",
+        "HOURGLASS",
+        "UNKNOWN",
+      ],
+    });
+    expect(appearance.properties.torso_legs).toMatchObject({
+      enum: ["LONG_TORSO", "BALANCED", "LONG_LEGS", "UNKNOWN"],
+    });
     const hair = root.properties.hair!;
     expect(hair.additionalProperties).toBe(false);
     expect(hair.required).toEqual(
@@ -328,6 +358,50 @@ describe("OpenRouterProvider (fetch simulado)", () => {
     expect(text).not.toMatch(/maxLength|maxItems/);
     // Solo los 3 nullable de v1 (eye_color, season, secondary): lo nuevo no agrega anyOf.
     expect(text.match(/"anyOf"/g)).toHaveLength(3);
+  });
+
+  it("pide los LookSpecs con razones por aspecto en el JSON schema estricto", async () => {
+    const { fn, calls } = fakeFetch([{ body: chatReply({ looks: FIXTURE_LOOK_SPECS }) }]);
+    const result = await generateLookSpecs(openrouter(fn), {
+      style_profile: FIXTURE_STYLE_PROFILE,
+      preferences,
+      count: 3,
+    });
+    expect(result.data.looks[0]?.reasoning[0]?.aspect).toBe("COLOR");
+    const body = calls[0]!.body as {
+      messages: Array<{ content: unknown }>;
+      response_format: { json_schema: { schema: Record<string, unknown> } };
+    };
+    expect(body.messages[0]?.content).toBe(GENERATE_LOOK_SPECS_PROMPT);
+    // El perfil que recibe el modelo trae la silueta y las proporciones.
+    expect(JSON.stringify(body.messages[1]?.content)).toContain("TRAPEZOID");
+    type Node = { properties: Record<string, Node>; items: Node; required: string[] };
+    const look = (body.response_format.json_schema.schema as unknown as Node).properties.looks!
+      .items;
+    const reason = look.properties.reasoning!.items;
+    expect(reason.required).toEqual(["aspect", "qualifier", "text"]);
+    expect(reason.properties.aspect).toMatchObject({
+      enum: ["COLOR", "SILHOUETTE", "FACE", "HAIR", "STYLE"],
+    });
+
+    // Una respuesta con razones de texto (formato viejo) no valida: se pide la reparación.
+    const old = { looks: FIXTURE_LOOK_SPECS.map((l) => ({ ...l, reasoning: ["queda bien"] })) };
+    const repaired = fakeFetch([
+      { body: chatReply(old) },
+      { body: chatReply({ looks: FIXTURE_LOOK_SPECS }) },
+    ]);
+    const fixed = await generateLookSpecs(openrouter(repaired.fn), {
+      style_profile: FIXTURE_STYLE_PROFILE,
+      preferences,
+      count: 3,
+    });
+    expect(repaired.calls).toHaveLength(2);
+    expect(JSON.stringify(repaired.calls[1]!.body)).toContain("reasoning");
+    expect(fixed.data.looks[2]?.reasoning.map((r) => r.aspect)).toEqual([
+      "COLOR",
+      "SILHOUETTE",
+      "STYLE",
+    ]);
   });
 
   it("genera la imagen con las fotos como referencia y registra el costo real", async () => {

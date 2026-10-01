@@ -27,7 +27,7 @@ import {
   type JobPayload,
   JobPayloadSchemas,
   type JobType,
-  LookSpecSchema,
+  StoredLookSpecSchema,
 } from "@asesor/shared";
 import { FIXTURE_PRODUCTS } from "@asesor/shared/fixtures";
 import { refreshProduct, searchProducts } from "@asesor/shopping";
@@ -114,7 +114,7 @@ async function enqueueLookGeneration(
 async function generateLook(job: JobRow, ctx: JobContext, variant: "FULL" | "PREVIEW") {
   const payload = parsePayload(job, variant === "FULL" ? "GENERATE_LOOK" : "GENERATE_LOOK_PREVIEW");
   const look = await getLookForUser(ctx.deps.db, payload.look_id, payload.user_id);
-  const spec = LookSpecSchema.safeParse(look.spec_json);
+  const spec = StoredLookSpecSchema.safeParse(look.spec_json);
   if (!spec.success)
     throw new NonRetryableJobError("El look guardado no cumple el schema.", { cause: spec.error });
   // La imagen completa de un look bloqueado solo se genera para usuarios Premium.

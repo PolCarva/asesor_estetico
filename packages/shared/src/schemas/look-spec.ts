@@ -18,6 +18,19 @@ export const GarmentSchema = z.object({
 });
 export type Garment = z.infer<typeof GarmentSchema>;
 
+/** Aspecto de la persona al que responde una razón del look. */
+export const LookReasonAspectSchema = z.enum(["COLOR", "SILHOUETTE", "FACE", "HAIR", "STYLE"]);
+export type LookReasonAspect = z.infer<typeof LookReasonAspectSchema>;
+
+/** "Por qué te queda bien": una razón con su aspecto, para etiquetas como "COLOR · CÁLIDO". */
+export const LookReasonSchema = z.object({
+  aspect: LookReasonAspectSchema,
+  /** Calificativo de 1 a 3 palabras ("cálido", "trapecio invertido"). Vacío si no hay. */
+  qualifier: z.string().max(30),
+  text: z.string().min(1).max(160),
+});
+export type LookReason = z.infer<typeof LookReasonSchema>;
+
 export const LookSpecSchema = z.object({
   id: z.string().min(1).max(64),
   name: z.string().min(1).max(80),
@@ -36,7 +49,7 @@ export const LookSpecSchema = z.object({
   }),
   palette: z.array(ColorSwatchSchema).min(1).max(6),
   fit: z.object({ overall: z.string().max(80), notes: shortList(4) }),
-  reasoning: shortList(5),
+  reasoning: z.array(LookReasonSchema).max(5),
   avoid: shortList(5),
   /** Datos para construir el prompt de imagen; no se muestran al usuario. */
   image_prompt_data: z.object({
@@ -48,6 +61,22 @@ export const LookSpecSchema = z.object({
   }),
 });
 export type LookSpec = z.infer<typeof LookSpecSchema>;
+
+/** LookSpec guardado antes del 2026-10-01: `reasoning` era texto, sin aspecto. */
+const LookSpecV1Schema = LookSpecSchema.extend({ reasoning: shortList(5) });
+
+/**
+ * Lectura tolerante de `looks.spec_json`: acepta el formato actual y el anterior. Las
+ * razones viejas pasan a `STYLE` sin calificativo (el aspecto no se puede saber), para
+ * que un look guardado nunca aparezca bloqueado por no validar.
+ */
+export const StoredLookSpecSchema = z.union([
+  LookSpecSchema,
+  LookSpecV1Schema.transform((v1): LookSpec => ({
+    ...v1,
+    reasoning: v1.reasoning.map((text) => ({ aspect: "STYLE", qualifier: "", text })),
+  })),
+]);
 
 /** Slots de un look en los que se pueden asociar productos. */
 export const GarmentSlotSchema = z

@@ -22,14 +22,17 @@ import {
   parseStoredStyleProfile,
   splitStyleProfile,
   StyleAdviceSchema,
+  StoredLookSpecSchema,
   StyleProfileCoreSchema,
   StyleProfileV1Schema,
+  StyleProfileV2Schema,
 } from "../src";
 import {
   FIXTURE_LOOK_SPECS,
   FIXTURE_PRODUCTS,
   FIXTURE_STYLE_PROFILE,
   FIXTURE_STYLE_PROFILE_V1,
+  FIXTURE_STYLE_PROFILE_V2,
 } from "../src/fixtures";
 
 const UUID = "0b5a1c3e-8f5d-4c1b-9d2e-1a2b3c4d5e6f";
@@ -40,6 +43,7 @@ const WEBP = new TextEncoder().encode("RIFF\0\0\0\0WEBPVP8 ");
 describe("fixtures cumplen los schemas", () => {
   it("StyleProfile", () => {
     expect(StyleProfileSchema.parse(FIXTURE_STYLE_PROFILE)).toEqual(FIXTURE_STYLE_PROFILE);
+    expect(StyleProfileV2Schema.parse(FIXTURE_STYLE_PROFILE_V2)).toEqual(FIXTURE_STYLE_PROFILE_V2);
     expect(StyleProfileV1Schema.parse(FIXTURE_STYLE_PROFILE_V1)).toEqual(FIXTURE_STYLE_PROFILE_V1);
   });
   it("LookSpecs", () => {
@@ -52,10 +56,14 @@ describe("fixtures cumplen los schemas", () => {
   });
 });
 
-describe("StyleProfile v2: asesoría completa", () => {
+describe("StyleProfile v3: asesoría completa", () => {
   it("cubre cada tema del SPEC con datos estructurados", () => {
     const p = FIXTURE_STYLE_PROFILE;
-    expect(p.schema_version).toBe(2);
+    expect(p.schema_version).toBe(3);
+    // perfil visual: rasgos del rostro, silueta y proporciones
+    expect(p.appearance.face_features.length).toBeGreaterThan(0);
+    expect(p.appearance.body_shape).toBe("TRAPEZOID");
+    expect(p.appearance.torso_legs).toBe("LONG_LEGS");
     // pelo: corte, largo, laterales, textura, peinado, evitar e indicaciones al peluquero
     expect(p.hair.recommended_cut).not.toBe("");
     expect(p.hair.recommended_length).not.toBe("");
@@ -116,14 +124,79 @@ describe("StyleProfile v2: asesoría completa", () => {
   });
 });
 
+describe("StyleProfile v3: perfil visual sin medidas ni puntajes", () => {
+  const withAppearance = (patch: Record<string, unknown>) => ({
+    ...FIXTURE_STYLE_PROFILE,
+    appearance: { ...FIXTURE_STYLE_PROFILE.appearance, ...patch },
+  });
+
+  it("silueta y proporciones son enums cerrados; los rasgos, frases cortas", () => {
+    expect(StyleProfileSchema.safeParse(withAppearance({ body_shape: "ATHLETIC" })).success).toBe(
+      false,
+    );
+    expect(StyleProfileSchema.safeParse(withAppearance({ torso_legs: "44/56" })).success).toBe(
+      false,
+    );
+    expect(
+      StyleProfileSchema.safeParse(withAppearance({ face_features: ["a", "b", "c"] })).success,
+    ).toBe(false);
+    expect(
+      StyleProfileSchema.safeParse(withAppearance({ face_features: ["x".repeat(61)] })).success,
+    ).toBe(false);
+    // "no se ve" se dice con UNKNOWN y sin rasgos, nunca con null.
+    const unknown = withAppearance({
+      face_features: [],
+      body_shape: "UNKNOWN",
+      torso_legs: "UNKNOWN",
+    });
+    expect(StyleProfileSchema.safeParse(unknown).success).toBe(true);
+    expect(StyleProfileSchema.safeParse(withAppearance({ body_shape: null })).success).toBe(false);
+  });
+
+  it("el único número del perfil y de los looks es schema_version (sin medidas ni porcentajes)", () => {
+    const profile = JSON.stringify(z.toJSONSchema(StyleProfileSchema));
+    expect(profile.match(/"type":"(number|integer)"/g)).toHaveLength(1);
+    expect(z.toJSONSchema(StyleProfileSchema).properties?.schema_version).toMatchObject({
+      type: "number",
+      const: 3,
+    });
+    expect(JSON.stringify(z.toJSONSchema(LookSpecSchema))).not.toMatch(/"type":"(number|integer)"/);
+    for (const schema of [StyleProfileSchema, LookSpecSchema]) {
+      const keys = JSON.stringify(z.toJSONSchema(schema)).match(/"[a-z_]+":/g) ?? [];
+      expect(
+        keys.filter((k) =>
+          /score|rating|attractiv|puntaje|percent|porcentaje|ratio|measure|medida|_cm"/.test(k),
+        ),
+      ).toEqual([]);
+    }
+  });
+});
+
 describe("parseStoredStyleProfile", () => {
   const { core, advice } = splitStyleProfile(FIXTURE_STYLE_PROFILE);
 
-  it("lee v2: núcleo + asesoría", () => {
+  it("lee v3: núcleo + asesoría", () => {
     expect(parseStoredStyleProfile(core, advice)).toEqual({ profile: core, advice });
   });
 
-  it("v2 sin asesoría (usuario free o perfil sin fila Premium): advice null", () => {
+  it("sube un perfil v2 guardado a v3: sin rasgos y con silueta y proporciones UNKNOWN", () => {
+    const v2Core = { ...core, schema_version: 2, appearance: FIXTURE_STYLE_PROFILE_V2.appearance };
+    const stored = parseStoredStyleProfile(v2Core, advice);
+    expect(stored?.profile).toEqual({
+      ...core,
+      appearance: {
+        ...FIXTURE_STYLE_PROFILE_V2.appearance,
+        face_features: [],
+        body_shape: "UNKNOWN",
+        torso_legs: "UNKNOWN",
+      },
+    });
+    // La asesoría no cambió entre v2 y v3: se lee tal cual.
+    expect(stored?.advice).toEqual(advice);
+    expect(StyleProfileCoreSchema.safeParse(stored?.profile).success).toBe(true);
+  });
+
+  it("v3 sin asesoría (usuario free o perfil sin fila Premium): advice null", () => {
     expect(parseStoredStyleProfile(core)).toEqual({ profile: core, advice: null });
     expect(parseStoredStyleProfile(core, { basura: true })).toEqual({
       profile: core,
@@ -131,9 +204,10 @@ describe("parseStoredStyleProfile", () => {
     });
   });
 
-  it("sube un perfil v1 guardado a v2 con la asesoría nueva vacía", () => {
+  it("sube un perfil v1 guardado a v3 con la asesoría nueva vacía", () => {
     const stored = parseStoredStyleProfile(FIXTURE_STYLE_PROFILE_V1);
-    expect(stored?.profile.schema_version).toBe(2);
+    expect(stored?.profile.schema_version).toBe(3);
+    expect(stored?.profile.appearance).toMatchObject({ body_shape: "UNKNOWN", face_features: [] });
     expect(stored?.profile.style_direction).toEqual(FIXTURE_STYLE_PROFILE_V1.style_direction);
     expect(stored?.profile.colors).toEqual(FIXTURE_STYLE_PROFILE_V1.colors);
     expect(stored?.advice?.hair.recommended_styles).toEqual(
@@ -171,6 +245,20 @@ describe("StyleProfile y LookSpec rechazan datos inválidos", () => {
     };
     expect(LookSpecSchema.safeParse(bad).success).toBe(false);
   });
+  it("cada razón del look trae aspecto y calificativo (enum cerrado)", () => {
+    const [look] = FIXTURE_LOOK_SPECS;
+    expect(look.reasoning[0]).toEqual({
+      aspect: "COLOR",
+      qualifier: "cálido",
+      text: "los tonos tierra acompañan el subtono cálido",
+    });
+    const reason = (r: unknown) => LookSpecSchema.safeParse({ ...look, reasoning: [r] }).success;
+    expect(reason({ aspect: "FACE", qualifier: "", text: "acompaña el rostro" })).toBe(true);
+    expect(reason({ aspect: "SCORE", qualifier: "", text: "x" })).toBe(false);
+    expect(reason({ aspect: "COLOR", qualifier: "x".repeat(31), text: "x" })).toBe(false);
+    // La IA tiene que devolver el formato nuevo: texto suelto no valida.
+    expect(reason("los tonos tierra acompañan")).toBe(false);
+  });
   it("listLookGarments enumera los slots", () => {
     expect(listLookGarments(FIXTURE_LOOK_SPECS[0]).map((g) => g.slot)).toEqual([
       "top",
@@ -179,6 +267,32 @@ describe("StyleProfile y LookSpec rechazan datos inválidos", () => {
       "shoes",
       "accessory:0",
     ]);
+  });
+});
+
+describe("StoredLookSpecSchema: looks guardados", () => {
+  const [look] = FIXTURE_LOOK_SPECS;
+
+  it("lee el formato actual tal cual", () => {
+    expect(StoredLookSpecSchema.parse(look)).toEqual(look);
+  });
+
+  it("lee los looks guardados con razones de texto: pasan a STYLE sin calificativo", () => {
+    const legacy = { ...look, reasoning: ["los tonos tierra acompañan", "capas simples"] };
+    const parsed = StoredLookSpecSchema.safeParse(JSON.parse(JSON.stringify(legacy)));
+    expect(parsed.success).toBe(true);
+    expect(parsed.data?.reasoning).toEqual([
+      { aspect: "STYLE", qualifier: "", text: "los tonos tierra acompañan" },
+      { aspect: "STYLE", qualifier: "", text: "capas simples" },
+    ]);
+    // El resultado es un LookSpec válido (lo usan el worker y la UI).
+    expect(LookSpecSchema.safeParse(parsed.data).success).toBe(true);
+    expect(StoredLookSpecSchema.safeParse({ ...look, reasoning: [] }).success).toBe(true);
+  });
+
+  it("sigue rechazando un look roto", () => {
+    expect(StoredLookSpecSchema.safeParse({ ...look, top: null }).success).toBe(false);
+    expect(StoredLookSpecSchema.safeParse(null).success).toBe(false);
   });
 });
 

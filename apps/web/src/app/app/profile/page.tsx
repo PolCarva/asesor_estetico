@@ -10,11 +10,14 @@ import { SubmitButton } from "@/components/ui/submit-button";
 import { requireUser } from "@/lib/auth";
 import { getPhotoUrls, getPlan, getProfile, getStyleData } from "@/lib/data";
 import {
+  BODY_SHAPE_LABEL,
   CONTRAST_LABEL,
   FACE_SHAPE_LABEL,
   FRAME_LABEL,
   RISK_LABEL,
+  sentenceList,
   TATTOO_LABEL,
+  TORSO_LEGS_LABEL,
   UNDERTONE_LABEL,
 } from "@/lib/labels";
 
@@ -28,11 +31,13 @@ function Label({ children, tone = "text-moss" }: { children: ReactNode; tone?: s
   );
 }
 
-/** Rostro: la foto del usuario con la lectura (puntos y contorno) y su forma de rostro. */
+/** Rostro: la foto del usuario con la lectura (puntos y contorno), su forma y sus rasgos. */
 function FaceTile({ core, photoUrl }: { core: StyleProfileCore; photoUrl: string | null }) {
   const { appearance } = core;
+  const features = sentenceList(appearance.face_features);
   const detail = [
-    `Contraste ${CONTRAST_LABEL[appearance.contrast_level]}`,
+    features || null,
+    `${features ? "contraste" : "Contraste"} ${CONTRAST_LABEL[appearance.contrast_level]}`,
     appearance.eye_color ? `ojos ${appearance.eye_color}` : null,
   ]
     .filter(Boolean)
@@ -104,18 +109,26 @@ function ColorTile({ core, view }: { core: StyleProfileCore; view: AdviceView })
   );
 }
 
-function StyleTile({ view }: { view: AdviceView }) {
+/** Estilo. `wide`: banda a lo ancho debajo del bento (cuando hay tarjeta de proporciones). */
+function StyleTile({ view, wide }: { view: AdviceView; wide: boolean }) {
   return (
-    <section aria-labelledby="tile-style" className={`${tile} glass`}>
-      <Label>Tu estilo</Label>
-      <h2 id="tile-style" className="mt-1.5 text-[1.75rem] leading-[1.05]">
-        {view.direction.primary}
-      </h2>
-      {view.direction.secondary ? (
-        <p className="text-[0.8125rem] text-bark">con un toque {view.direction.secondary}</p>
-      ) : null}
+    <section
+      aria-labelledby="tile-style"
+      className={`${tile} glass ${wide ? "md:col-span-2 lg:col-span-3 lg:flex-row lg:items-end lg:justify-between lg:gap-8" : ""}`}
+    >
+      <div>
+        <Label>Tu estilo</Label>
+        <h2 id="tile-style" className="mt-1.5 text-[1.75rem] leading-[1.05]">
+          {view.direction.primary}
+        </h2>
+        {view.direction.secondary ? (
+          <p className="mt-1 text-[0.8125rem] text-bark">con un toque {view.direction.secondary}</p>
+        ) : null}
+      </div>
       {view.direction.keywords.length ? (
-        <ul className="mt-auto flex flex-wrap gap-1.5 pt-6">
+        <ul
+          className={`mt-auto flex flex-wrap gap-1.5 pt-6 ${wide ? "lg:justify-end lg:pt-0" : ""}`}
+        >
           {view.direction.keywords.map((keyword) => (
             <li key={keyword} className="rounded-full well px-2.5 py-1 text-xs text-bark">
               {keyword}
@@ -127,45 +140,138 @@ function StyleTile({ view }: { view: AdviceView }) {
   );
 }
 
-/** Silueta: dato de la asesoría (Premium). Free ve la tarjeta bloqueada. */
-function SilhouetteTile({ advice }: { advice: StyleAdviceData | null }) {
-  if (!advice) {
-    return (
-      <section aria-labelledby="tile-silhouette" className={`${tile} glass`}>
-        <Label>Silueta</Label>
-        <h2 id="tile-silhouette" className="mt-1.5 text-[1.75rem] leading-[1.05]">
-          Tus proporciones
-        </h2>
-        <p className="text-[0.8125rem] text-bark">
-          Cómo equilibrar tu silueta con cortes, largos y capas.
-        </p>
-        <div className="mt-auto pt-6">
+type KnownBodyShape = keyof typeof BODY_SHAPE_LABEL;
+
+/**
+ * Contorno de hombros, cintura y cadera de cada silueta (viewBox 60×80). Es el dibujo de la
+ * categoría, no una medida de la persona.
+ */
+const SHAPE_WIDTHS: Record<KnownBodyShape, [number, number, number]> = {
+  TRAPEZOID: [44, 32, 34],
+  INVERTED_TRIANGLE: [50, 28, 28],
+  RECTANGLE: [38, 36, 38],
+  TRIANGLE: [32, 34, 46],
+  OVAL: [36, 46, 38],
+  HOURGLASS: [42, 26, 42],
+};
+
+function ShapeGlyph({ shape }: { shape: KnownBodyShape }) {
+  const [shoulders, waist, hips] = SHAPE_WIDTHS[shape];
+  const x = (width: number, side: -1 | 1) => 30 + (side * width) / 2;
+  const outline = `M${x(shoulders, -1)} 10 L${x(shoulders, 1)} 10 L${x(waist, 1)} 44 L${x(hips, 1)} 70 L${x(hips, -1)} 70 L${x(waist, -1)} 44 Z`;
+  return (
+    <svg aria-hidden="true" viewBox="0 0 60 80" className="h-24 w-[4.5rem] shrink-0">
+      {[10, 44, 70].map((y) => (
+        <line key={y} x1="2" x2="58" y1={y} y2={y} className="stroke-line" strokeDasharray="2 3" />
+      ))}
+      <path
+        d={outline}
+        className="fill-tint-moss stroke-moss"
+        strokeWidth="1.5"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+/**
+ * Silueta: la etiqueta es del núcleo (cualquier plan, D26) y las notas para equilibrarla son
+ * de la asesoría (Premium). Los perfiles anteriores a v3 no tienen silueta (`UNKNOWN`): ahí
+ * se muestra la contextura (Premium) o la tarjeta bloqueada (free), como antes.
+ */
+function SilhouetteTile({
+  core,
+  advice,
+}: {
+  core: StyleProfileCore;
+  advice: StyleAdviceData | null;
+}) {
+  const shape = core.appearance.body_shape;
+  const notes = advice?.body_proportions.balance_notes.filter((n) => n.trim()).slice(0, 3) ?? [];
+  const title =
+    shape !== "UNKNOWN"
+      ? BODY_SHAPE_LABEL[shape]
+      : advice
+        ? FRAME_LABEL[advice.body_proportions.frame]
+        : "Tus proporciones";
+  return (
+    <section aria-labelledby="tile-silhouette" className={`${tile} glass`}>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <Label>Silueta</Label>
+          <h2 id="tile-silhouette" className="mt-1.5 text-[1.75rem] leading-[1.05]">
+            {title}
+          </h2>
+          {!advice && shape === "UNKNOWN" ? (
+            <p className="mt-1.5 text-[0.8125rem] text-bark">
+              Cómo equilibrar tu silueta con cortes, largos y capas.
+            </p>
+          ) : null}
+        </div>
+        {shape !== "UNKNOWN" ? <ShapeGlyph shape={shape} /> : null}
+      </div>
+      {advice ? (
+        notes.length ? (
+          <ul className="mt-auto space-y-1.5 pt-6 text-[0.8125rem] text-bark">
+            {notes.map((note) => (
+              <li key={note} className="flex gap-2.5">
+                <span aria-hidden="true" className="text-moss">
+                  +
+                </span>
+                {note}
+              </li>
+            ))}
+          </ul>
+        ) : null
+      ) : (
+        <div className="mt-auto flex flex-wrap items-center gap-x-4 gap-y-2 pt-6">
+          {shape !== "UNKNOWN" ? (
+            <p className="text-[0.8125rem] text-bark">Cómo equilibrarla con cortes y largos:</p>
+          ) : null}
           <LinkButton href="/app/looks#premium" variant="secondary" size="sm">
             Desbloquear con Premium
           </LinkButton>
         </div>
-      </section>
-    );
-  }
-  const notes = advice.body_proportions.balance_notes.filter((n) => n.trim()).slice(0, 3);
+      )}
+    </section>
+  );
+}
+
+const TORSO_LEGS_SCALE = Object.entries(TORSO_LEGS_LABEL) as Array<
+  [keyof typeof TORSO_LEGS_LABEL, string]
+>;
+
+/**
+ * Proporciones torso/piernas como etiqueta: una escala de tres tramos con el que corresponde
+ * marcado, sin porcentajes (la IA no mide desde una foto).
+ */
+function ProportionsTile({ value }: { value: keyof typeof TORSO_LEGS_LABEL }) {
   return (
-    <section aria-labelledby="tile-silhouette" className={`${tile} glass`}>
-      <Label>Silueta</Label>
-      <h2 id="tile-silhouette" className="mt-1.5 text-[1.75rem] leading-[1.05]">
-        {FRAME_LABEL[advice.body_proportions.frame]}
+    <section aria-labelledby="tile-proportions" className={`${tile} glass`}>
+      <Label>Proporciones</Label>
+      <h2 id="tile-proportions" className="mt-1.5 text-[1.75rem] leading-[1.05]">
+        {TORSO_LEGS_LABEL[value]}
       </h2>
-      {notes.length ? (
-        <ul className="mt-auto space-y-1.5 pt-6 text-[0.8125rem] text-bark">
-          {notes.map((note) => (
-            <li key={note} className="flex gap-2.5">
-              <span aria-hidden="true" className="text-moss">
-                +
-              </span>
-              {note}
-            </li>
+      <div aria-hidden="true" className="mt-auto pt-8">
+        <div className="flex h-[22px] gap-1 overflow-hidden rounded-full well p-1">
+          {TORSO_LEGS_SCALE.map(([key]) => (
+            <span
+              key={key}
+              className={`flex-1 rounded-full ${key === value ? "bg-[linear-gradient(90deg,var(--color-copper),var(--color-clay))]" : ""}`}
+            />
           ))}
-        </ul>
-      ) : null}
+        </div>
+        <div className="mt-2 flex font-mono text-[0.625rem] tracking-[0.08em] uppercase">
+          {TORSO_LEGS_SCALE.map(([key, label]) => (
+            <span
+              key={key}
+              className={`flex-1 text-center first:text-left last:text-right ${key === value ? "text-clay-dark" : "text-stone"}`}
+            >
+              {label}
+            </span>
+          ))}
+        </div>
+      </div>
     </section>
   );
 }
@@ -215,6 +321,7 @@ export default async function ProfilePage() {
     getStyleData(user.id),
     getPhotoUrls(user.id),
   ]);
+  const torsoLegs = style?.core.appearance.torso_legs ?? "UNKNOWN";
 
   return (
     <>
@@ -230,9 +337,10 @@ export default async function ProfilePage() {
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-[1.05fr_1fr_1fr]">
             <FaceTile core={style.core} photoUrl={photoUrls.FACE_DETAIL ?? null} />
             <ColorTile core={style.core} view={style.view} />
-            <StyleTile view={style.view} />
-            <SilhouetteTile advice={style.advice} />
+            <SilhouetteTile core={style.core} advice={style.advice} />
+            {torsoLegs !== "UNKNOWN" ? <ProportionsTile value={torsoLegs} /> : null}
             <KeysTile view={style.view} />
+            <StyleTile view={style.view} wide={torsoLegs !== "UNKNOWN"} />
           </div>
           <div className="mt-6 flex flex-wrap items-center gap-3">
             <LinkButton href="/app/looks#advice-title">Ver tu asesoría y tus looks</LinkButton>

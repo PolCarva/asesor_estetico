@@ -218,11 +218,13 @@ erDiagram
 
 ## StyleProfile guardado
 
-El análisis (`StyleProfile` v2, ver `AI_PIPELINE.md`) se guarda partido para que la parte Premium quede protegida por RLS (D4):
+El análisis (`StyleProfile` v3, ver `AI_PIPELINE.md`) se guarda partido para que la parte Premium quede protegida por RLS (D4):
 
-- `style_profiles.profile_json`: núcleo teaser (`StyleProfileCoreSchema`: `schema_version: 2`, `appearance`, `colors`, `strengths`, `avoid`, `style_direction`). Lo lee cualquier plan.
+- `style_profiles.profile_json`: núcleo teaser (`StyleProfileCoreSchema`: `schema_version: 3`, `appearance`, `colors`, `strengths`, `avoid`, `style_direction`). Lo lee cualquier plan. Desde v3, `appearance` incluye la silueta (`body_shape`), las proporciones (`torso_legs`) y los rasgos del rostro (`face_features`): las etiquetas son visibles para free y las notas para equilibrar la silueta (`body_proportions.balance_notes`) siguen en la asesoría Premium (D26). No hizo falta migración: el reparto es por claves de primer nivel.
 - `style_advice.advice_json`: asesoría detallada (`StyleAdviceSchema`: pelo, grooming, proporciones, ropa y fit, materiales, calzado, accesorios, tatuajes, `general_advice`). PK = `style_profile_id`; FK compuesta `(style_profile_id, user_id)` → `style_profiles (id, user_id)`, así nunca apunta al perfil de otro usuario. RLS: `select` solo propio y con `current_user_is_premium()`; nadie escribe desde el cliente.
-- Perfiles v1 (anteriores al 2026-09-30): el perfil completo quedó en `profile_json` y no tienen fila en `style_advice`. `parseStoredStyleProfile` los sube a v2 con la asesoría nueva vacía. Solo existen en bases locales (no hay producción).
+- Perfiles v2 (2026-09-30 a 2026-10-01): mismo reparto, sin perfil visual. `parseStoredStyleProfile` los sube a v3 con `face_features: []` y silueta y proporciones `UNKNOWN`.
+- Perfiles v1 (anteriores al 2026-09-30): el perfil completo quedó en `profile_json` y no tienen fila en `style_advice`. `parseStoredStyleProfile` los sube a v3 con la asesoría nueva vacía. Solo existen en bases locales (no hay producción).
+- `looks.spec_json` anteriores al 2026-10-01 tienen `reasoning` como lista de strings; `StoredLookSpecSchema` los lee como razones de aspecto `STYLE` (ver `AI_PIPELINE.md`).
 
 ## Índices principales
 

@@ -42,7 +42,7 @@ fotos
    - calzado y accesorios (joyería, anteojos), tatuajes;
    - consejos generales de por dónde empezar.
 
-   Listas cortas, sin bloques de texto. Cada look tiene su detalle en `/app/looks/[id]`: render con pines por zona, piezas del look (color, fit y material), ficha de pelo y grooming, por qué le queda y qué evitar. `/app/profile` ("Mi perfil") muestra el análisis en un bento: forma de rostro, colorimetría, estilo, silueta (Premium) y claves.
+   Listas cortas, sin bloques de texto. Cada look tiene su detalle en `/app/looks/[id]`: render con pines por zona, piezas del look (color, fit y material), ficha de pelo y grooming, por qué le queda (cada razón con su aspecto: color, silueta, rostro, pelo o estilo) y qué evitar. `/app/profile` ("Mi perfil") muestra el análisis en un bento: forma y rasgos del rostro, colorimetría, silueta, proporciones torso/piernas, claves y estilo. Silueta y proporciones son categorías para vestirse, sin medidas.
 
 8. **Paywall.** El plan free muestra 1 look. Premium desbloquea el resto.
 9. **Shopping.** Para cada prenda de un look se buscan productos equivalentes en tiendas de Uruguay.
@@ -86,7 +86,7 @@ La app nunca muestra puntajes, porcentajes ni medidas que no calculó.
 | Carrito externo            |      |    ✔    |
 | Chat con el asesor         |      |    ✔    |
 
-El teaser es el núcleo del perfil recortado: dirección de estilo, 3 ítems de "te favorece" y 3 de "mejor evitar" y hasta 6 colores. La asesoría completa (pelo, grooming, ropa y fit, calzado y accesorios, tatuajes, consejos generales, neutros y colores a evitar) es Premium: la protege la RLS de `style_advice` y la web ni siquiera la consulta para un usuario free (`selectAdviceForPlan` en `packages/shared`).
+El teaser es el núcleo del perfil recortado: dirección de estilo, 3 ítems de "te favorece" y 3 de "mejor evitar", hasta 6 colores y el perfil visual (forma y rasgos del rostro, silueta y proporciones). La asesoría completa (pelo, grooming, ropa y fit, cómo equilibrar la silueta, calzado y accesorios, tatuajes, consejos generales, neutros y colores a evitar) es Premium: la protege la RLS de `style_advice` y la web ni siquiera la consulta para un usuario free (`selectAdviceForPlan` en `packages/shared`).
 
 Decisión vigente (aplicada en RLS): en free solo se pueden guardar looks; guardar productos es Premium, igual que el shopping. Revisar con datos de uso.
 

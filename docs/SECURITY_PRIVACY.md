@@ -32,7 +32,7 @@ Y en la base, RLS en todas las tablas (detalle en `DATA_MODEL.md`). Los permisos
 
 ### Análisis de estilo: qué es Premium
 
-- **Free (teaser)**: el núcleo del StyleProfile en `style_profiles.profile_json`: rasgos generales (`appearance`), colores, qué le favorece, qué evitar y dirección de estilo.
+- **Free (teaser)**: el núcleo del StyleProfile en `style_profiles.profile_json`: rasgos generales (`appearance`, que desde v3 incluye silueta, proporciones y rasgos del rostro como categorías, sin medidas), colores, qué le favorece, qué evitar y dirección de estilo.
 - **Premium**: la asesoría detallada en `style_advice.advice_json`: pelo (corte, largo, laterales, textura, peinado, indicaciones al peluquero), grooming (barba, cejas), proporciones, ropa y fit, materiales, calzado, accesorios (joyería, anteojos), tatuajes y consejos generales.
 - Se protege en la base, no solo en la UI: la política de `style_advice` exige `current_user_is_premium()`, así que un usuario free no la lee ni con su JWT vía PostgREST (test de integración en `rls.int.test.ts`). Los looks 2-3 siguen la misma regla.
 - Los perfiles v1 (solo en bases locales, anteriores al 2026-09-30) tienen todo en `profile_json`: mostrarlos según el plan es tarea de la UI.

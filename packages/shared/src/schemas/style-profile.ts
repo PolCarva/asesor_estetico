@@ -7,12 +7,12 @@ import {
   TattooPreferenceSchema,
 } from "./common";
 
-export const STYLE_PROFILE_SCHEMA_VERSION = 2;
+export const STYLE_PROFILE_SCHEMA_VERSION = 3;
 
 /** Texto breve de una sola recomendación. Vacío = "no aplica" (sin `.nullable()`, ver D3). */
 const brief = (max = 160) => z.string().max(max);
 
-const AppearanceSchema = z.object({
+const AppearanceV2Schema = z.object({
   presentation: z.enum(["MASCULINE", "FEMININE", "ANDROGYNOUS"]),
   age_range: z.enum(["18_24", "25_34", "35_44", "45_54", "55_PLUS"]),
   face_shape: z.enum(["OVAL", "ROUND", "SQUARE", "RECTANGLE", "HEART", "DIAMOND", "TRIANGLE"]),
@@ -20,6 +20,34 @@ const AppearanceSchema = z.object({
   skin_undertone: z.enum(["WARM", "COOL", "NEUTRAL", "OLIVE"]),
   contrast_level: z.enum(["LOW", "MEDIUM", "HIGH"]),
   eye_color: z.string().max(40).nullable(),
+});
+
+/**
+ * Silueta para vestirse (relación hombros, cintura y cadera a simple vista). Es una
+ * categoría de styling, no una medida ni un juicio. `UNKNOWN`: la foto no deja verla o
+ * el perfil es anterior a v3.
+ */
+export const BodyShapeSchema = z.enum([
+  "TRAPEZOID",
+  "INVERTED_TRIANGLE",
+  "RECTANGLE",
+  "TRIANGLE",
+  "OVAL",
+  "HOURGLASS",
+  "UNKNOWN",
+]);
+export type BodyShape = z.infer<typeof BodyShapeSchema>;
+
+/** Largo del torso respecto de las piernas, como etiqueta (sin porcentajes). */
+export const TorsoLegsSchema = z.enum(["LONG_TORSO", "BALANCED", "LONG_LEGS", "UNKNOWN"]);
+export type TorsoLegs = z.infer<typeof TorsoLegsSchema>;
+
+/** v3: suma los datos cualitativos que muestra el perfil (rasgos, silueta, proporciones). */
+const AppearanceSchema = AppearanceV2Schema.extend({
+  /** Rasgos del rostro que acompañan la forma ("mandíbula definida"). Vacío en perfiles viejos. */
+  face_features: z.array(z.string().min(1).max(60)).max(2),
+  body_shape: BodyShapeSchema,
+  torso_legs: TorsoLegsSchema,
 });
 
 const ColorsSchema = z.object({
@@ -160,7 +188,7 @@ export function mergeStyleProfile(core: StyleProfileCore, advice: StyleAdvice): 
 /** StyleProfile v1 (hasta el 2026-09-30): todo en `profile_json`, sin asesoría detallada. */
 export const StyleProfileV1Schema = z.object({
   schema_version: z.literal(1),
-  appearance: AppearanceSchema,
+  appearance: AppearanceV2Schema,
   hair: z.object({
     color: z.string().max(60),
     texture: TextureSchema,
@@ -196,11 +224,29 @@ export const StyleProfileV1Schema = z.object({
 });
 export type StyleProfileV1 = z.infer<typeof StyleProfileV1Schema>;
 
-/** Sube un perfil v1 a v2: conserva todo y deja vacía la asesoría nueva. */
+/** StyleProfile v2 (hasta el 2026-10-01): sin rasgos del rostro, silueta ni proporciones. */
+export const StyleProfileV2Schema = StyleProfileSchema.extend({
+  schema_version: z.literal(2),
+  appearance: AppearanceV2Schema,
+});
+export type StyleProfileV2 = z.infer<typeof StyleProfileV2Schema>;
+
+/** Núcleo v2 guardado en `profile_json` (la asesoría no cambió entre v2 y v3). */
+const StyleProfileV2CoreSchema = StyleProfileV2Schema.pick(CORE_KEYS);
+
+/** Datos de v3 que un perfil viejo no tiene: "no se sabe", nunca un valor inventado. */
+function upgradeAppearanceV2(
+  appearance: z.infer<typeof AppearanceV2Schema>,
+): StyleProfile["appearance"] {
+  return { ...appearance, face_features: [], body_shape: "UNKNOWN", torso_legs: "UNKNOWN" };
+}
+
+/** Sube un perfil v1 a la versión actual: conserva todo y deja vacía la asesoría nueva. */
 export function upgradeStyleProfileV1(v1: StyleProfileV1): StyleProfile {
   return {
     ...v1,
     schema_version: STYLE_PROFILE_SCHEMA_VERSION,
+    appearance: upgradeAppearanceV2(v1.appearance),
     hair: {
       ...v1.hair,
       recommended_cut: "",
@@ -237,16 +283,17 @@ export interface StoredStyleProfile {
   profile: StyleProfileCore;
   /**
    * Asesoría detallada. `null` si no se pudo leer: usuario free (la RLS no la devuelve)
-   * o perfil sin asesoría. En perfiles v1 viene de `profile_json` (subida a v2 con los
-   * campos nuevos vacíos): mostrarla o no según el plan es tarea de la UI.
+   * o perfil sin asesoría. En perfiles v1 viene de `profile_json` (subida a la versión
+   * actual con los campos nuevos vacíos): mostrarla o no según el plan es tarea de la UI.
    */
   advice: StyleAdvice | null;
 }
 
 /**
- * Lectura tolerante de lo guardado: acepta `profile_json` v2 (núcleo) o v1 (perfil
- * completo viejo) y la asesoría de `style_advice.advice_json` si la hay. Devuelve
- * `null` si `profile_json` no es un perfil válido de ninguna versión.
+ * Lectura tolerante de lo guardado: acepta `profile_json` v3 o v2 (núcleo) o v1 (perfil
+ * completo viejo) y la asesoría de `style_advice.advice_json` si la hay. Todo sale en la
+ * versión actual. Devuelve `null` si `profile_json` no es un perfil válido de ninguna
+ * versión.
  */
 export function parseStoredStyleProfile(
   profileJson: unknown,
@@ -257,6 +304,17 @@ export function parseStoredStyleProfile(
 
   const current = StyleProfileCoreSchema.safeParse(profileJson);
   if (current.success) return { profile: current.data, advice };
+
+  const v2 = StyleProfileV2CoreSchema.safeParse(profileJson);
+  if (v2.success)
+    return {
+      profile: {
+        ...v2.data,
+        schema_version: STYLE_PROFILE_SCHEMA_VERSION,
+        appearance: upgradeAppearanceV2(v2.data.appearance),
+      },
+      advice,
+    };
 
   const legacy = StyleProfileV1Schema.safeParse(profileJson);
   if (!legacy.success) return null;

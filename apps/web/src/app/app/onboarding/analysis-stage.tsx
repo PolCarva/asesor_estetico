@@ -3,7 +3,14 @@ import type { StyleProfileCore } from "@asesor/shared";
 import { PrivateImage } from "@/components/private-image";
 import { Pebble } from "@/components/swatches";
 import { LinkButton } from "@/components/ui/button";
-import { CONTRAST_LABEL, FACE_SHAPE_LABEL, UNDERTONE_LABEL } from "@/lib/labels";
+import {
+  BODY_SHAPE_LABEL,
+  CONTRAST_LABEL,
+  FACE_SHAPE_LABEL,
+  sentenceList,
+  TORSO_LEGS_LABEL,
+  UNDERTONE_LABEL,
+} from "@/lib/labels";
 import type { PipelineStage } from "@/lib/pipeline";
 
 type BusyStage = Extract<PipelineStage, "VALIDATING" | "ANALYZING" | "GENERATING">;
@@ -63,6 +70,29 @@ function Finding({ label, children }: { label: string; children: React.ReactNode
   );
 }
 
+/** "Ovalado, mandíbula definida, frente media" o, sin rasgos, "Ovalado, contraste alto". */
+function faceFinding(appearance: StyleProfileCore["appearance"]): string {
+  const shape = FACE_SHAPE_LABEL[appearance.face_shape];
+  const features = sentenceList(appearance.face_features).toLowerCase();
+  return `${shape}, ${features || `contraste ${CONTRAST_LABEL[appearance.contrast_level]}`}.`;
+}
+
+/** "Trapecio · piernas largas". Vacío si el perfil no trae silueta ni proporciones. */
+function silhouetteFinding(appearance: StyleProfileCore["appearance"]): string {
+  const { body_shape: shape, torso_legs: torsoLegs } = appearance;
+  const text = [
+    shape !== "UNKNOWN" ? BODY_SHAPE_LABEL[shape].toLowerCase() : null,
+    torsoLegs === "BALANCED"
+      ? "proporciones equilibradas"
+      : torsoLegs !== "UNKNOWN"
+        ? TORSO_LEGS_LABEL[torsoLegs].toLowerCase()
+        : null,
+  ]
+    .filter((part): part is string => part !== null)
+    .join(" · ");
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
 /**
  * Pantalla del análisis en curso ("escaneo nocturno" del diseño 2d). Las etapas salen de
  * los jobs; los hallazgos, del perfil recién guardado (solo en GENERATING, cuando el
@@ -81,6 +111,7 @@ export function AnalysisStage({
 }) {
   const current = STEPS.findIndex((s) => s.stage === stage);
   const findings = stage === "GENERATING" ? profile : null;
+  const silhouette = findings ? silhouetteFinding(findings.appearance) : "";
 
   return (
     <section
@@ -180,10 +211,7 @@ export function AnalysisStage({
           {findings ? (
             <>
               <Finding label="ROSTRO">
-                <p className="text-sm leading-snug">
-                  {FACE_SHAPE_LABEL[findings.appearance.face_shape]}, contraste{" "}
-                  {CONTRAST_LABEL[findings.appearance.contrast_level]}.
-                </p>
+                <p className="text-sm leading-snug">{faceFinding(findings.appearance)}</p>
               </Finding>
               <Finding label="COLOR">
                 <p className="text-sm leading-snug">
@@ -196,6 +224,11 @@ export function AnalysisStage({
                   ))}
                 </div>
               </Finding>
+              {silhouette ? (
+                <Finding label="SILUETA">
+                  <p className="text-sm leading-snug">{silhouette}</p>
+                </Finding>
+              ) : null}
               <Finding label="ESTILO">
                 <p className="text-sm leading-snug">{findings.style_direction.primary}</p>
               </Finding>
@@ -204,6 +237,7 @@ export function AnalysisStage({
             <>
               <PendingFinding label="ROSTRO" />
               <PendingFinding label="COLOR" />
+              <PendingFinding label="SILUETA" />
               <PendingFinding label="ESTILO" />
             </>
           )}

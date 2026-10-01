@@ -1,8 +1,11 @@
 import type {
+  BodyShape,
+  LookReasonAspect,
   ProductCategory,
   StyleProfile,
   StyleRiskLevel,
   TattooPreference,
+  TorsoLegs,
 } from "@asesor/shared";
 
 /** Textos de la UI para los enums del dominio (español rioplatense). */
@@ -37,6 +40,44 @@ export const FRAME_LABEL: Record<StyleProfile["body_proportions"]["frame"], stri
   AVERAGE: "Contextura media",
   TALL: "Contextura alta",
 };
+
+/** Silueta para vestirse. `UNKNOWN` no tiene etiqueta: la UI no la muestra. */
+export const BODY_SHAPE_LABEL: Record<Exclude<BodyShape, "UNKNOWN">, string> = {
+  TRAPEZOID: "Trapecio",
+  INVERTED_TRIANGLE: "Triángulo invertido",
+  RECTANGLE: "Rectángulo",
+  TRIANGLE: "Triángulo",
+  OVAL: "Óvalo",
+  HOURGLASS: "Reloj de arena",
+};
+
+/** Proporción torso/piernas, en el orden de la escala del perfil. */
+export const TORSO_LEGS_LABEL: Record<Exclude<TorsoLegs, "UNKNOWN">, string> = {
+  LONG_TORSO: "Torso largo",
+  BALANCED: "Equilibradas",
+  LONG_LEGS: "Piernas largas",
+};
+
+export const REASON_ASPECT_LABEL: Record<LookReasonAspect, string> = {
+  COLOR: "Color",
+  SILHOUETTE: "Silueta",
+  FACE: "Rostro",
+  HAIR: "Pelo",
+  STYLE: "Estilo",
+};
+
+/** "Mandíbula definida, frente media": une frases cortas en una sola oración. */
+export function sentenceList(items: string[]): string {
+  return items
+    .map((item, i) => {
+      const text = item.trim();
+      return i === 0
+        ? text.charAt(0).toUpperCase() + text.slice(1)
+        : text.charAt(0).toLowerCase() + text.slice(1);
+    })
+    .filter(Boolean)
+    .join(", ");
+}
 
 export const RISK_LABEL: Record<StyleRiskLevel, string> = {
   CONSERVATIVE: "Clásico",

@@ -1,8 +1,9 @@
-import { splitStyleProfile } from "@asesor/shared";
+import { splitStyleProfile, StoredLookSpecSchema } from "@asesor/shared";
 import {
   FIXTURE_LOOK_SPECS,
   FIXTURE_STYLE_PROFILE,
   FIXTURE_STYLE_PROFILE_V1,
+  FIXTURE_STYLE_PROFILE_V2,
 } from "@asesor/shared/fixtures";
 import { afterAll, beforeAll, expect, it } from "vitest";
 
@@ -136,6 +137,12 @@ describeIntegration("RLS, auth y Storage", () => {
     // Free, con su JWT: ve el núcleo del perfil, no la asesoría (ni por PostgREST directo).
     const free = await getActiveStyleProfile(alice.client, alice.id);
     expect(free).toEqual({ id: aliceProfileId, profile: core, advice: null });
+    // D26: silueta, proporciones y rasgos del rostro son núcleo (free); las notas, Premium.
+    expect(free?.profile.appearance).toMatchObject({
+      face_features: FIXTURE_STYLE_PROFILE.appearance.face_features,
+      body_shape: "TRAPEZOID",
+      torso_legs: "LONG_LEGS",
+    });
     const direct = await alice.client.from("style_advice").select("advice_json");
     expect(direct.error).toBeNull();
     expect(direct.data).toEqual([]);
@@ -151,6 +158,9 @@ describeIntegration("RLS, auth y Storage", () => {
     expect((await givePremium(alice.id)).error).toBeNull();
     const premium = await getActiveStyleProfile(alice.client, alice.id);
     expect(premium).toEqual({ id: aliceProfileId, profile: core, advice });
+    expect(premium?.advice?.body_proportions.balance_notes).toEqual(
+      FIXTURE_STYLE_PROFILE.body_proportions.balance_notes,
+    );
 
     const update = await alice.client
       .from("style_advice")
@@ -185,7 +195,65 @@ describeIntegration("RLS, auth y Storage", () => {
     expect(mismatch.error).not.toBeNull();
   });
 
-  it("asesoría: los perfiles v1 guardados se siguen leyendo (subidos a v2)", async () => {
+  it("perfil v2 y looks con razones de texto guardados se siguen leyendo", async () => {
+    const { schema_version, appearance, colors, strengths, avoid, style_direction } =
+      FIXTURE_STYLE_PROFILE_V2;
+    const { data: profile } = await admin
+      .from("style_profiles")
+      .insert({
+        user_id: bob.id,
+        version: 1,
+        active: true,
+        profile_json: toJson({
+          schema_version,
+          appearance,
+          colors,
+          strengths,
+          avoid,
+          style_direction,
+        }),
+      })
+      .select("id")
+      .single();
+    const [first] = FIXTURE_LOOK_SPECS;
+    const legacyLook = { ...first, reasoning: first.reasoning.map((r) => r.text) };
+    const inserted = await admin.from("looks").insert({
+      user_id: bob.id,
+      style_profile_id: profile!.id,
+      name: first.name,
+      position: 1,
+      spec_json: toJson(legacyLook),
+    });
+    expect(inserted.error).toBeNull();
+
+    // Bob (free, su JWT): el núcleo v2 sube a v3 sin inventar silueta ni proporciones.
+    const stored = await getActiveStyleProfile(bob.client, bob.id);
+    expect(stored?.profile).toMatchObject({
+      schema_version: 3,
+      appearance: {
+        ...appearance,
+        face_features: [],
+        body_shape: "UNKNOWN",
+        torso_legs: "UNKNOWN",
+      },
+      style_direction,
+    });
+    expect(stored?.advice).toBeNull();
+
+    // El look guardado con el formato anterior valida (no aparece bloqueado por error).
+    const { data: looks } = await bob.client.from("looks").select("spec_json");
+    expect(looks).toHaveLength(1);
+    const spec = StoredLookSpecSchema.safeParse(looks![0]!.spec_json);
+    expect(spec.success).toBe(true);
+    expect(spec.data?.reasoning.map((r) => [r.aspect, r.text])).toEqual(
+      first.reasoning.map((r) => ["STYLE", r.text]),
+    );
+
+    await admin.from("looks").delete().eq("user_id", bob.id);
+    await admin.from("style_profiles").delete().eq("user_id", bob.id);
+  });
+
+  it("asesoría: los perfiles v1 guardados se siguen leyendo (subidos a v3)", async () => {
     await admin.from("style_profiles").insert({
       user_id: bob.id,
       version: 1,
@@ -194,7 +262,7 @@ describeIntegration("RLS, auth y Storage", () => {
     });
     const stored = await getActiveStyleProfile(bob.client, bob.id);
     expect(stored?.profile).toMatchObject({
-      schema_version: 2,
+      schema_version: 3,
       style_direction: FIXTURE_STYLE_PROFILE_V1.style_direction,
       strengths: FIXTURE_STYLE_PROFILE_V1.strengths,
     });

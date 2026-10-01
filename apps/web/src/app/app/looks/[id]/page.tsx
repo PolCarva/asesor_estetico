@@ -1,4 +1,4 @@
-import type { Garment, GarmentSlot, LookSpec } from "@asesor/shared";
+import type { Garment, GarmentSlot, LookReason, LookReasonAspect, LookSpec } from "@asesor/shared";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -10,7 +10,7 @@ import { PaletteRing, Pebble } from "@/components/swatches";
 import { TrackEvent } from "@/components/track-event";
 import { requireUser } from "@/lib/auth";
 import { getLook, getLookSummaries, getPlan } from "@/lib/data";
-import { CATEGORY_LABEL, twoDigits } from "@/lib/labels";
+import { CATEGORY_LABEL, REASON_ASPECT_LABEL, twoDigits } from "@/lib/labels";
 
 export const metadata: Metadata = { title: "Look" };
 
@@ -79,12 +79,35 @@ function PieceRow({ garment }: { garment: Garment }) {
   );
 }
 
-/** Tonos de las tarjetas "Por qué te queda bien" (arcilla, musgo, neutro), como en el diseño. */
-const REASON_TONES = [
-  "bg-tint-clay [--topo-line:rgb(184_101_63/0.18)]",
-  "bg-tint-moss [--topo-line:rgb(78_91_60/0.18)]",
-  "bg-tint-stone [--topo-line:rgb(31_36_32/0.12)]",
-];
+/** Tono de cada tarjeta "Por qué te queda bien" según su aspecto, como en el diseño. */
+const NEUTRAL_TONE = {
+  card: "bg-tint-stone [--topo-line:rgb(31_36_32/0.12)]",
+  label: "text-bark",
+};
+const REASON_TONE: Record<LookReasonAspect, { card: string; label: string }> = {
+  COLOR: { card: "bg-tint-clay [--topo-line:rgb(184_101_63/0.18)]", label: "text-clay-dark" },
+  SILHOUETTE: { card: "bg-tint-moss [--topo-line:rgb(78_91_60/0.18)]", label: "text-moss" },
+  FACE: NEUTRAL_TONE,
+  HAIR: NEUTRAL_TONE,
+  STYLE: NEUTRAL_TONE,
+};
+
+/** Tarjeta de una razón con su etiqueta "COLOR · CÁLIDO" (sin calificativo: solo el aspecto). */
+function ReasonCard({ reason }: { reason: LookReason }) {
+  const tone = REASON_TONE[reason.aspect];
+  const label = [REASON_ASPECT_LABEL[reason.aspect], reason.qualifier.trim()]
+    .filter(Boolean)
+    .join(" · ");
+  return (
+    <div className={`relative overflow-hidden rounded-[22px] p-[1.125rem] ${tone.card}`}>
+      <div aria-hidden="true" className="absolute inset-0 topo-card" />
+      <p className={`relative font-mono text-[0.625rem] tracking-[0.08em] uppercase ${tone.label}`}>
+        {label}
+      </p>
+      <p className="relative mt-1.5 text-[0.8125rem] leading-relaxed text-ink">{reason.text}</p>
+    </div>
+  );
+}
 
 /** Último término del nombre en itálica de acento ("Smart casual *cálido*"). */
 function AccentTitle({ name }: { name: string }) {
@@ -281,17 +304,8 @@ export default async function LookDetailPage({ params }: { params: Promise<{ id:
             <h2 id="look-why" className="text-[1.625rem] italic">
               Por qué te queda bien
             </h2>
-            {spec.reasoning.map((reason, i) => (
-              <div
-                key={reason}
-                className={`relative overflow-hidden rounded-[22px] p-[1.125rem] ${REASON_TONES[i % REASON_TONES.length]}`}
-              >
-                <div aria-hidden="true" className="absolute inset-0 topo-card" />
-                <p className="relative font-mono text-[0.625rem] text-bark">{twoDigits(i + 1)}</p>
-                <p className="relative mt-1.5 text-[0.8125rem] leading-relaxed text-ink">
-                  {reason}
-                </p>
-              </div>
+            {spec.reasoning.map((reason) => (
+              <ReasonCard key={reason.text} reason={reason} />
             ))}
             {spec.avoid.length ? (
               <div className="mt-2 rounded-[22px] glass p-[1.125rem]">

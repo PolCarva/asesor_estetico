@@ -12,7 +12,7 @@ import {
   type AdviceView,
   isPremiumSubscription,
   type LookSpec,
-  LookSpecSchema,
+  StoredLookSpecSchema,
   SIGNED_URL_TTL_SECONDS,
   STORAGE_BUCKETS,
   selectAdviceForPlan,
@@ -123,7 +123,7 @@ export async function getLooks(userId: string): Promise<LookView[]> {
   return Promise.all(
     (all ?? []).map(async (look): Promise<LookView> => {
       const full = unlockedById.get(look.id);
-      const spec = full ? LookSpecSchema.safeParse(full.spec_json) : null;
+      const spec = full ? StoredLookSpecSchema.safeParse(full.spec_json) : null;
       if (full && spec?.success) {
         // Se firma con el cliente del usuario: la política de Storage vuelve a verificar dueño y plan.
         const signed = full.image_storage_path
@@ -197,7 +197,7 @@ export async function getLook(userId: string, lookId: string): Promise<LookDetai
     .eq("id", lookId)
     .eq("user_id", userId)
     .maybeSingle();
-  const spec = full ? LookSpecSchema.safeParse(full.spec_json) : null;
+  const spec = full ? StoredLookSpecSchema.safeParse(full.spec_json) : null;
   if (!full || !spec?.success)
     return { locked: true, id: summary.id, position: summary.position, name: summary.name };
 
