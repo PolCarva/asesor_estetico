@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 import { CurrencySchema, MoneySchema, ProductCategorySchema } from "./common";
-import { GarmentSchema } from "./look-spec";
+import { GarmentSchema, GarmentSlotSchema } from "./look-spec";
 
 export const ProductAvailabilitySchema = z.enum([
   "IN_STOCK",
@@ -47,15 +47,30 @@ export const ProductSchema = z.object({
 });
 export type Product = z.infer<typeof ProductSchema>;
 
-/** Qué buscar para una prenda de un look. */
+/** Público de la prenda. `null` = sin filtro (unisex o no se sabe). */
+export const ShoppingAudienceSchema = z.enum(["MEN", "WOMEN"]);
+export type ShoppingAudience = z.infer<typeof ShoppingAudienceSchema>;
+
+/**
+ * Qué buscar para una prenda de un look. Los campos nuevos (paso 03) tienen default para
+ * que los payloads viejos sigan validando; `buildShoppingQueries` los completa.
+ */
 export const ShoppingQuerySchema = z.object({
   garment: GarmentSchema,
   country_code: z.literal("UY"),
   size: z.string().max(20).nullable(),
   max_price: z.object({ amount: z.number().positive(), currency: CurrencySchema }).nullable(),
   limit: z.number().int().min(1).max(20),
+  /** Slot del look al que corresponde la prenda. */
+  slot: GarmentSlotSchema.nullable().default(null),
+  /** Términos en español rioplatense, del más específico al más general. */
+  search_terms: z.array(z.string().min(1).max(80)).max(8).default([]),
+  audience: ShoppingAudienceSchema.nullable().default(null),
+  /** true: `max_price` es un tope duro (se descarta lo que lo supera), no solo un factor. */
+  strict_max_price: z.boolean().default(false),
 });
 export type ShoppingQuery = z.infer<typeof ShoppingQuerySchema>;
+export type ShoppingQueryInput = z.input<typeof ShoppingQuerySchema>;
 
 export const RANKING_FACTORS = [
   "category_match",

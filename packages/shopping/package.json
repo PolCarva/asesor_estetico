@@ -19,6 +19,7 @@
     "vitest": "catalog:"
   },
   "dependencies": {
-    "@asesor/shared": "workspace:*"
+    "@asesor/shared": "workspace:*",
+    "zod": "catalog:"
   }
 }

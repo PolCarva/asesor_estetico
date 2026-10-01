@@ -32,14 +32,14 @@
 
 ## Mockeado
 
-| Qué                      | Mock                                                                                                 | Dónde                               |
-| ------------------------ | ---------------------------------------------------------------------------------------------------- | ----------------------------------- |
-| Modelos de IA (opcional) | `MockAIProvider` con `AI_PROVIDER=mock` (default y en tests). Con `openrouter` es real               | `packages/ai/src/providers/mock.ts` |
-| Búsqueda de productos    | `MockSearchProvider` (catálogo ficticio `.test`)                                                     | `packages/shopping/src/mocks.ts`    |
-| Páginas de tiendas       | `MockProductFetcher` (HTML con JSON-LD)                                                              | idem                                |
-| Pagos                    | `MockPaymentProvider` (en memoria)                                                                   | `packages/payments/src/mock.ts`     |
-| Handlers del worker      | Solo `SEARCH_PRODUCTS`, `REFRESH_PRODUCT` y `GENERATE_STYLE_BOARD` (el pipeline de análisis es real) | `apps/worker/src/handlers`          |
-| Contenido de la UI       | Looks de ejemplo (fixtures) cuando el usuario no tiene looks; paywall sin checkout                   | `apps/web`                          |
+| Qué                      | Mock                                                                                                                                         | Dónde                               |
+| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------- |
+| Modelos de IA (opcional) | `MockAIProvider` con `AI_PROVIDER=mock` (default y en tests). Con `openrouter` es real                                                       | `packages/ai/src/providers/mock.ts` |
+| Búsqueda de productos    | Real por defecto (`SHOPPING_PROVIDER=live`). `MockSearchProvider` (catálogo ficticio `.test`) solo con `SHOPPING_PROVIDER=mock` en tests/E2E | `packages/shopping/src/mocks.ts`    |
+| Páginas de tiendas       | Real (`HttpProductFetcher`) con `live`; `MockProductFetcher` (HTML con JSON-LD) con `mock`                                                   | idem                                |
+| Pagos                    | `MockPaymentProvider` (en memoria)                                                                                                           | `packages/payments/src/mock.ts`     |
+| Handlers del worker      | Solo `SEARCH_PRODUCTS`, `REFRESH_PRODUCT` y `GENERATE_STYLE_BOARD` (el pipeline de análisis es real)                                         | `apps/worker/src/handlers`          |
+| Contenido de la UI       | Looks de ejemplo (fixtures) cuando el usuario no tiene looks; paywall sin checkout                                                           | `apps/web`                          |
 
 ## Proveedores reales que faltan
 

@@ -17,3 +17,5 @@ export * from "./schemas/photos";
 export * from "./schemas/products";
 export * from "./schemas/style-profile";
 export * from "./schemas/subscriptions";
+export * from "./shopping-query";
+export * from "./sizes";

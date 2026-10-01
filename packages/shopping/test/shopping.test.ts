@@ -32,6 +32,10 @@ const query = (overrides: Partial<ShoppingQuery> = {}): ShoppingQuery => ({
   size: null,
   max_price: null,
   limit: 5,
+  slot: "top",
+  search_terms: ["camisa oxford crudo", "camisa oxford", "camisa"],
+  audience: null,
+  strict_max_price: false,
   ...overrides,
 });
 

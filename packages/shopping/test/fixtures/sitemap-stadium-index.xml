@@ -1,0 +1,9 @@
+<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+        <sitemap><loc>https://www.stadium.com.uy/sitemap/destacados.xml</loc></sitemap>        
+        <sitemap><loc>https://www.stadium.com.uy/sitemap/catalogo.xml</loc></sitemap>
+        <sitemap><loc>https://www.stadium.com.uy/sitemap/catalogo-articulos.xml</loc></sitemap>
+
+                    <sitemap><loc>https://www.stadium.com.uy/sitemap/blog.xml</loc></sitemap>
+                            <sitemap><loc>https://www.stadium.com.uy/sitemap/sucursales.xml</loc></sitemap>
+            
+    </sitemapindex>

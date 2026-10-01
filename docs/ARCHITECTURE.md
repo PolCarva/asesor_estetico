@@ -30,7 +30,7 @@ flowchart LR
   R -->|claim_next_job · SKIP LOCKED| PG
   R --> H
   H -->|OpenRouter o mock| AI[(Proveedor IA)]
-  H -->|mock hoy| SH[(Tiendas)]
+  H -->|SHOPPING_PROVIDER live o mock| SH[(Tiendas UY y búsqueda web)]
   MP[Mercado Pago] -->|webhook firmado| RSC
 ```
 
@@ -58,7 +58,7 @@ packages/
   shared/     Dominio puro: schemas Zod, tipos, constantes, logger, rate limit, fixtures
   db/         Tipos generados, clientes Supabase, auth helpers, cola de jobs, Storage, seed
   ai/         Abstracción de IA: operaciones tipadas, OpenRouterProvider, MockAIProvider, prompts
-  shopping/   Pipeline de productos: search → fetch → extract → normalize → rank → cache
+  shopping/   Pipeline de productos: search (registro por plataforma, sitemaps, búsqueda web) → fetch → extract → normalize → rank → cache
   payments/   PaymentProvider, MockPaymentProvider, esqueleto Mercado Pago, estados
   analytics/  AnalyticsService + DatabaseAnalyticsProvider, registro de uso de IA
 supabase/     config.toml, migraciones y seed.sql mínimo

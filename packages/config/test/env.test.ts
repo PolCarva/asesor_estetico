@@ -77,4 +77,15 @@ describe("env", () => {
       ),
     ).toThrow();
   });
+
+  it("SHOPPING_PROVIDER: default live y mock prohibido en producción", () => {
+    const worker = { ...base, SUPABASE_SERVICE_ROLE_KEY: "srv" };
+    expect(getWorkerEnv(worker).SHOPPING_PROVIDER).toBe("live");
+    expect(getWorkerEnv({ ...worker, SHOPPING_PROVIDER: "mock" }).SHOPPING_PROVIDER).toBe("mock");
+    expect(getWorkerEnv({ ...worker, NODE_ENV: "production" }).SHOPPING_PROVIDER).toBe("live");
+    expect(() =>
+      getWorkerEnv({ ...worker, NODE_ENV: "production", SHOPPING_PROVIDER: "mock" }),
+    ).toThrowError(/SHOPPING_PROVIDER/);
+    expect(() => getWorkerEnv({ ...worker, SHOPPING_PROVIDER: "fake" })).toThrow();
+  });
 });

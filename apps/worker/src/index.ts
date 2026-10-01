@@ -5,7 +5,12 @@ import { AnalyticsService, DatabaseAnalyticsProvider } from "@asesor/analytics";
 import { getWorkerEnv } from "@asesor/config/env/worker";
 import { createWorkerSupabaseClient } from "@asesor/db/worker";
 import { createLogger } from "@asesor/shared";
-import { MockProductFetcher, MockSearchProvider } from "@asesor/shopping";
+import {
+  createLiveShopping,
+  MockProductFetcher,
+  MockSearchProvider,
+  OpenRouterWebSearchClient,
+} from "@asesor/shopping";
 
 import { handlers } from "./handlers";
 import { createPostgresJobQueue } from "./queue";
@@ -39,6 +44,26 @@ logger.info("proveedor de IA", {
     : {}),
 });
 
+// Shopping: live por defecto (tiendas reales); mock solo en tests/E2E y nunca en producción.
+const shopping =
+  env.SHOPPING_PROVIDER === "mock"
+    ? { searchProvider: new MockSearchProvider(), fetcher: new MockProductFetcher() }
+    : createLiveShopping({
+        botContact: env.SHOPPING_BOT_CONTACT,
+        // Sin clave de OpenRouter no hay descubrimiento fuera del registro de tiendas.
+        webSearch: env.OPENROUTER_API_KEY
+          ? new OpenRouterWebSearchClient({
+              apiKey: env.OPENROUTER_API_KEY,
+              model: env.OPENROUTER_TEXT_MODEL,
+            })
+          : undefined,
+        onError: (source, error) => logger.warn("fuente de shopping falló", { source, error }),
+      });
+logger.info("proveedor de shopping", {
+  provider: env.SHOPPING_PROVIDER,
+  discovery: env.SHOPPING_PROVIDER === "live" && Boolean(env.OPENROUTER_API_KEY),
+});
+
 const runner = new WorkerRunner({
   queue: createPostgresJobQueue(db, { workerId }),
   handlers,
@@ -51,8 +76,8 @@ const runner = new WorkerRunner({
       enabled: true,
       logger,
     }),
-    searchProvider: new MockSearchProvider(),
-    fetcher: new MockProductFetcher(),
+    searchProvider: shopping.searchProvider,
+    fetcher: shopping.fetcher,
   },
   logger,
   concurrency: env.WORKER_CONCURRENCY,

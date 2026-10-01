@@ -1,0 +1,22 @@
+{
+  "resources": {
+    "results": {
+      "products": [
+        {
+          "title": "CAMISA CLÁSICA REGULAR OXFORD - Cashmere Blue Fit:SLIM FIT",
+          "url": "/products/12182486_3507147?_pos=1&_psq=camisa&_psid=5ab299205&_ss=e",
+          "available": true,
+          "price": "1299.00",
+          "vendor": "JACK & JONES"
+        },
+        {
+          "title": "CAMISA CLÁSICA REGULAR OXFORD - Ensign Blue Stripes:STRIPES",
+          "url": "/products/12182486_4502397?_pos=2&_psq=camisa&_psid=5ab299205&_ss=e",
+          "available": true,
+          "price": "1299.00",
+          "vendor": "JACK & JONES"
+        }
+      ]
+    }
+  }
+}

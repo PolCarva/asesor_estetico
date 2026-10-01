@@ -1,6 +1,7 @@
 import {
   type Product,
   type ShoppingQuery,
+  type ShoppingQueryInput,
   ShoppingQuerySchema,
   type ShoppingResult,
 } from "@asesor/shared";
@@ -56,7 +57,7 @@ export function searchCacheKey(query: ShoppingQuery) {
  * Normalize → Rank → Cache.
  */
 export async function searchProducts(
-  rawQuery: ShoppingQuery,
+  rawQuery: ShoppingQueryInput,
   deps: ShoppingDeps,
 ): Promise<ShoppingResult> {
   const query = ShoppingQuerySchema.parse(rawQuery);

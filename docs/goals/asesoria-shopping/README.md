@@ -110,7 +110,7 @@ source ~/.nvm/nvm.sh && nvm use >/dev/null && pnpm format && pnpm lint && pnpm t
 | --- | -------------------------------------------------------------------------------------------------- | -------------- | ---------- | ------ |
 | 01  | [Asesoría: schema, prompt y persistencia](pasos/01-asesoria-schema-prompt.md)                      | 1–5            | —          | ✅     |
 | 02  | [Asesoría: UI, Free/Premium y detalle de look](pasos/02-asesoria-ui-detalle-look.md)               | 6              | 01         | ✅     |
-| 03  | [Shopping: queries desde el LookSpec y búsqueda real](pasos/03-shopping-queries-busqueda.md)       | 7–9            | —          | ⬜     |
+| 03  | [Shopping: queries desde el LookSpec y búsqueda real](pasos/03-shopping-queries-busqueda.md)       | 7–9            | —          | ✅     |
 | 04a | [Shopping: fetcher seguro, extracción y normalización](pasos/04a-fetch-extraccion.md)              | 10–11          | 03         | ⬜     |
 | 04b | [Shopping: adaptadores de talles/stock, validación y locales](pasos/04b-adaptadores-validacion.md) | 10–11          | 04a        | ⬜     |
 | 05  | [Shopping: ranking y cache persistente](pasos/05-shopping-ranking-cache.md)                        | 12–13          | 04b        | ⬜     |
@@ -222,3 +222,27 @@ source ~/.nvm/nvm.sh && nvm use >/dev/null && pnpm format && pnpm lint && pnpm t
   - `notFound()` bajo `/app` responde 200 con la UI de 404 (streaming por `app/app/loading.tsx`); comportamiento previo, no se cambió.
   - Paso 12a: sumar E2E de asesoría (free ve bloqueadas, Premium ve peluquero) y del detalle bloqueado.
 - Commit: `feat(asesoria-shopping): paso 02 — asesoría: UI, Free/Premium y detalle de look`
+
+### Paso 03 — Shopping: queries desde el LookSpec y búsqueda real · 2026-09-30 · ✅
+
+- Hecho:
+  - `packages/shared`: `UserSizesSchema`, `sizeKindForCategory`, `sizeForCategory` (`sizes.ts`); `buildShoppingQueries`, `buildSearchTerms`, `isRelevantCandidate`, `audienceForProfile`, sinónimos y alias (`shopping-query.ts`). `ShoppingQuerySchema` + `slot`, `search_terms`, `audience`, `strict_max_price` (aditivo, con defaults).
+  - `packages/shopping/src/providers`: `PoliteHttpClient` (UA identificable, robots.txt cacheado, timeout, 2 por host, tope de tamaño, anti-SSRF), `parseRobots`/`isAllowedByRobots`, `STORE_REGISTRY` (13 tiendas como datos) + `BLOCKED_DOMAINS`, adaptadores Fenicio/VTEX/Shopify/Woo con Zod, `detectPlatform`, `SitemapIndex`, `OpenRouterWebSearchClient` (`openrouter:web_search`), `RegistrySearchProvider`, `DiscoverySearchProvider`, `CompositeSearchProvider`, `HttpProductFetcher` y `createLiveShopping`. `zod` agregado a `@asesor/shopping` desde el catálogo.
+  - Worker: `SHOPPING_PROVIDER=mock|live` (default `live`, `mock` prohibido en producción), `SHOPPING_BOT_CONTACT` opcional; `.env.example` y `turbo.json` (`SHOPPING_*`).
+  - Script `apps/worker/scripts/real-shopping-search.ts` (`[look-N] [--no-discovery]`).
+  - Docs: `SHOPPING_ENGINE.md` (búsqueda, fuentes, reglas), `ARCHITECTURE.md`, `SETUP_STATUS.md`, `TIENDAS_UY.md` (verificado en el paso 03), `DECISIONES.md` (D6, D8, D15).
+- Prueba real (`real-shopping-search.ts`, público hombre, talles M/42/42):
+  - Look 1 sin descubrimiento: 9 tiendas del registro en 24 s (Legacy, Hering, Indian, La Isla, Zooko, Stadium y BAS por sitemap, Jack & Jones, Decathlon), plataformas FENICIO, VTEX (BAS), SHOPIFY.
+  - Look 1 con descubrimiento (5 prendas): **25 tiendas**, plataformas **FENICIO, VTEX, SHOPIFY**, **16 fuera del registro** (uniformandco.uy, minot.uy, amadeuspde.com.uy, ganbaru.com.uy, kiabi.uy, jeanvernier.com.uy, harrington.com.uy, brooksfield.com.uy, tienda.soysantander.com.uy, rusty.uy, …), USD 0.0531, 61 s. Santander se detectó como Fenicio y se buscó con el adaptador (`discovery+platform:fenicio` → "Sobrecamisa Gamuza - Camel").
+  - Look 3 con descubrimiento, después del último cambio de pertinencia: **24 tiendas, 14 fuera del registro**, FENICIO/VTEX/SHOPIFY, USD 0.0317, 27 s; 2 fallas parciales toleradas (404 en páginas citadas por el buscador).
+  - Pertinencia, ejemplos reales: camisa oxford → "CAMISA OXFORD LISA - Blanco" (Legacy), "Camisa Oxford - Blanca" (Amadeus, fuera del registro); pantalón chino verde → "PANTALÓN MODELO CHINO SLIM - VERDE" (Hering), "Pantalón chino slim VERDE" (Kiabi); bermuda de sastrería → "Bermuda Valentin - Crudo" (Canva Store); zapatillas blancas de cuero → "Championes Superstar" (Adidas, VTEX), "championes de hombre lotto tennis cuero blanco" (Stadium, sitemap).
+  - Ruido conocido para los pasos 04–05: alguna página de categoría citada por el buscador (`uy.hm.com/hombre/pantalones/chinos`), productos de otro color (el color se puntúa en el ranking) y un "reloj despertador" de BAS para "reloj" (la categoría se valida al extraer).
+- Verificación: format ✓ · lint ✓ · typecheck ✓ · test ✓ (137 unit, 21 integración ejecutados: db 18, worker 3) · build ✓ (web + `@asesor/worker` bundle) · e2e — (no hay cambios de UI)
+- Decisiones: D6, D8 y D15 (dominio) confirmadas; detalle y costos en `DECISIONES.md`.
+- Para pasos siguientes:
+  - 04a: las candidatas de Fenicio no tienen JSON-LD (microdata); `extractProduct` hoy solo lee JSON-LD, así que con `live` el worker todavía no devuelve productos. `CandidateUrl` trae `title`, `source` y `platform` para elegir extractor. Descartar páginas de categoría y 404.
+  - 04a/04b: `HttpProductFetcher` ya usa `PoliteHttpClient` (robots, UA, tope de tamaño); falta lo específico de producto (content-type, límites, redirects entre dominios).
+  - 05: el ranking tiene que pesar el color: los adaptadores traen el producto pertinente aunque sea de otro color.
+  - 06: el job tiene que armar las queries con `buildShoppingQueries` (audience con `audienceForProfile`) y registrar el costo de descubrimiento (`onCost`, ~USD 0.01 por prenda) en `ai_usage` o similar.
+  - 09: `strict_max_price` ya existe en la query.
+- Commit: `feat(asesoria-shopping): paso 03 — queries desde el LookSpec y búsqueda real`

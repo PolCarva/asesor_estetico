@@ -48,7 +48,7 @@ export class MockSearchProvider implements SearchProvider {
 
   async search(_query?: ShoppingQuery): Promise<CandidateUrl[]> {
     // Devuelve todo el catálogo: filtrar y ordenar es trabajo del ranker.
-    return this.catalog.map((p) => ({ url: p.url, store: p.store }));
+    return this.catalog.map((p) => ({ url: p.url, store: p.store, source: "mock" }));
   }
 }
 

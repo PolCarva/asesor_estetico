@@ -49,9 +49,20 @@ export const WorkerEnvSchema = z
     OPENROUTER_TEXT_MODEL: z.string().min(1).default(DEFAULT_OPENROUTER_TEXT_MODEL),
     OPENROUTER_IMAGE_MODEL: z.string().min(1).default(DEFAULT_OPENROUTER_IMAGE_MODEL),
     AI_IMAGE_QUALITY: z.enum(["low", "medium", "high"]).default("medium"),
+    /**
+     * live (default): tiendas reales. mock: catálogo ficticio, solo para tests y E2E.
+     * El default es live a propósito: un worker sin la variable nunca sirve productos falsos.
+     */
+    SHOPPING_PROVIDER: z.enum(["mock", "live"]).default("live"),
+    /** Contacto (URL o email) que se agrega al user agent del bot de shopping. */
+    SHOPPING_BOT_CONTACT: z.string().min(3).max(120).optional(),
   })
   .refine((env) => env.AI_PROVIDER !== "openrouter" || Boolean(env.OPENROUTER_API_KEY), {
     path: ["OPENROUTER_API_KEY"],
     message: "Requerida con AI_PROVIDER=openrouter",
+  })
+  .refine((env) => env.NODE_ENV !== "production" || env.SHOPPING_PROVIDER !== "mock", {
+    path: ["SHOPPING_PROVIDER"],
+    message: "mock no está permitido en producción",
   });
 export type WorkerEnv = z.infer<typeof WorkerEnvSchema>;

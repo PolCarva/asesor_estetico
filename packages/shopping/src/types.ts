@@ -4,6 +4,11 @@ import type { Product, ShoppingQuery, Store } from "@asesor/shared";
 export interface CandidateUrl {
   url: string;
   store: Store;
+  /** Título que mostró la tienda o el buscador (solo para depurar y filtrar). */
+  title?: string | null;
+  /** De dónde salió: `platform:fenicio`, `sitemap`, `discovery`, `mock`… */
+  source?: string;
+  platform?: string | null;
 }
 
 /** Busca URLs de producto en tiendas para una prenda. */
