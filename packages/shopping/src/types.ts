@@ -1,4 +1,10 @@
-import type { Product, ShoppingQuery, Store } from "@asesor/shared";
+import type {
+  Product,
+  ShoppingAudience,
+  ShoppingQuery,
+  ShoppingStats,
+  Store,
+} from "@asesor/shared";
 
 /** URL candidata devuelta por un buscador (antes de visitar la página). */
 export interface CandidateUrl {
@@ -102,9 +108,54 @@ export type RawField =
     >
   | "variants";
 
-export interface ShoppingCache {
-  get<T>(key: string): Promise<T | null>;
-  set<T>(key: string, value: T, ttlMs: number): Promise<void>;
+/**
+ * Lo que identifica un pool de búsqueda: la prenda y dónde se busca. Sin talle, precio
+ * máximo, límite ni nada del usuario: el mismo pool sirve para cualquier pedido.
+ */
+export interface PoolQuery {
+  /** Versión del pipeline: subirla invalida los pools viejos (`POOL_VERSION`). */
+  v: number;
+  country_code: string;
+  audience: ShoppingAudience | null;
+  search_terms: string[];
+  garment: {
+    category: string;
+    description: string;
+    color: { name: string; hex: string };
+    fit: string | null;
+    material: string | null;
+    pattern: string | null;
+  };
+}
+
+/** Pool cacheado: todos los productos validados de una búsqueda, sin ranking. */
+export interface CachedPool {
+  products: Product[];
+  stats: ShoppingStats;
+  /** Cuándo se hizo la búsqueda en vivo. */
+  cachedAt: string;
+}
+
+/** Producto revalidado por frescura: solo `verified` cuenta como verificación nueva. */
+export interface RefreshedProduct {
+  product: Product;
+  verified: boolean;
+}
+
+/**
+ * Cache de búsquedas por pool (24 h). En el worker es Postgres (`@asesor/db`,
+ * `createPostgresSearchCache`); en tests y desarrollo, memoria (`createMemorySearchCache`).
+ */
+export interface SearchCache {
+  /** El pool vigente para la clave, o null si no hay o venció. */
+  getPool(key: string): Promise<CachedPool | null>;
+  savePool(
+    key: string,
+    entry: { query: PoolQuery; products: Product[]; stats: ShoppingStats },
+    ttlMs: number,
+  ): Promise<void>;
+  /** Guarda productos revalidados porque estaban viejos (más de 8 h). */
+  updateProducts?(products: RefreshedProduct[]): Promise<void>;
 }
 
 export type { Product };

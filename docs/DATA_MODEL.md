@@ -195,26 +195,27 @@ erDiagram
 
 ## Tablas
 
-| Tabla              | Propósito                                                            | Escribe                                |
-| ------------------ | -------------------------------------------------------------------- | -------------------------------------- |
-| `profiles`         | Perfil de la app, 1:1 con `auth.users`                               | Trigger + usuario (columnas limitadas) |
-| `style_profiles`   | Versiones del StyleProfile (jsonb); una activa por usuario           | Worker                                 |
-| `style_advice`     | Asesoría detallada (Premium) de cada StyleProfile, 1:1               | Worker                                 |
-| `user_photos`      | Metadata de fotos; el archivo está en Storage. Una por tipo          | Usuario (insert/delete)                |
-| `looks`            | 3 looks por StyleProfile (`position` 1..3) con `spec_json`           | Worker                                 |
-| `products`         | Catálogo global normalizado de tiendas externas                      | Worker / servidor                      |
-| `product_variants` | Talles/colores con stock propio                                      | Worker / servidor                      |
-| `look_products`    | Ranking de productos por prenda (`garment_slot`) de un look          | Worker                                 |
-| `favorites`        | Looks o productos guardados (exactamente uno)                        | Usuario                                |
-| `carts`            | Un carrito externo por usuario                                       | Usuario (Premium)                      |
-| `cart_items`       | Productos del carrito; el precio lo fija un trigger desde `products` | Usuario (Premium)                      |
-| `subscriptions`    | Estado del plan Premium por proveedor                                | Servidor (tras validar el pago)        |
-| `payment_events`   | Webhooks recibidos; `unique(provider, event_id)` = idempotencia      | Servidor                               |
-| `chat_threads`     | Conversaciones con el asesor                                         | Usuario (Premium)                      |
-| `chat_messages`    | Mensajes; el usuario solo puede escribir `role = 'user'`             | Usuario / servidor                     |
-| `jobs`             | Cola de trabajos                                                     | Solo service role                      |
-| `ai_usage`         | Costo y uso de cada operación de IA                                  | Solo service role                      |
-| `analytics_events` | Eventos de producto                                                  | Solo service role                      |
+| Tabla                   | Propósito                                                                      | Escribe                                |
+| ----------------------- | ------------------------------------------------------------------------------ | -------------------------------------- |
+| `profiles`              | Perfil de la app, 1:1 con `auth.users`                                         | Trigger + usuario (columnas limitadas) |
+| `style_profiles`        | Versiones del StyleProfile (jsonb); una activa por usuario                     | Worker                                 |
+| `style_advice`          | Asesoría detallada (Premium) de cada StyleProfile, 1:1                         | Worker                                 |
+| `user_photos`           | Metadata de fotos; el archivo está en Storage. Una por tipo                    | Usuario (insert/delete)                |
+| `looks`                 | 3 looks por StyleProfile (`position` 1..3) con `spec_json`                     | Worker                                 |
+| `products`              | Catálogo global normalizado de tiendas externas                                | Worker / servidor                      |
+| `product_variants`      | Talles/colores con stock propio                                                | Worker / servidor                      |
+| `look_products`         | Ranking de productos por prenda (`garment_slot`) de un look, con `size_status` | Worker (`replace_look_products`)       |
+| `shopping_search_cache` | Pools de búsqueda (24 h): uuids de productos validados de una prenda           | Solo service role                      |
+| `favorites`             | Looks o productos guardados (exactamente uno)                                  | Usuario                                |
+| `carts`                 | Un carrito externo por usuario                                                 | Usuario (Premium)                      |
+| `cart_items`            | Productos del carrito; el precio lo fija un trigger desde `products`           | Usuario (Premium)                      |
+| `subscriptions`         | Estado del plan Premium por proveedor                                          | Servidor (tras validar el pago)        |
+| `payment_events`        | Webhooks recibidos; `unique(provider, event_id)` = idempotencia                | Servidor                               |
+| `chat_threads`          | Conversaciones con el asesor                                                   | Usuario (Premium)                      |
+| `chat_messages`         | Mensajes; el usuario solo puede escribir `role = 'user'`                       | Usuario / servidor                     |
+| `jobs`                  | Cola de trabajos                                                               | Solo service role                      |
+| `ai_usage`              | Costo y uso de cada operación de IA                                            | Solo service role                      |
+| `analytics_events`      | Eventos de producto                                                            | Solo service role                      |
 
 ## StyleProfile guardado
 
@@ -234,6 +235,9 @@ El análisis (`StyleProfile` v3, ver `AI_PIPELINE.md`) se guarda partido para qu
 - **Local físico**: ubicación y contacto (`in_store`: dirección, localidad, teléfono, link) van en `data_json`, sin columnas nuevas.
 - **Variantes** (`product_variants`): `size` es el talle normalizado (`M`, `42`, `US 9`, `ÚNICO`). La etiqueta de la tienda (`size_label`) queda en `data_json`.
 - **Carrito**: `set_cart_item_price_snapshot()` rechaza un producto sin precio con un error explícito (`22023`): un local físico no se compra online.
+- **Identidad y cache** (migración `20261001000200_shopping_cache.sql`, paso 05): el upsert es por `url` (canónica). El único `(store_domain, external_id)` pasó a ser un índice común, porque un handle renombrado o un id externo que cambia entre corridas chocaba con el único de `url`. `products` y `product_variants` son la cache persistente de productos (frescura de 8 h con `last_fetched_at`, que solo avanza con una verificación exitosa).
+- **Pools de búsqueda** (`shopping_search_cache`): `key` (sha256 de la prenda, sin talle, precio máximo, límite ni datos del usuario), `query_json`, `product_ids uuid[]`, `stats`, `expires_at` (24 h, con índice para purgar). RLS habilitada y sin grants para `anon` ni `authenticated`: solo el worker.
+- **Resultados por look** (`look_products`): `size_status` (`AVAILABLE`, `OUT_OF_STOCK`, `NOT_OFFERED`, `UNVERIFIED`, `NOT_REQUESTED`, `NOT_APPLICABLE`; null en filas anteriores) para mostrar "talle sin verificar" con honestidad. El ranking de una prenda se reemplaza entero y de forma atómica con `replace_look_products`. Lo lee solo el dueño Premium.
 
 ## Índices principales
 
@@ -268,17 +272,18 @@ Rutas: `<user_id>/<...>`. Las políticas comparan la primera carpeta con `auth.u
 
 ## Funciones SQL
 
-| Función                          | Quién la ejecuta | Qué hace                                                                      |
-| -------------------------------- | ---------------- | ----------------------------------------------------------------------------- |
-| `handle_new_user()`              | Trigger          | Crea `profiles` al registrarse                                                |
-| `set_cart_item_price_snapshot()` | Trigger          | Fija precio y moneda del ítem desde el catálogo; rechaza productos sin precio |
-| `current_user_is_premium()`      | RLS              | Regla Premium                                                                 |
-| `current_user_is_admin()`        | RLS / servidor   | Rol admin                                                                     |
-| `can_read_generated_look(name)`  | Política Storage | Imagen generada visible según look y plan                                     |
-| `enqueue_job(...)`               | service_role     | Encola (idempotente con `idempotency_key`)                                    |
-| `claim_next_job(...)`            | service_role     | Toma el próximo job con `FOR UPDATE SKIP LOCKED`                              |
-| `complete_job(...)`              | service_role     | Marca COMPLETED (solo el worker que lo tomó)                                  |
-| `fail_job(...)`                  | service_role     | Reintenta con delay o marca FAILED                                            |
-| `retry_job(id)`                  | service_role     | Reintento manual de un FAILED                                                 |
-| `admin_overview_metrics()`       | service_role     | Métricas del overview de `/admin`                                             |
-| `admin_event_counts(days)`       | service_role     | Conteo de eventos para `/admin/analytics`                                     |
+| Función                                    | Quién la ejecuta | Qué hace                                                                      |
+| ------------------------------------------ | ---------------- | ----------------------------------------------------------------------------- |
+| `handle_new_user()`                        | Trigger          | Crea `profiles` al registrarse                                                |
+| `set_cart_item_price_snapshot()`           | Trigger          | Fija precio y moneda del ítem desde el catálogo; rechaza productos sin precio |
+| `replace_look_products(look, slot, items)` | service_role     | Reemplaza el ranking de una prenda de un look en una transacción              |
+| `current_user_is_premium()`                | RLS              | Regla Premium                                                                 |
+| `current_user_is_admin()`                  | RLS / servidor   | Rol admin                                                                     |
+| `can_read_generated_look(name)`            | Política Storage | Imagen generada visible según look y plan                                     |
+| `enqueue_job(...)`                         | service_role     | Encola (idempotente con `idempotency_key`)                                    |
+| `claim_next_job(...)`                      | service_role     | Toma el próximo job con `FOR UPDATE SKIP LOCKED`                              |
+| `complete_job(...)`                        | service_role     | Marca COMPLETED (solo el worker que lo tomó)                                  |
+| `fail_job(...)`                            | service_role     | Reintenta con delay o marca FAILED                                            |
+| `retry_job(id)`                            | service_role     | Reintento manual de un FAILED                                                 |
+| `admin_overview_metrics()`                 | service_role     | Métricas del overview de `/admin`                                             |
+| `admin_event_counts(days)`                 | service_role     | Conteo de eventos para `/admin/analytics`                                     |

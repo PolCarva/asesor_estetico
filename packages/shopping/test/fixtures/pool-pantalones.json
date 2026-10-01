@@ -1,0 +1,1003 @@
+{
+  "_fuente": "Productos reales (pipeline del paso 04b, 2026-10-01, sin descubrimiento): Legacy, Indian, Jack & Jones, Stadium, Zooko, BAS, Hering, Decathlon. Descripciones recortadas.",
+  "products": [
+    {
+      "id": "https://legacy.com.uy/catalogo/pantalon-skinny-con-spandex-gris_LL05799_GRIS",
+      "store": {
+        "name": "Legacy",
+        "domain": "legacy.com.uy"
+      },
+      "url": "https://legacy.com.uy/catalogo/pantalon-skinny-con-spandex-gris_LL05799_GRIS",
+      "title": "PANTALÓN SKINNY CON SPANDEX - Gris",
+      "brand": "Legacy",
+      "category": "PANTS",
+      "description": "Pantalón con spandex. El tejido flexible ofrece comodidad y acompaña la silueta, ideal para usar con camisas, polos o remeras. El modelo mide 1,85 m y usa talle 42.",
+      "image_url": "https://f.fcdn.app/imgs/7d557f/legacy.com.uy/leg/952a/original/catalogo/LL05799_GRIS_1/1920-1200/pantalon-skinny-con-spandex-gris.jpg",
+      "price": {
+        "amount": 2490,
+        "currency": "UYU"
+      },
+      "colors": ["gris"],
+      "materials": ["elastano"],
+      "fit": "skinny",
+      "availability": "IN_STOCK",
+      "variants": [
+        {
+          "id": "1:LL05799:GRIS:36:1",
+          "sku": "1:LL05799:GRIS:36:1",
+          "size": "36",
+          "size_label": "36",
+          "color": null,
+          "availability": "IN_STOCK",
+          "price": null
+        },
+        {
+          "id": "1:LL05799:GRIS:38:1",
+          "sku": "1:LL05799:GRIS:38:1",
+          "size": "38",
+          "size_label": "38",
+          "color": null,
+          "availability": "IN_STOCK",
+          "price": null
+        },
+        {
+          "id": "1:LL05799:GRIS:40:1",
+          "sku": "1:LL05799:GRIS:40:1",
+          "size": "40",
+          "size_label": "40",
+          "color": null,
+          "availability": "IN_STOCK",
+          "price": null
+        },
+        {
+          "id": "1:LL05799:GRIS:42:1",
+          "sku": "1:LL05799:GRIS:42:1",
+          "size": "42",
+          "size_label": "42",
+          "color": null,
+          "availability": "IN_STOCK",
+          "price": null
+        },
+        {
+          "id": "1:LL05799:GRIS:44:1",
+          "sku": "1:LL05799:GRIS:44:1",
+          "size": "44",
+          "size_label": "44",
+          "color": null,
+          "availability": "IN_STOCK",
+          "price": null
+        },
+        {
+          "id": "1:LL05799:GRIS:46:1",
+          "sku": "1:LL05799:GRIS:46:1",
+          "size": "46",
+          "size_label": "46",
+          "color": null,
+          "availability": "IN_STOCK",
+          "price": null
+        },
+        {
+          "id": "1:LL05799:GRIS:48:1",
+          "sku": "1:LL05799:GRIS:48:1",
+          "size": "48",
+          "size_label": "48",
+          "color": null,
+          "availability": "IN_STOCK",
+          "price": null
+        },
+        {
+          "id": "1:LL05799:GRIS:50:1",
+          "sku": "1:LL05799:GRIS:50:1",
+          "size": "50",
+          "size_label": "50",
+          "color": null,
+          "availability": "IN_STOCK",
+          "price": null
+        },
+        {
+          "id": "1:LL05799:GRIS:54:1",
+          "sku": "1:LL05799:GRIS:54:1",
+          "size": "54",
+          "size_label": "54",
+          "color": null,
+          "availability": "IN_STOCK",
+          "price": null
+        },
+        {
+          "id": "1:LL05799:GRIS:56:1",
+          "sku": "1:LL05799:GRIS:56:1",
+          "size": "56",
+          "size_label": "56",
+          "color": null,
+          "availability": "IN_STOCK",
+          "price": null
+        },
+        {
+          "id": "1:LL05799:GRIS:60:1",
+          "sku": "1:LL05799:GRIS:60:1",
+          "size": "60",
+          "size_label": "60",
+          "color": null,
+          "availability": "IN_STOCK",
+          "price": null
+        }
+      ],
+      "in_store": null,
+      "fetched_at": "2026-10-01T16:41:18.429Z"
+    },
+    {
+      "id": "https://jackjones.com.uy/products/12283009_4839419",
+      "store": {
+        "name": "Jack & Jones",
+        "domain": "jackjones.com.uy"
+      },
+      "url": "https://jackjones.com.uy/products/12283009_4839419",
+      "title": "PANTALÓN ANCHO TIRO ALTO HUNTER - Charcoal Art",
+      "brand": "JACK & JONES",
+      "category": "PANTS",
+      "description": "Pantalón de tiro alto y fit wide leg. Un diseño moderno y versátil para el día a día, confeccionado en corderoy suave que aporta textura y comodidad. Incluye bolsillos delanteros y traseros y cierre frontal con cremallera, ofreciendo un estilo relajado con un acabado clásico. Composición: 100% Algod",
+      "image_url": "https://jackjones.com.uy/cdn/shop/files/lk440BMZrACa5EAQRBv5hw9Ak0v_preview.jpg?v=1781587055&width=1920",
+      "price": {
+        "amount": 999,
+        "currency": "UYU"
+      },
+      "colors": ["charcoal art"],
+      "materials": ["algodón", "pana"],
+      "fit": "ancho",
+      "availability": "IN_STOCK",
+      "variants": [
+        {
+          "id": "54960004006180",
+          "sku": "5715729603979",
+          "size": "32-30",
+          "size_label": "32-30",
+          "color": "charcoal art",
+          "availability": "IN_STOCK",
+          "price": {
+            "amount": 999,
+            "currency": "UYU"
+          }
+        },
+        {
+          "id": "54960004071716",
+          "sku": "5715729603122",
+          "size": "38-32",
+          "size_label": "38-32",
+          "color": "charcoal art",
+          "availability": "IN_STOCK",
+          "price": {
+            "amount": 999,
+            "currency": "UYU"
+          }
+        },
+        {
+          "id": "54960004104484",
+          "sku": "5715729603115",
+          "size": "31-32",
+          "size_label": "31-32",
+          "color": "charcoal art",
+          "availability": "IN_STOCK",
+          "price": {
+            "amount": 999,
+            "currency": "UYU"
+          }
+        },
+        {
+          "id": "54960004137252",
+          "sku": "5715729603108",
+          "size": "28-32",
+          "size_label": "28-32",
+          "color": "charcoal art",
+          "availability": "IN_STOCK",
+          "price": {
+            "amount": 999,
+            "currency": "UYU"
+          }
+        },
+        {
+          "id": "54960004170020",
+          "sku": "5715724136533",
+          "size": "33-32",
+          "size_label": "33-32",
+          "color": "charcoal art",
+          "availability": "IN_STOCK",
+          "price": {
+            "amount": 999,
+            "currency": "UYU"
+          }
+        },
+        {
+          "id": "54960004202788",
+          "sku": "5715729603962",
+          "size": "30-30",
+          "size_label": "30-30",
+          "color": "charcoal art",
+          "availability": "IN_STOCK",
+          "price": {
+            "amount": 999,
+            "currency": "UYU"
+          }
+        },
+        {
+          "id": "54960004235556",
+          "sku": "5715729603917",
+          "size": "34-30",
+          "size_label": "34-30",
+          "color": "charcoal art",
+          "availability": "IN_STOCK",
+          "price": {
+            "amount": 999,
+            "currency": "UYU"
+          }
+        },
+        {
+          "id": "54960004268324",
+          "sku": "5715729603900",
+          "size": "33-30",
+          "size_label": "33-30",
+          "color": "charcoal art",
+          "availability": "IN_STOCK",
+          "price": {
+            "amount": 999,
+            "currency": "UYU"
+          }
+        },
+        {
+          "id": "54960004301092",
+          "sku": "5715729603894",
+          "size": "31-30",
+          "size_label": "31-30",
+          "color": "charcoal art",
+          "availability": "IN_STOCK",
+          "price": {
+            "amount": 999,
+            "currency": "UYU"
+          }
+        },
+        {
+          "id": "54960004333860",
+          "sku": "5715729603221",
+          "size": "34-32",
+          "size_label": "34-32",
+          "color": "charcoal art",
+          "availability": "IN_STOCK",
+          "price": {
+            "amount": 999,
+            "currency": "UYU"
+          }
+        },
+        {
+          "id": "54960004366628",
+          "sku": "5715729603207",
+          "size": "36-32",
+          "size_label": "36-32",
+          "color": "charcoal art",
+          "availability": "IN_STOCK",
+          "price": {
+            "amount": 999,
+            "currency": "UYU"
+          }
+        },
+        {
+          "id": "54960004399396",
+          "sku": "5715729603191",
+          "size": "32-32",
+          "size_label": "32-32",
+          "color": "charcoal art",
+          "availability": "IN_STOCK",
+          "price": {
+            "amount": 999,
+            "currency": "UYU"
+          }
+        },
+        {
+          "id": "54960004432164",
+          "sku": "5715729603184",
+          "size": "30-32",
+          "size_label": "30-32",
+          "color": "charcoal art",
+          "availability": "IN_STOCK",
+          "price": {
+            "amount": 999,
+            "currency": "UYU"
+          }
+        },
+        {
+          "id": "54960004464932",
+          "sku": "5715729603177",
+          "size": "29-32",
+          "size_label": "29-32",
+          "color": "charcoal art",
+          "availability": "IN_STOCK",
+          "price": {
+            "amount": 999,
+            "currency": "UYU"
+          }
+        }
+      ],
+      "in_store": null,
+      "fetched_at": "2026-10-01T16:41:18.861Z"
+    },
+    {
+      "id": "https://jackjones.com.uy/products/12216976_4296953",
+      "store": {
+        "name": "Jack & Jones",
+        "domain": "jackjones.com.uy"
+      },
+      "url": "https://jackjones.com.uy/products/12216976_4296953",
+      "title": "PANTALÓN LOOSE TIRO ALTO CHRIS - Magical Forest",
+      "brand": "JACK & JONES",
+      "category": "PANTS",
+      "description": "Pantalones 5 pockets de algodón Better Cotton con cierre de cremallera. Corte suelto y acabado ecru sin teñir. Composición: 100% Algodón – Better Cotton",
+      "image_url": "https://jackjones.com.uy/cdn/shop/files/qqw1eMeX8EFJ6_002.png?v=1737457058&width=1920",
+      "price": {
+        "amount": 1299,
+        "currency": "UYU"
+      },
+      "colors": ["magical forest"],
+      "materials": ["algodón"],
+      "fit": "relajado",
+      "availability": "IN_STOCK",
+      "variants": [
+        {
+          "id": "50467458089252",
+          "sku": "5715431114022",
+          "size": "30-30",
+          "size_label": "30-30",
+          "color": "magical forest",
+          "availability": "OUT_OF_STOCK",
+          "price": {
+            "amount": 1299,
+            "currency": "UYU"
+          }
+        },
+        {
+          "id": "50468468162852",
+          "sku": "5715431114060",
+          "size": "34-30",
+          "size_label": "34-30",
+          "color": "magical forest",
+          "availability": "OUT_OF_STOCK",
+          "price": {
+            "amount": 1299,
+            "currency": "UYU"
+          }
+        },
+        {
+          "id": "50469931942180",
+          "sku": "5715431114428",
+          "size": "28-30",
+          "size_label": "28-30",
+          "color": "magical forest",
+          "availability": "IN_STOCK",
+          "price": {
+            "amount": 1299,
+            "currency": "UYU"
+          }
+        },
+        {
+          "id": "50474166583588",
+          "sku": "5715431117245",
+          "size": "38-30",
+          "size_label": "38-30",
+          "color": "magical forest",
+          "availability": "IN_STOCK",
+          "price": {
+            "amount": 1299,
+            "currency": "UYU"
+          }
+        },
+        {
+          "id": "50471368622372",
+          "sku": "5715431117337",
+          "size": "42-30",
+          "size_label": "42-30",
+          "color": "magical forest",
+          "availability": "IN_STOCK",
+          "price": {
+            "amount": 1299,
+            "currency": "UYU"
+          }
+        },
+        {
+          "id": "50280754610468",
+          "sku": "5715431117405",
+          "size": "40-32",
+          "size_label": "40-32",
+          "color": "magical forest",
+          "availability": "IN_STOCK",
+          "price": {
+            "amount": 1299,
+            "currency": "UYU"
+          }
+        },
+        {
+          "id": "50280754577700",
+          "sku": "5715431117429",
+          "size": "42-32",
+          "size_label": "42-32",
+          "color": "magical forest",
+          "availability": "IN_STOCK",
+          "price": {
+            "amount": 1299,
+            "currency": "UYU"
+          }
+        },
+        {
+          "id": "50280754741540",
+          "sku": "5715422669852",
+          "size": "32-32",
+          "size_label": "32-32",
+          "color": "magical forest",
+          "availability": "IN_STOCK",
+          "price": {
+            "amount": 1299,
+            "currency": "UYU"
+          }
+        },
+        {
+          "id": "50280754807076",
+          "sku": "5715431113735",
+          "size": "28-32",
+          "size_label": "28-32",
+          "color": "magical forest",
+          "availability": "IN_STOCK",
+          "price": {
+            "amount": 1299,
+            "currency": "UYU"
+          }
+        },
+        {
+          "id": "50280754774308",
+          "sku": "5715431113759",
+          "size": "30-32",
+          "size_label": "30-32",
+          "color": "magical forest",
+          "availability": "OUT_OF_STOCK",
+          "price": {
+            "amount": 1299,
+            "currency": "UYU"
+          }
+        },
+        {
+          "id": "50280754708772",
+          "sku": "5715431113773",
+          "size": "34-32",
+          "size_label": "34-32",
+          "color": "magical forest",
+          "availability": "IN_STOCK",
+          "price": {
+            "amount": 1299,
+            "currency": "UYU"
+          }
+        },
+        {
+          "id": "50280754676004",
+          "sku": "5715431113780",
+          "size": "36-32",
+          "size_label": "36-32",
+          "color": "magical forest",
+          "availability": "OUT_OF_STOCK",
+          "price": {
+            "amount": 1299,
+            "currency": "UYU"
+          }
+        },
+        {
+          "id": "50280754643236",
+          "sku": "5715431113940",
+          "size": "38-32",
+          "size_label": "38-32",
+          "color": "magical forest",
+          "availability": "IN_STOCK",
+          "price": {
+            "amount": 1299,
+            "currency": "UYU"
+          }
+        }
+      ],
+      "in_store": null,
+      "fetched_at": "2026-10-01T16:41:22.109Z"
+    },
+    {
+      "id": "https://www.hering.com.uy/catalogo/pantalon-basico-sastrero-beige_K0VU_1ASI",
+      "store": {
+        "name": "Hering",
+        "domain": "hering.com.uy"
+      },
+      "url": "https://www.hering.com.uy/catalogo/pantalon-basico-sastrero-beige_K0VU_1ASI",
+      "title": "PANTALÓN BÁSICO SASTRERO - BEIGE",
+      "brand": "Hering",
+      "category": "PANTS",
+      "description": "Femenino",
+      "image_url": "https://f.fcdn.app/imgs/23e8e5/www.hering.com.uy/her/12e9/original/catalogo/K0VU-1ASI-1/1920-1200/pantalon-basico-sastrero-beige.jpg",
+      "price": {
+        "amount": 1799,
+        "currency": "UYU"
+      },
+      "colors": ["beige"],
+      "materials": [],
+      "fit": null,
+      "availability": "IN_STOCK",
+      "variants": [
+        {
+          "id": "1:K0VU:1ASI:36:1",
+          "sku": "1:K0VU:1ASI:36:1",
+          "size": "36",
+          "size_label": "36",
+          "color": null,
+          "availability": "IN_STOCK",
+          "price": null
+        },
+        {
+          "id": "1:K0VU:1ASI:38:1",
+          "sku": "1:K0VU:1ASI:38:1",
+          "size": "38",
+          "size_label": "38",
+          "color": null,
+          "availability": "IN_STOCK",
+          "price": null
+        },
+        {
+          "id": "1:K0VU:1ASI:40:1",
+          "sku": "1:K0VU:1ASI:40:1",
+          "size": "40",
+          "size_label": "40",
+          "color": null,
+          "availability": "IN_STOCK",
+          "price": null
+        },
+        {
+          "id": "1:K0VU:1ASI:42:1",
+          "sku": "1:K0VU:1ASI:42:1",
+          "size": "42",
+          "size_label": "42",
+          "color": null,
+          "availability": "IN_STOCK",
+          "price": null
+        },
+        {
+          "id": "1:K0VU:1ASI:44:1",
+          "sku": "1:K0VU:1ASI:44:1",
+          "size": "44",
+          "size_label": "44",
+          "color": null,
+          "availability": "IN_STOCK",
+          "price": null
+        },
+        {
+          "id": "1:K0VU:1ASI:46:1",
+          "sku": "1:K0VU:1ASI:46:1",
+          "size": "46",
+          "size_label": "46",
+          "color": null,
+          "availability": "IN_STOCK",
+          "price": null
+        }
+      ],
+      "in_store": null,
+      "fetched_at": "2026-10-01T16:41:17.976Z"
+    },
+    {
+      "id": "https://www.indian.com.uy/catalogo/pantalon-ladel-gris_40342124_209",
+      "store": {
+        "name": "Indian",
+        "domain": "indian.com.uy"
+      },
+      "url": "https://www.indian.com.uy/catalogo/pantalon-ladel-gris_40342124_209",
+      "title": "Pantalon Ladel - Gris",
+      "brand": "MAXIMO",
+      "category": "PANTS",
+      "description": "Pantalon lino, con bolsillo, slim fit y de calce bajo",
+      "image_url": "https://f.fcdn.app/imgs/f6ec04/www.indian.com.uy/indiuy/6669/original/catalogo/40342124209_0/1920-1200/pantalon-ladel-gris.jpg",
+      "price": {
+        "amount": 499,
+        "currency": "UYU"
+      },
+      "colors": ["gris"],
+      "materials": ["lino"],
+      "fit": "slim",
+      "availability": "IN_STOCK",
+      "variants": [
+        {
+          "id": "1:40342124:209:078:1",
+          "sku": "1:40342124:209:078:1",
+          "size": "XL",
+          "size_label": "XL",
+          "color": null,
+          "availability": "IN_STOCK",
+          "price": null
+        }
+      ],
+      "in_store": null,
+      "fetched_at": "2026-10-01T16:41:18.126Z"
+    },
+    {
+      "id": "https://www.stadium.com.uy/productos/pantalon-de-hombre-topper-slim-gris_001.62356_0005",
+      "store": {
+        "name": "Stadium",
+        "domain": "stadium.com.uy"
+      },
+      "url": "https://www.stadium.com.uy/productos/pantalon-de-hombre-topper-slim-gris_001.62356_0005",
+      "title": "Pantalón de Hombre Topper Slim - Gris",
+      "brand": "Topper",
+      "category": "PANTS",
+      "description": "Pantalón de Hombre Topper Slim - Gris $ 1.014 (001.623560005)",
+      "image_url": "https://f.fcdn.app/imgs/728056/www.stadium.com.uy/std/1c99/original/catalogo/001.623560005/1920-1200/pantalon-de-hombre-topper-slim-gris.jpg",
+      "price": {
+        "amount": 1014,
+        "currency": "UYU"
+      },
+      "colors": ["gris"],
+      "materials": [],
+      "fit": "slim",
+      "availability": "IN_STOCK",
+      "variants": [
+        {
+          "id": "1:001.62356:0005:S:1",
+          "sku": "1:001.62356:0005:S:1",
+          "size": "S",
+          "size_label": "S",
+          "color": null,
+          "availability": "IN_STOCK",
+          "price": null
+        }
+      ],
+      "in_store": null,
+      "fetched_at": "2026-10-01T16:41:20.450Z"
+    },
+    {
+      "id": "15008703349106",
+      "store": {
+        "name": "Decathlon",
+        "domain": "decathlon.com.uy"
+      },
+      "url": "https://decathlon.com.uy/products/pantalon-de-montana-y-trekking-hombre-quechua-nh100-1",
+      "title": "PANTALÓN DE SENDERISMO HOMBRE NH100",
+      "brand": "QUECHUA",
+      "category": "PANTS",
+      "description": "Nuestros diseñadores senderistas desarrollaron este pantalón NH100 para la práctica del senderismo en iniciación, en planicie, bosque o litoral. Un pantalón para todo el año.Por su materia, el pantalón es muy agradable de llevar en entretiempo o en verano, cuando no hace demasiado calor. Estos panta",
+      "image_url": "https://decathlon.com.uy/cdn/shop/files/pic_05a340fe-ecf0-40fc-ac1f-e2501b22dbb6.jpg?v=1790839699&width=1920",
+      "price": {
+        "amount": 1290,
+        "currency": "UYU"
+      },
+      "colors": ["gris", "caqui"],
+      "materials": ["algodón", "elastano"],
+      "fit": "regular",
+      "availability": "IN_STOCK",
+      "variants": [
+        {
+          "id": "61679566717298",
+          "sku": "4866415",
+          "size": "38 (L33)",
+          "size_label": "38 (L33)",
+          "color": "gris",
+          "availability": "IN_STOCK",
+          "price": {
+            "amount": 1290,
+            "currency": "UYU"
+          }
+        },
+        {
+          "id": "61679566684530",
+          "sku": "4866433",
+          "size": "38 (L33)",
+          "size_label": "38 (L33)",
+          "color": "caqui",
+          "availability": "OUT_OF_STOCK",
+          "price": {
+            "amount": 1290,
+            "currency": "UYU"
+          }
+        },
+        {
+          "id": "61679566782834",
+          "sku": "4866417",
+          "size": "40 (L33)",
+          "size_label": "40 (L33)",
+          "color": "gris",
+          "availability": "IN_STOCK",
+          "price": {
+            "amount": 1290,
+            "currency": "UYU"
+          }
+        },
+        {
+          "id": "61679566750066",
+          "sku": "4866435",
+          "size": "40 (L33)",
+          "size_label": "40 (L33)",
+          "color": "caqui",
+          "availability": "IN_STOCK",
+          "price": {
+            "amount": 1290,
+            "currency": "UYU"
+          }
+        },
+        {
+          "id": "61679566815602",
+          "sku": "4866419",
+          "size": "42 (L33)",
+          "size_label": "42 (L33)",
+          "color": "gris",
+          "availability": "IN_STOCK",
+          "price": {
+            "amount": 1290,
+            "currency": "UYU"
+          }
+        },
+        {
+          "id": "61679566848370",
+          "sku": "4866437",
+          "size": "42 (L33)",
+          "size_label": "42 (L33)",
+          "color": "caqui",
+          "availability": "IN_STOCK",
+          "price": {
+            "amount": 1290,
+            "currency": "UYU"
+          }
+        },
+        {
+          "id": "61679566881138",
+          "sku": "4866421",
+          "size": "44 (L34)",
+          "size_label": "44 (L34)",
+          "color": "gris",
+          "availability": "IN_STOCK",
+          "price": {
+            "amount": 1290,
+            "currency": "UYU"
+          }
+        },
+        {
+          "id": "61679566913906",
+          "sku": "4866439",
+          "size": "44 (L34)",
+          "size_label": "44 (L34)",
+          "color": "caqui",
+          "availability": "OUT_OF_STOCK",
+          "price": {
+            "amount": 1290,
+            "currency": "UYU"
+          }
+        },
+        {
+          "id": "61679566979442",
+          "sku": "4866441",
+          "size": "46 (L34)",
+          "size_label": "46 (L34)",
+          "color": "caqui",
+          "availability": "IN_STOCK",
+          "price": {
+            "amount": 1290,
+            "currency": "UYU"
+          }
+        },
+        {
+          "id": "61679566946674",
+          "sku": "4866423",
+          "size": "46 (L34)",
+          "size_label": "46 (L34)",
+          "color": "gris",
+          "availability": "IN_STOCK",
+          "price": {
+            "amount": 1290,
+            "currency": "UYU"
+          }
+        },
+        {
+          "id": "61679567044978",
+          "sku": "4866443",
+          "size": "48 (L34)",
+          "size_label": "48 (L34)",
+          "color": "caqui",
+          "availability": "IN_STOCK",
+          "price": {
+            "amount": 1290,
+            "currency": "UYU"
+          }
+        },
+        {
+          "id": "61679567012210",
+          "sku": "4866425",
+          "size": "48 (L34)",
+          "size_label": "48 (L34)",
+          "color": "gris",
+          "availability": "IN_STOCK",
+          "price": {
+            "amount": 1290,
+            "currency": "UYU"
+          }
+        },
+        {
+          "id": "61679567077746",
+          "sku": "4866427",
+          "size": "50 (L34)",
+          "size_label": "50 (L34)",
+          "color": "gris",
+          "availability": "IN_STOCK",
+          "price": {
+            "amount": 1290,
+            "currency": "UYU"
+          }
+        },
+        {
+          "id": "61679567110514",
+          "sku": "4866445",
+          "size": "50 (L34)",
+          "size_label": "50 (L34)",
+          "color": "caqui",
+          "availability": "IN_STOCK",
+          "price": {
+            "amount": 1290,
+            "currency": "UYU"
+          }
+        },
+        {
+          "id": "61679567143282",
+          "sku": "4866429",
+          "size": "52 (L34)",
+          "size_label": "52 (L34)",
+          "color": "gris",
+          "availability": "IN_STOCK",
+          "price": {
+            "amount": 1290,
+            "currency": "UYU"
+          }
+        },
+        {
+          "id": "61679567176050",
+          "sku": "4866447",
+          "size": "52 (L34)",
+          "size_label": "52 (L34)",
+          "color": "caqui",
+          "availability": "OUT_OF_STOCK",
+          "price": {
+            "amount": 1290,
+            "currency": "UYU"
+          }
+        },
+        {
+          "id": "61679567241586",
+          "sku": "4866431",
+          "size": "54 (L34)",
+          "size_label": "54 (L34)",
+          "color": "gris",
+          "availability": "IN_STOCK",
+          "price": {
+            "amount": 1290,
+            "currency": "UYU"
+          }
+        }
+      ],
+      "in_store": null,
+      "fetched_at": "2026-10-01T16:41:18.981Z"
+    },
+    {
+      "id": "https://legacy.com.uy/catalogo/pantalon-cargo-gris-oscuro_LL05918_GRISOSCURO",
+      "store": {
+        "name": "Legacy",
+        "domain": "legacy.com.uy"
+      },
+      "url": "https://legacy.com.uy/catalogo/pantalon-cargo-gris-oscuro_LL05918_GRISOSCURO",
+      "title": "PANTALÓN CARGO - Gris Oscuro",
+      "brand": "Legacy",
+      "category": "PANTS",
+      "description": "Pantalón cargo de algodón con elastano. Los bolsillos laterales aportan funcionalidad y el tejido flexible suma comodidad para el uso diario. El modelo mide 1,85 m y usa talle 42.",
+      "image_url": "https://f.fcdn.app/imgs/f281e3/legacy.com.uy/leg/4ef0/original/catalogo/LL05918_GRISOSCURO_1/1920-1200/pantalon-cargo-gris-oscuro.jpg",
+      "price": {
+        "amount": 2890,
+        "currency": "UYU"
+      },
+      "colors": ["gris"],
+      "materials": ["algodón", "elastano"],
+      "fit": null,
+      "availability": "IN_STOCK",
+      "variants": [
+        {
+          "id": "1:LL05918:GRISOSCURO:38:1",
+          "sku": "1:LL05918:GRISOSCURO:38:1",
+          "size": "38",
+          "size_label": "38",
+          "color": null,
+          "availability": "IN_STOCK",
+          "price": null
+        },
+        {
+          "id": "1:LL05918:GRISOSCURO:40:1",
+          "sku": "1:LL05918:GRISOSCURO:40:1",
+          "size": "40",
+          "size_label": "40",
+          "color": null,
+          "availability": "IN_STOCK",
+          "price": null
+        },
+        {
+          "id": "1:LL05918:GRISOSCURO:42:1",
+          "sku": "1:LL05918:GRISOSCURO:42:1",
+          "size": "42",
+          "size_label": "42",
+          "color": null,
+          "availability": "IN_STOCK",
+          "price": null
+        },
+        {
+          "id": "1:LL05918:GRISOSCURO:44:1",
+          "sku": "1:LL05918:GRISOSCURO:44:1",
+          "size": "44",
+          "size_label": "44",
+          "color": null,
+          "availability": "IN_STOCK",
+          "price": null
+        },
+        {
+          "id": "1:LL05918:GRISOSCURO:46:1",
+          "sku": "1:LL05918:GRISOSCURO:46:1",
+          "size": "46",
+          "size_label": "46",
+          "color": null,
+          "availability": "IN_STOCK",
+          "price": null
+        },
+        {
+          "id": "1:LL05918:GRISOSCURO:48:1",
+          "sku": "1:LL05918:GRISOSCURO:48:1",
+          "size": "48",
+          "size_label": "48",
+          "color": null,
+          "availability": "IN_STOCK",
+          "price": null
+        },
+        {
+          "id": "1:LL05918:GRISOSCURO:50:1",
+          "sku": "1:LL05918:GRISOSCURO:50:1",
+          "size": "50",
+          "size_label": "50",
+          "color": null,
+          "availability": "IN_STOCK",
+          "price": null
+        },
+        {
+          "id": "1:LL05918:GRISOSCURO:52:1",
+          "sku": "1:LL05918:GRISOSCURO:52:1",
+          "size": "52",
+          "size_label": "52",
+          "color": null,
+          "availability": "IN_STOCK",
+          "price": null
+        },
+        {
+          "id": "1:LL05918:GRISOSCURO:54:1",
+          "sku": "1:LL05918:GRISOSCURO:54:1",
+          "size": "54",
+          "size_label": "54",
+          "color": null,
+          "availability": "IN_STOCK",
+          "price": null
+        },
+        {
+          "id": "1:LL05918:GRISOSCURO:56:1",
+          "sku": "1:LL05918:GRISOSCURO:56:1",
+          "size": "56",
+          "size_label": "56",
+          "color": null,
+          "availability": "IN_STOCK",
+          "price": null
+        },
+        {
+          "id": "1:LL05918:GRISOSCURO:58:1",
+          "sku": "1:LL05918:GRISOSCURO:58:1",
+          "size": "58",
+          "size_label": "58",
+          "color": null,
+          "availability": "IN_STOCK",
+          "price": null
+        }
+      ],
+      "in_store": null,
+      "fetched_at": "2026-10-01T16:41:21.583Z"
+    }
+  ]
+}

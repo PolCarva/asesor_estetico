@@ -127,10 +127,14 @@ describeIntegration("RLS, auth y Storage", () => {
       "products",
       "jobs",
       "ai_usage",
+      "look_products",
     ] as const) {
       const { data, error } = await anon.from(table).select("id").limit(1);
       expect(error !== null || (data ?? []).length === 0).toBe(true);
     }
+    // Cache de búsquedas (paso 05): sin `id`, se consulta por su clave.
+    const cache = await anon.from("shopping_search_cache").select("key").limit(1);
+    expect(cache.error).not.toBeNull();
   });
 
   it("asesoría: el núcleo lo ve cualquier plan; la asesoría detallada solo Premium", async () => {

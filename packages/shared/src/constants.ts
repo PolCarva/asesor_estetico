@@ -29,3 +29,7 @@ export const STORAGE_BUCKETS = {
   userPhotos: "user-photos",
   generatedLooks: "generated-looks",
 } as const;
+
+/** Cache de shopping (SPEC "CACHE"): resultados de búsqueda 24 h, datos de producto 8 h. */
+export const SHOPPING_SEARCH_TTL_MS = 24 * 60 * 60 * 1000;
+export const PRODUCT_FRESHNESS_MS = 8 * 60 * 60 * 1000;

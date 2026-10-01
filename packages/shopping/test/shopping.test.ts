@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   CACHE_TTL_MS,
-  createMemoryCache,
+  createMemorySearchCache,
   extractProduct,
   HttpStatusError,
   isSafeProductUrl,
@@ -130,7 +130,8 @@ describe("rankProducts", () => {
   it("considera talle disponible y precio máximo", () => {
     const withSize = rankProducts(FIXTURE_PRODUCTS, query({ size: "L" }));
     const crudo = withSize.find((r) => r.product.id === "mock-oxford-crudo")!;
-    expect(crudo.breakdown.size_available).toBe(0.25); // existe el talle pero sin stock
+    expect(crudo.breakdown.size_available).toBe(0.1); // existe el talle pero sin stock
+    expect(crudo.size_status).toBe("OUT_OF_STOCK");
     const cheap = rankProducts(
       FIXTURE_PRODUCTS,
       query({ max_price: { amount: 1000, currency: "UYU" } }),
@@ -143,7 +144,7 @@ describe("rankProducts", () => {
 describe("searchProducts", () => {
   it("corre el pipeline completo con mocks y usa cache", async () => {
     let t = 0;
-    const cache = createMemoryCache(() => t);
+    const cache = createMemorySearchCache(() => t);
     const deps = {
       searchProvider: new MockSearchProvider(),
       fetcher: new MockProductFetcher(),

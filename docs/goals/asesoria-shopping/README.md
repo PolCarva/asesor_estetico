@@ -114,7 +114,7 @@ source ~/.nvm/nvm.sh && nvm use >/dev/null && pnpm format && pnpm lint && pnpm t
 | 03  | [Shopping: queries desde el LookSpec y búsqueda real](pasos/03-shopping-queries-busqueda.md)       | 7–9            | —          | ✅     |
 | 04a | [Shopping: fetcher seguro, extracción y normalización](pasos/04a-fetch-extraccion.md)              | 10–11          | 03         | ✅     |
 | 04b | [Shopping: adaptadores de talles/stock, validación y locales](pasos/04b-adaptadores-validacion.md) | 10–11          | 04a        | ✅     |
-| 05  | [Shopping: ranking y cache persistente](pasos/05-shopping-ranking-cache.md)                        | 12–13          | 04b        | ⬜     |
+| 05  | [Shopping: ranking y cache persistente](pasos/05-shopping-ranking-cache.md)                        | 12–13          | 04b        | ✅     |
 | 06  | [Shopping: jobs reales, progreso y Premium server-side](pasos/06-shopping-jobs-premium.md)         | 14, 19         | 05         | ⬜     |
 | 07  | [Talles, CTA "Encontrar este look" y progreso](pasos/07-talles-cta-progreso.md)                    | 16, 15         | 02, 06     | ⬜     |
 | 08  | [UI de resultados de shopping](pasos/08-resultados-ui.md)                                          | 15             | 07         | ⬜     |
@@ -431,3 +431,71 @@ source ~/.nvm/nvm.sh && nvm use >/dev/null && pnpm format && pnpm lint && pnpm t
   - 10a: el trigger rechaza agregar al carrito un producto sin precio (`22023`, "has no price"): no ofrecer el botón.
   - `db:reset` recreó los usuarios del seed: se perdieron los renders y el perfil real que tenían `demo@`/`free@` en la base local.
 - Commit: `feat(asesoria-shopping): paso 04b — adaptadores de talles/stock, validación y locales`
+
+### Paso 05 — Shopping: ranking y cache persistente · 2026-10-01 · ✅
+
+- Hecho:
+  - **Ranking** (`packages/shopping/src/rank.ts`):
+    - Pesos (D11): categoría 0.20, color 0.20, estilo 0.18, fit 0.12, material 0.07, talle 0.10, stock 0.08, precio 0.05. Estética 0.77 contra precio 0.05, con test.
+    - Estilo: cobertura de lo que pide la prenda, con sinónimos y alias, y liso contra estampado (también en inglés).
+    - Color: nombre canónico o cercanía de hex en Lab; colores de fantasía, neutros.
+    - Fit y material: por familias, con contradicciones (skinny contra relaxed: 0).
+    - Talle con `size_status`: `sizeMatches` entiende talles combinados (`XS/S`, `32-30`, `38 (L33)`) y un talle de otro sistema queda `UNVERIFIED`.
+    - Sin precio, el producto se rankea sin ese factor; `strict_max_price` filtra; diversidad leve de tiendas.
+  - **Cache de pools** (D12):
+    - `searchPoolKey`/`poolQueryOf`: la clave es la prenda, sin talle, precio, límite, slot ni datos del usuario.
+    - `searchProducts` guarda el pool completo y re-rankea en cada pedido; en un hit revalida los productos de más de 8 h (los 404 salen).
+    - `SearchCache` inyectable: `createMemorySearchCache` para tests y `createPostgresSearchCache` en `@asesor/db`.
+    - `isProductStale` y los TTL en `shared`.
+  - **Migración `20261001000200_shopping_cache.sql`**:
+    - tabla `shopping_search_cache`, con RLS y revokes, solo service role;
+    - el único `(store_domain, external_id)` pasa a índice, porque la identidad es la URL canónica;
+    - `look_products.size_status`;
+    - `replace_look_products()`, atómica y solo para service role.
+
+    `db:reset` y `db:types`.
+
+  - **Persistencia** (`packages/db/src/shopping.ts`):
+    - `upsertProducts`, idempotente por URL, y `upsertVariants`, que conserva los uuid y borra solo las variantes que desaparecen;
+    - `saveLookProducts` y `getLookProducts`;
+    - `getProductById`/`getProductsByIds` y `markProductVerified`/`markProductUnverified`;
+    - `purgeExpiredSearchCache`.
+  - **Shared**: `normalizeSizeLabel` (`32-30`, `38 (L33)`), `sizeMatches`, `sizeSystem`, `SizeStatusSchema`, `RankedProduct.size_status` (aditivo), `applyTermAliases` exportado y vocabulario "charcoal"/"carbón" → gris con `COLOR_HEX`.
+  - **Tests**:
+    - `rank.test.ts` (10), con pools reales grabados del pipeline (`pool-remeras-negras.json`, `pool-pantalones.json`): la lisa le gana a las estampadas aunque sea más cara; relaxed le gana a skinny; el mismo pool con XS y con 4XL da órdenes distintos; talle en stock > sin dato > agotado; otro sistema de talles → `UNVERIFIED`; filtro estricto; sin precio sin factor; color por hex; regresión de títulos reales.
+    - `cache.test.ts` (6): clave sin datos del usuario; miss, hit sin buscar ni descargar y vencimiento; re-ranking por talle sobre el pool; revalidación de lo de más de 8 h; cache caída → en vivo.
+    - `sizes.test.ts` (+16).
+    - Integración `packages/db/test/integration/shopping.int.test.ts` (6): upsert idempotente con duplicados en el lote; variantes reemplazadas conservando uuid; mismo id externo en dos URLs sin violar únicos; `last_fetched_at` solo con verificación; reemplazo atómico; RLS de `look_products` (free no, Premium dueño sí, otro no, nadie escribe ni ejecuta la función); cache Postgres (hit, vencimiento, purga, sin datos del usuario); revokes de `shopping_search_cache`.
+    - `rls.int.test.ts`: `anon` no lee `look_products` ni `shopping_search_cache`.
+    - Worker `shopping-cache.int.test.ts` (1): `searchProducts` con la cache Postgres (miss, hit, re-ranking por talle, vencimiento).
+  - **Script** `apps/worker/scripts/real-shopping-ranking.ts`.
+  - **Docs**: `SHOPPING_ENGINE.md` (pesos y justificación, `size_status`, cache, persistencia), `DATA_MODEL.md` y `DECISIONES.md` (D11, D12).
+- Prueba real (`real-shopping-ranking.ts`, look 1 "Smart casual cálido" de `demo@asesor.test`, sin descubrimiento, USD 0):
+  - **Corrida 1** (cache vacía, talles M/42/42): **en vivo, 221 requests HTTP, 32 s**. Pools de 16, 24, 9, 6 y 4 productos, y 19 filas guardadas en `look_products`. Top por prenda:
+
+    | Prenda (LookSpec)                 | 1.º                                                                     | 2.º                                                                    | Por qué tiene sentido                                                                                                                                                    |
+    | --------------------------------- | ----------------------------------------------------------------------- | ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+    | camisa oxford crudo, regular      | Indian "Camisa Xavro - Crudo / Natural" 0.847 (color 1, talle M ✓)      | J&J "Camisa slim Oxford - White" 0.842 (estilo 1, color 0.73, fit 0.4) | Gana el color exacto (crudo) sobre una oxford blanca slim. La J&J rayada ("Stripes") salió del top: estilo 0.4.                                                          |
+    | pantalón chino verde oliva, recto | J&J "Pantalón chino slim Marco - Dusty Olive" 0.880 (color 1, fit 0.4)  | Hering "Pantalón recto chino - Beige" 0.801 (fit 1, color 0.31)        | El color pesa más que el fit: un chino oliva slim reproduce el look mejor que uno recto beige. Tercero, Legacy chino de gabardina verde (material 1).                    |
+    | overshirt camel, regular          | J&J "Sobrecamisa Vesterbro - Forest River" 0.790 (estilo 1, material 1) | Indian "Sobrecamisa Insani - Estampado" 0.697 (estilo 0.4)             | El pool no tiene camel: gana la sobrecamisa lisa de algodón y las estampadas bajan.                                                                                      |
+    | desert boots chocolate            | Decathlon "Botines de senderismo NH500" 0.800 (talle 42 ✓)              | La Isla "Botas Blundstone 562 - Brown" 0.756 (color 1, talle 42 no)    | "desert boots" = botas. Las Blundstone y Dr. Martens marrones encajan mejor en estilo, pero no tienen 42 (`NOT_OFFERED`): el talle del usuario manda, como pide el SPEC. |
+    | reloj con malla de cuero marrón   | Decathlon "Reloj cronómetro W200" 0.634                                 | Decathlon "Reloj running W500S" 0.621                                  | El pool solo tiene relojes deportivos: el ranking no puede inventar uno de cuero.                                                                                        |
+
+  - **Corrida 2** (mismos talles, misma hora): **todo `CACHE`, 0 requests HTTP, 0 s** y el mismo top que la corrida 1 (diff vacío).
+  - **Corrida 3** (talles S/40/44, mismo pool): **`CACHE`, 0 requests**, con otro orden:
+    - entra La Isla "Camisa Rusty Volus - Crudo" (tiene S);
+    - el chino Rip Curl verde en 40 desplaza al Hering beige;
+    - la sobrecamisa Vesterbro queda `OUT_OF_STOCK` en S.
+
+    `look_products` quedó con esos 19 resultados y su `size_status`.
+
+  - **Arreglos que salieron de la prueba real:** "Stripes"/"Checks" no contaban como estampado (una camisa rayada quedaba primera para "camisa oxford cruda") y "desert boots" no matcheaba "botas"/"botines". Se corrigieron con un test de regresión y se repitió la corrida 1 con la cache vacía.
+- Verificación: format ✓ · lint ✓ · typecheck ✓ · test ✓ (376 unit, 34 integración ejecutados: db 29, worker 5) · build ✓ · db:reset ✓ · db:types ✓ · e2e — (sin cambios de UI)
+- Decisiones: D11 y D12 confirmadas, con los pesos nuevos y su justificación. Identidad de producto = URL canónica. Detalle en `DECISIONES.md`.
+- Para pasos siguientes:
+  - 06: el handler `SEARCH_PRODUCTS` tiene que usar `createPostgresSearchCache(db)` y `saveLookProducts(db, { lookId, slot, items })`. `REFRESH_PRODUCT` sale con `getProductById` + `refreshProduct` + `markProductVerified`/`markProductUnverified`. Para "buscar más barato" (09) alcanza con el mismo pool más `strict_max_price`.
+  - 08: `look_products.size_status` dice qué mostrar ("talle sin verificar", "no hay tu talle", "agotado en tu talle"). `getLookProducts` lee con RLS.
+  - 08/10a: `isProductStale` (`@asesor/shared`) antes de "Comprar" o de agregar al carrito.
+  - Limitaciones conocidas: el estilo es léxico (un logo que el título no nombra no cuenta como estampado: Adidas "M Lin SJ"). Embeddings de imagen siguen en "próximos pasos". Los pools dependen de lo que las tiendas tienen: con el reloj solo hubo deportivos.
+  - Base local: el look 1 de `demo@` ahora tiene en `look_products` los productos reales de la prueba (antes, los ficticios del seed); `pnpm db:seed` lo restaura. Un test de integración del worker llegó a borrar los productos del seed en una corrida intermedia: se corrigió para que use URLs propias y se re-sembró.
+- Commit: `feat(asesoria-shopping): paso 05 — ranking y cache persistente`

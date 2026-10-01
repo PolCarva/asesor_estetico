@@ -1,14 +1,14 @@
 import {
+  isProductStale,
   type Product,
   sizeKindForCategory,
-  type ShoppingQuery,
   type ShoppingQueryInput,
   ShoppingQuerySchema,
   type ShoppingResult,
   type ShoppingStats,
 } from "@asesor/shared";
 
-import { CACHE_TTL_MS } from "./cache";
+import { CACHE_TTL_MS, poolQueryOf, searchPoolKey } from "./cache";
 import { extractProduct } from "./extract";
 import { fetchProductPage, NotHtmlError } from "./fetch";
 import { UnsafeUrlError } from "./net";
@@ -25,8 +25,9 @@ import type {
   ExtractSource,
   ProductFetcher,
   RawField,
+  RefreshedProduct,
+  SearchCache,
   SearchProvider,
-  ShoppingCache,
 } from "./types";
 import { canonicalProductUrl, type ValidationFailure, validateProduct } from "./validate";
 import { applyVariants, type VariantEnricher, type VariantResult } from "./variants";
@@ -36,7 +37,8 @@ export interface ShoppingDeps {
   fetcher: ProductFetcher;
   /** Talles y stock por plataforma (paso 04b). Sin él, solo lo que dice la página. */
   variants?: VariantEnricher;
-  cache?: ShoppingCache;
+  /** Cache de pools (24 h). Sin ella, cada búsqueda va en vivo. */
+  cache?: SearchCache;
   now?: () => Date;
   /** Páginas que se descargan en paralelo. */
   concurrency?: number;
@@ -170,14 +172,38 @@ export function summarizeOutcomes(outcomes: CandidateOutcome[]): ShoppingStats {
   return stats;
 }
 
-export function searchCacheKey(query: ShoppingQuery) {
-  return `search:${JSON.stringify(query)}`;
+/**
+ * Revalida los productos del pool verificados hace más de 8 h. Los que desaparecieron
+ * (404/410) salen del resultado; una falla deja el stock en UNKNOWN y la fecha como estaba.
+ */
+async function refreshStale(
+  products: Product[],
+  deps: Pick<ShoppingDeps, "fetcher" | "signal" | "variants" | "concurrency">,
+  now: Date,
+): Promise<{ products: Product[]; refreshed: RefreshedProduct[] }> {
+  const stale = products.filter((p) => isProductStale(p.fetched_at, now, CACHE_TTL_MS.product));
+  if (stale.length === 0) return { products, refreshed: [] };
+  const results = await mapWithConcurrency(stale, deps.concurrency ?? 4, (p) =>
+    refreshProduct(p, deps),
+  );
+  const byUrl = new Map(stale.map((p, i) => [p.url, results[i]!]));
+  const kept = products.flatMap((p) => {
+    const result = byUrl.get(p.url);
+    if (!result) return [p];
+    return result.status === "gone" ? [] : [result.product];
+  });
+  return {
+    products: kept,
+    refreshed: results.map((r) => ({ product: r.product, verified: r.status === "verified" })),
+  };
 }
 
 /**
- * Pipeline: ShoppingQuery → SearchProvider → URLs candidatas → Fetch → Extract → variantes
- * de la plataforma → Normalize → Validate → Rank → Cache. El resultado lleva los conteos de
- * lo que falló y de lo que no se pudo verificar.
+ * Pipeline: ShoppingQuery → (cache del pool) → SearchProvider → URLs candidatas → Fetch →
+ * Extract → variantes de la plataforma → Normalize → Validate → Rank. El pool cacheado es
+ * de la prenda, sin datos del usuario: en cada pedido se re-rankea con su talle y su precio
+ * máximo, así que el mismo pool da órdenes distintos a usuarios distintos. El resultado
+ * lleva los conteos de lo que falló y de lo que no se pudo verificar.
  */
 export async function searchProducts(
   rawQuery: ShoppingQueryInput,
@@ -185,24 +211,39 @@ export async function searchProducts(
 ): Promise<ShoppingResult> {
   const query = ShoppingQuerySchema.parse(rawQuery);
   const now = deps.now ?? (() => new Date());
-  const key = searchCacheKey(query);
+  const key = searchPoolKey(query);
 
-  const cached = await deps.cache?.get<ShoppingResult>(key);
-  if (cached) return { ...cached, source: "CACHE" };
+  let pool: Product[];
+  let stats: ShoppingStats;
+  let source: ShoppingResult["source"];
+  // Una cache caída no rompe la búsqueda: se va en vivo.
+  const cached = deps.cache ? await deps.cache.getPool(key).catch(() => null) : null;
+  if (cached) {
+    const fresh = await refreshStale(cached.products, deps, now());
+    if (fresh.refreshed.length > 0) await deps.cache?.updateProducts?.(fresh.refreshed);
+    pool = fresh.products;
+    stats = cached.stats;
+    source = "CACHE";
+  } else {
+    const candidates = await deps.searchProvider.search(query);
+    const outcomes = await loadCandidates(candidates, deps);
+    pool = outcomes.flatMap((o) => (o.status === "product" ? [o.product] : []));
+    stats = summarizeOutcomes(outcomes);
+    source = "LIVE";
+    await deps.cache?.savePool(
+      key,
+      { query: poolQueryOf(query), products: pool, stats },
+      CACHE_TTL_MS.search,
+    );
+  }
 
-  const candidates = await deps.searchProvider.search(query);
-  const outcomes = await loadCandidates(candidates, deps);
-  const products = outcomes.flatMap((o) => (o.status === "product" ? [o.product] : []));
-
-  const result: ShoppingResult = {
+  return {
     query,
-    items: rankProducts(products, query).slice(0, query.limit),
-    source: "LIVE",
+    items: rankProducts(pool, query).slice(0, query.limit),
+    source,
     generated_at: now().toISOString(),
-    stats: summarizeOutcomes(outcomes),
+    stats,
   };
-  await deps.cache?.set(key, result, CACHE_TTL_MS.search);
-  return result;
 }
 
 /**

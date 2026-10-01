@@ -1,0 +1,649 @@
+{
+  "_fuente": "Productos reales (pipeline del paso 04b, 2026-10-01, sin descubrimiento): Legacy, Indian, Jack & Jones, Stadium, Zooko, BAS, Hering, Decathlon. Descripciones recortadas.",
+  "products": [
+    {
+      "id": "https://legacy.com.uy/catalogo/remera-lisa-de-algodon-negro_LR06040_NEGRO",
+      "store": {
+        "name": "Legacy",
+        "domain": "legacy.com.uy"
+      },
+      "url": "https://legacy.com.uy/catalogo/remera-lisa-de-algodon-negro_LR06040_NEGRO",
+      "title": "REMERA LISA DE ALGODÓN - Negro",
+      "brand": "Legacy",
+      "category": "T_SHIRT",
+      "description": "Remera básica con botones de algodón. De manga corta, cuello a la base y cartera con botones que aporta un detalle clásico y versátil. Una prenda cómoda para un look casual de todos los días. El modelo mide 1,85 m y usa talle L.",
+      "image_url": "https://f.fcdn.app/imgs/79a6ff/legacy.com.uy/leg/d526/original/catalogo/LR06040_NEGRO_1/1920-1200/remera-lisa-de-algodon-negro.jpg",
+      "price": {
+        "amount": 1290,
+        "currency": "UYU"
+      },
+      "colors": ["negro"],
+      "materials": ["algodón"],
+      "fit": null,
+      "availability": "IN_STOCK",
+      "variants": [
+        {
+          "id": "1:LR06040:NEGRO:L:1",
+          "sku": "1:LR06040:NEGRO:L:1",
+          "size": "L",
+          "size_label": "L",
+          "color": null,
+          "availability": "IN_STOCK",
+          "price": null
+        },
+        {
+          "id": "1:LR06040:NEGRO:M:1",
+          "sku": "1:LR06040:NEGRO:M:1",
+          "size": "M",
+          "size_label": "M",
+          "color": null,
+          "availability": "IN_STOCK",
+          "price": null
+        },
+        {
+          "id": "1:LR06040:NEGRO:S:1",
+          "sku": "1:LR06040:NEGRO:S:1",
+          "size": "S",
+          "size_label": "S",
+          "color": null,
+          "availability": "IN_STOCK",
+          "price": null
+        },
+        {
+          "id": "1:LR06040:NEGRO:XL:1",
+          "sku": "1:LR06040:NEGRO:XL:1",
+          "size": "XL",
+          "size_label": "XL",
+          "color": null,
+          "availability": "IN_STOCK",
+          "price": null
+        },
+        {
+          "id": "1:LR06040:NEGRO:4XL:1",
+          "sku": "1:LR06040:NEGRO:4XL:1",
+          "size": "4XL",
+          "size_label": "4XL",
+          "color": null,
+          "availability": "IN_STOCK",
+          "price": null
+        },
+        {
+          "id": "1:LR06040:NEGRO:XXL:1",
+          "sku": "1:LR06040:NEGRO:XXL:1",
+          "size": "XXL",
+          "size_label": "XXL",
+          "color": null,
+          "availability": "IN_STOCK",
+          "price": null
+        },
+        {
+          "id": "1:LR06040:NEGRO:XXXL:1",
+          "sku": "1:LR06040:NEGRO:XXXL:1",
+          "size": "XXXL",
+          "size_label": "XXXL",
+          "color": null,
+          "availability": "IN_STOCK",
+          "price": null
+        }
+      ],
+      "in_store": null,
+      "fetched_at": "2026-10-01T16:41:09.592Z"
+    },
+    {
+      "id": "https://legacy.com.uy/catalogo/remera-lisa-de-algodon-negro_LRD6106_NEGRO",
+      "store": {
+        "name": "Legacy",
+        "domain": "legacy.com.uy"
+      },
+      "url": "https://legacy.com.uy/catalogo/remera-lisa-de-algodon-negro_LRD6106_NEGRO",
+      "title": "REMERA LISA DE ALGODÓN - Negro",
+      "brand": "Legacy Woman",
+      "category": "T_SHIRT",
+      "description": "Remera lisa sin mangas con cortes laterales. Su confección aporta movimiento y define una silueta actual para combinar con jeans, faldas o pantalones livianos. Una opción práctica para looks simples y cuidados. La modelo mide 1,70 m y usa talle S.",
+      "image_url": "https://f.fcdn.app/imgs/816d5e/legacy.com.uy/leg/5f09/original/catalogo/LRD6106_NEGRO_1/1920-1200/remera-lisa-de-algodon-negro.jpg",
+      "price": {
+        "amount": 637,
+        "currency": "UYU"
+      },
+      "colors": ["negro"],
+      "materials": ["algodón"],
+      "fit": null,
+      "availability": "IN_STOCK",
+      "variants": [
+        {
+          "id": "1:LRD6106:NEGRO:L:1",
+          "sku": "1:LRD6106:NEGRO:L:1",
+          "size": "L",
+          "size_label": "L",
+          "color": null,
+          "availability": "IN_STOCK",
+          "price": null
+        },
+        {
+          "id": "1:LRD6106:NEGRO:M:1",
+          "sku": "1:LRD6106:NEGRO:M:1",
+          "size": "M",
+          "size_label": "M",
+          "color": null,
+          "availability": "IN_STOCK",
+          "price": null
+        },
+        {
+          "id": "1:LRD6106:NEGRO:S:1",
+          "sku": "1:LRD6106:NEGRO:S:1",
+          "size": "S",
+          "size_label": "S",
+          "color": null,
+          "availability": "IN_STOCK",
+          "price": null
+        },
+        {
+          "id": "1:LRD6106:NEGRO:XL:1",
+          "sku": "1:LRD6106:NEGRO:XL:1",
+          "size": "XL",
+          "size_label": "XL",
+          "color": null,
+          "availability": "IN_STOCK",
+          "price": null
+        },
+        {
+          "id": "1:LRD6106:NEGRO:XS:1",
+          "sku": "1:LRD6106:NEGRO:XS:1",
+          "size": "XS",
+          "size_label": "XS",
+          "color": null,
+          "availability": "IN_STOCK",
+          "price": null
+        },
+        {
+          "id": "1:LRD6106:NEGRO:XXL:1",
+          "sku": "1:LRD6106:NEGRO:XXL:1",
+          "size": "XXL",
+          "size_label": "XXL",
+          "color": null,
+          "availability": "IN_STOCK",
+          "price": null
+        },
+        {
+          "id": "1:LRD6106:NEGRO:XXXL:1",
+          "sku": "1:LRD6106:NEGRO:XXXL:1",
+          "size": "XXXL",
+          "size_label": "XXXL",
+          "color": null,
+          "availability": "IN_STOCK",
+          "price": null
+        }
+      ],
+      "in_store": null,
+      "fetched_at": "2026-10-01T16:41:07.883Z"
+    },
+    {
+      "id": "https://legacy.com.uy/catalogo/remera-estampada-de-algodon-negro_LR06143_NEGRO",
+      "store": {
+        "name": "Legacy",
+        "domain": "legacy.com.uy"
+      },
+      "url": "https://legacy.com.uy/catalogo/remera-estampada-de-algodon-negro_LR06143_NEGRO",
+      "title": "REMERA ESTAMPADA DE ALGODÓN - Negro",
+      "brand": "Legacy",
+      "category": "T_SHIRT",
+      "description": "Remera T-Shirt manga corta estampada de algodón. La estampa central tono sobre tono, de inspiración vintage, aporta un detalle sutil que realza el diseño y la convierte en una prenda fácil de combinar. El modelo mide 1,85 m y usa talle L.",
+      "image_url": "https://f.fcdn.app/imgs/a3a682/legacy.com.uy/leg/61a4/original/catalogo/LR06143_NEGRO_1/1920-1200/remera-estampada-de-algodon-negro.jpg",
+      "price": {
+        "amount": 1190,
+        "currency": "UYU"
+      },
+      "colors": ["negro"],
+      "materials": ["algodón"],
+      "fit": null,
+      "availability": "IN_STOCK",
+      "variants": [
+        {
+          "id": "1:LR06143:NEGRO:L:1",
+          "sku": "1:LR06143:NEGRO:L:1",
+          "size": "L",
+          "size_label": "L",
+          "color": null,
+          "availability": "IN_STOCK",
+          "price": null
+        },
+        {
+          "id": "1:LR06143:NEGRO:M:1",
+          "sku": "1:LR06143:NEGRO:M:1",
+          "size": "M",
+          "size_label": "M",
+          "color": null,
+          "availability": "IN_STOCK",
+          "price": null
+        },
+        {
+          "id": "1:LR06143:NEGRO:S:1",
+          "sku": "1:LR06143:NEGRO:S:1",
+          "size": "S",
+          "size_label": "S",
+          "color": null,
+          "availability": "IN_STOCK",
+          "price": null
+        },
+        {
+          "id": "1:LR06143:NEGRO:XXL:1",
+          "sku": "1:LR06143:NEGRO:XXL:1",
+          "size": "XXL",
+          "size_label": "XXL",
+          "color": null,
+          "availability": "IN_STOCK",
+          "price": null
+        }
+      ],
+      "in_store": null,
+      "fetched_at": "2026-10-01T16:45:09.117Z"
+    },
+    {
+      "id": "https://jackjones.com.uy/products/12291780_4955417",
+      "store": {
+        "name": "Jack & Jones",
+        "domain": "jackjones.com.uy"
+      },
+      "url": "https://jackjones.com.uy/products/12291780_4955417",
+      "title": "REMERA MAINE ESTAMPADA-",
+      "brand": "JACK & JONES",
+      "category": "T_SHIRT",
+      "description": "Simple, cómoda y fácil de combinar con todo. Esta remera de manga corta tiene cuello redondo, calce holgado y estampa en el frente y la espalda con impresión de tacto suave. Está confeccionada en tejido jersey de punto 100% algodón, suave y respirable. Combinala con jeans, bermudas o joggers y sneak",
+      "image_url": "https://jackjones.com.uy/cdn/shop/files/eyXQnGEbpBc5jRd11a64UYZJjkPJ_preview.jpg?v=1790658854&width=1920",
+      "price": {
+        "amount": 799,
+        "currency": "UYU"
+      },
+      "colors": ["negro"],
+      "materials": ["algodón"],
+      "fit": "relajado",
+      "availability": "IN_STOCK",
+      "variants": [
+        {
+          "id": "67573041955108",
+          "sku": "5715868183158",
+          "size": "XXL",
+          "size_label": "XXL",
+          "color": "negro",
+          "availability": "IN_STOCK",
+          "price": {
+            "amount": 799,
+            "currency": "UYU"
+          }
+        },
+        {
+          "id": "67573042282788",
+          "sku": "5715868183110",
+          "size": "XL",
+          "size_label": "XL",
+          "color": "negro",
+          "availability": "IN_STOCK",
+          "price": {
+            "amount": 799,
+            "currency": "UYU"
+          }
+        },
+        {
+          "id": "67573042315556",
+          "sku": "5715868183073",
+          "size": "M",
+          "size_label": "M",
+          "color": "negro",
+          "availability": "IN_STOCK",
+          "price": {
+            "amount": 799,
+            "currency": "UYU"
+          }
+        },
+        {
+          "id": "67573042348324",
+          "sku": "5715868183035",
+          "size": "S",
+          "size_label": "S",
+          "color": "negro",
+          "availability": "IN_STOCK",
+          "price": {
+            "amount": 799,
+            "currency": "UYU"
+          }
+        },
+        {
+          "id": "67573042381092",
+          "sku": "5715829369928",
+          "size": "L",
+          "size_label": "L",
+          "color": "negro",
+          "availability": "IN_STOCK",
+          "price": {
+            "amount": 799,
+            "currency": "UYU"
+          }
+        }
+      ],
+      "in_store": null,
+      "fetched_at": "2026-10-01T16:45:09.633Z"
+    },
+    {
+      "id": "https://www.indian.com.uy/catalogo/remera-fredrik-negro_40347258_200",
+      "store": {
+        "name": "Indian",
+        "domain": "indian.com.uy"
+      },
+      "url": "https://www.indian.com.uy/catalogo/remera-fredrik-negro_40347258_200",
+      "title": "Remera Fredrik - Negro",
+      "brand": "MAXIMO",
+      "category": "T_SHIRT",
+      "description": "Remera manga larga de algodon, con botones y cuello camisa",
+      "image_url": "https://f.fcdn.app/imgs/aa66a1/www.indian.com.uy/indiuy/f3ce/original/catalogo/40347258200_0/1920-1200/remera-fredrik-negro.jpg",
+      "price": {
+        "amount": 699,
+        "currency": "UYU"
+      },
+      "colors": ["negro"],
+      "materials": ["algodón"],
+      "fit": null,
+      "availability": "IN_STOCK",
+      "variants": [
+        {
+          "id": "1:40347258:200:072:1",
+          "sku": "1:40347258:200:072:1",
+          "size": "S",
+          "size_label": "S",
+          "color": null,
+          "availability": "IN_STOCK",
+          "price": null
+        },
+        {
+          "id": "1:40347258:200:074:1",
+          "sku": "1:40347258:200:074:1",
+          "size": "M",
+          "size_label": "M",
+          "color": null,
+          "availability": "IN_STOCK",
+          "price": null
+        },
+        {
+          "id": "1:40347258:200:076:1",
+          "sku": "1:40347258:200:076:1",
+          "size": "L",
+          "size_label": "L",
+          "color": null,
+          "availability": "IN_STOCK",
+          "price": null
+        },
+        {
+          "id": "1:40347258:200:078:1",
+          "sku": "1:40347258:200:078:1",
+          "size": "XL",
+          "size_label": "XL",
+          "color": null,
+          "availability": "IN_STOCK",
+          "price": null
+        },
+        {
+          "id": "1:40347258:200:080:1",
+          "sku": "1:40347258:200:080:1",
+          "size": "XXL",
+          "size_label": "2XL",
+          "color": null,
+          "availability": "IN_STOCK",
+          "price": null
+        },
+        {
+          "id": "1:40347258:200:834:1",
+          "sku": "1:40347258:200:834:1",
+          "size": "XXXL",
+          "size_label": "3XL",
+          "color": null,
+          "availability": "IN_STOCK",
+          "price": null
+        }
+      ],
+      "in_store": null,
+      "fetched_at": "2026-10-01T16:41:09.421Z"
+    },
+    {
+      "id": "https://jackjones.com.uy/products/12156101_3077457",
+      "store": {
+        "name": "Jack & Jones",
+        "domain": "jackjones.com.uy"
+      },
+      "url": "https://jackjones.com.uy/products/12156101_3077457",
+      "title": "CAMISETA BÁSICA REGULAR MANGA CORTA ORGANIC - Black Detail:SLIM",
+      "brand": "JACK & JONES",
+      "category": "T_SHIRT",
+      "description": "Remera básica de manga corta y cuello redondo con fit regular. Perfecta para uso diario. Tipo de tejido: Jersey simple Composición: 100% Algodón orgánico (Direct to Farm)",
+      "image_url": "https://jackjones.com.uy/cdn/shop/files/7AZ1YOjP3PtVq_001_preview.png?v=1754799578&width=1920",
+      "price": {
+        "amount": 499,
+        "currency": "UYU"
+      },
+      "colors": ["negro"],
+      "materials": ["algodón"],
+      "fit": "regular",
+      "availability": "IN_STOCK",
+      "variants": [
+        {
+          "id": "50972079456548",
+          "sku": "5713773492365",
+          "size": "L",
+          "size_label": "L",
+          "color": "negro",
+          "availability": "IN_STOCK",
+          "price": {
+            "amount": 499,
+            "currency": "UYU"
+          }
+        },
+        {
+          "id": "50972079489316",
+          "sku": "5714487615941",
+          "size": "S",
+          "size_label": "S",
+          "color": "negro",
+          "availability": "IN_STOCK",
+          "price": {
+            "amount": 499,
+            "currency": "UYU"
+          }
+        },
+        {
+          "id": "50972079522084",
+          "sku": "5714487615958",
+          "size": "M",
+          "size_label": "M",
+          "color": "negro",
+          "availability": "IN_STOCK",
+          "price": {
+            "amount": 499,
+            "currency": "UYU"
+          }
+        },
+        {
+          "id": "50972079554852",
+          "sku": "5714487615965",
+          "size": "XL",
+          "size_label": "XL",
+          "color": "negro",
+          "availability": "IN_STOCK",
+          "price": {
+            "amount": 499,
+            "currency": "UYU"
+          }
+        },
+        {
+          "id": "50972079587620",
+          "sku": "5714487615972",
+          "size": "XXL",
+          "size_label": "XXL",
+          "color": "negro",
+          "availability": "IN_STOCK",
+          "price": {
+            "amount": 499,
+            "currency": "UYU"
+          }
+        },
+        {
+          "id": "51055227633956",
+          "sku": "5714487617136",
+          "size": "XS",
+          "size_label": "XS",
+          "color": "negro",
+          "availability": "OUT_OF_STOCK",
+          "price": {
+            "amount": 499,
+            "currency": "UYU"
+          }
+        }
+      ],
+      "in_store": null,
+      "fetched_at": "2026-10-01T16:41:10.623Z"
+    },
+    {
+      "id": "https://www.stadium.com.uy/productos/remera-de-hombre-adidas-m-lin-sj-negro-blanco_009.E8993_0102",
+      "store": {
+        "name": "Stadium",
+        "domain": "stadium.com.uy"
+      },
+      "url": "https://www.stadium.com.uy/productos/remera-de-hombre-adidas-m-lin-sj-negro-blanco_009.E8993_0102",
+      "title": "Remera de Hombre Adidas M Lin SJ - Negro - Blanco",
+      "brand": "Adidas",
+      "category": "T_SHIRT",
+      "description": "Remera de Hombre Adidas M Lin SJ - Negro - Blanco $ 1.190 (009.E89930102)",
+      "image_url": "https://f.fcdn.app/imgs/c6dc2e/www.stadium.com.uy/std/87cd/original/catalogo/009.E89930102/1920-1200/remera-de-hombre-adidas-m-lin-sj-negro-blanco.jpg",
+      "price": {
+        "amount": 1190,
+        "currency": "UYU"
+      },
+      "colors": ["negro", "blanco"],
+      "materials": [],
+      "fit": null,
+      "availability": "IN_STOCK",
+      "variants": [
+        {
+          "id": "1:009.E8993:0102:L:1",
+          "sku": "1:009.E8993:0102:L:1",
+          "size": "L",
+          "size_label": "L",
+          "color": null,
+          "availability": "IN_STOCK",
+          "price": null
+        },
+        {
+          "id": "1:009.E8993:0102:M:1",
+          "sku": "1:009.E8993:0102:M:1",
+          "size": "M",
+          "size_label": "M",
+          "color": null,
+          "availability": "IN_STOCK",
+          "price": null
+        },
+        {
+          "id": "1:009.E8993:0102:XL:1",
+          "sku": "1:009.E8993:0102:XL:1",
+          "size": "XL",
+          "size_label": "XL",
+          "color": null,
+          "availability": "IN_STOCK",
+          "price": null
+        }
+      ],
+      "in_store": null,
+      "fetched_at": "2026-10-01T16:41:10.635Z"
+    },
+    {
+      "id": "https://www.zooko.com.uy/catalogo/remera-polo-lacoste-pique-lisa-green_LCPH7757_4673",
+      "store": {
+        "name": "Zooko",
+        "domain": "zooko.com.uy"
+      },
+      "url": "https://www.zooko.com.uy/catalogo/remera-polo-lacoste-pique-lisa-green_LCPH7757_4673",
+      "title": "Remera Polo Lacoste Pique Lisa - Green",
+      "brand": "Lacoste",
+      "category": "T_SHIRT",
+      "description": "Remera Polo Lacoste Pique Lisa - Green $U 5.990 (LCPH77574673)",
+      "image_url": "https://f.fcdn.app/imgs/bf6572/www.zooko.com.uy/zoo/bf61/original/catalogo/LCPH7757-4673-1/1920-1200/remera-polo-lacoste-pique-lisa-green.jpg",
+      "price": {
+        "amount": 5990,
+        "currency": "UYU"
+      },
+      "colors": ["verde"],
+      "materials": ["piqué"],
+      "fit": null,
+      "availability": "IN_STOCK",
+      "variants": [
+        {
+          "id": "1:LCPH7757:4673:L:1",
+          "sku": "1:LCPH7757:4673:L:1",
+          "size": "L",
+          "size_label": "L",
+          "color": null,
+          "availability": "IN_STOCK",
+          "price": null
+        },
+        {
+          "id": "1:LCPH7757:4673:M:1",
+          "sku": "1:LCPH7757:4673:M:1",
+          "size": "M",
+          "size_label": "M",
+          "color": null,
+          "availability": "IN_STOCK",
+          "price": null
+        },
+        {
+          "id": "1:LCPH7757:4673:S:1",
+          "sku": "1:LCPH7757:4673:S:1",
+          "size": "S",
+          "size_label": "S",
+          "color": null,
+          "availability": "IN_STOCK",
+          "price": null
+        },
+        {
+          "id": "1:LCPH7757:4673:XL:1",
+          "sku": "1:LCPH7757:4673:XL:1",
+          "size": "XL",
+          "size_label": "XL",
+          "color": null,
+          "availability": "IN_STOCK",
+          "price": null
+        },
+        {
+          "id": "1:LCPH7757:4673:XXL:1",
+          "sku": "1:LCPH7757:4673:XXL:1",
+          "size": "XXL",
+          "size_label": "XXL",
+          "color": null,
+          "availability": "IN_STOCK",
+          "price": null
+        }
+      ],
+      "in_store": null,
+      "fetched_at": "2026-10-01T16:41:07.599Z"
+    },
+    {
+      "id": "https://www.bas.com.uy/remera-dry-fit-negro-y-gris-melange-1000091119/p",
+      "store": {
+        "name": "BAS",
+        "domain": "bas.com.uy"
+      },
+      "url": "https://www.bas.com.uy/remera-dry-fit-negro-y-gris-melange-1000091119/p",
+      "title": "REMERA DRY FIT NEGRO Y GRIS MELANGE",
+      "brand": "BAS",
+      "category": "T_SHIRT",
+      "description": "Remera dry fit negro y gris melange",
+      "image_url": "https://basuy.vtexassets.com/arquivos/ids/714725/68706fb79460f8093821dc2b.jpg?v=638878013728130000",
+      "price": {
+        "amount": 99,
+        "currency": "UYU"
+      },
+      "colors": ["negro", "gris"],
+      "materials": [],
+      "fit": null,
+      "availability": "OUT_OF_STOCK",
+      "variants": [],
+      "in_store": null,
+      "fetched_at": "2026-10-01T16:41:12.274Z"
+    }
+  ]
+}

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { normalizeSizeLabel } from "../src";
+import { normalizeSizeLabel, sizeMatches } from "../src";
 
 describe("normalizeSizeLabel: talles de tiendas a forma canónica", () => {
   it.each([
@@ -35,6 +35,8 @@ describe("normalizeSizeLabel: talles de tiendas a forma canónica", () => {
     ["W32 L34", "32/34"],
     ["32/34", "32/34"],
     ["32x32", "32/32"],
+    ["32-30", "32/30"],
+    ["38 (L33)", "38/33"],
     // Calzado de EE. UU. y del Reino Unido
     ["US 9", "US 9"],
     ["9.5 US", "US 9.5"],
@@ -58,5 +60,26 @@ describe("normalizeSizeLabel: talles de tiendas a forma canónica", () => {
     expect(normalizeSizeLabel("   ")).toBeNull();
     expect(normalizeSizeLabel(null)).toBeNull();
     expect(normalizeSizeLabel(undefined)).toBeNull();
+  });
+});
+
+describe("sizeMatches: talle del usuario contra el de la variante", () => {
+  it.each([
+    ["M", "M", true],
+    ["M", "Medium", true],
+    ["L", "G", true],
+    ["S", "XS/S", true],
+    ["M", "XS/S", false],
+    ["32", "32-30", true],
+    ["32", "W32 L34", true],
+    ["38", "38 (L33)", true],
+    ["40", "38 (L33)", false],
+    ["M", "M / W32 L33", true],
+    ["32", "M / W32 L33", true],
+    ["42", "US 9", false],
+    ["M", null, false],
+    [null, "M", false],
+  ])("%s en %s → %s", (user, variant, expected) => {
+    expect(sizeMatches(user, variant)).toBe(expected);
   });
 });

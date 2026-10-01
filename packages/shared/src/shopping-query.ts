@@ -107,7 +107,8 @@ const STOPWORDS = new Set(
   "de del la el los las con sin y o a en para por un una al tipo estilo corte look".split(" "),
 );
 
-function applyAliases(text: string): string {
+/** Pasa a español rioplatense lo que escribe la IA ("desert boots" → "botas", "overshirt" → "sobrecamisa"). */
+export function applyTermAliases(text: string): string {
   let out = ` ${normalizeText(text)} `;
   for (const [from, to] of Object.entries(TERM_ALIASES)) {
     out = out.replaceAll(` ${from} `, ` ${normalizeText(to)} `);
@@ -124,7 +125,7 @@ export function synonymsOf(term: string): string[] {
 
 /** Sustantivo principal: el de la categoría que aparece en la descripción, o el primero. */
 function mainNoun(category: ProductCategory, description: string): string {
-  const words = ` ${applyAliases(description)} `;
+  const words = ` ${applyTermAliases(description)} `;
   const nouns = CATEGORY_TERMS[category].map(normalizeText);
   const found = nouns.find((n) => words.includes(` ${n} `));
   if (found) return found;
@@ -142,7 +143,7 @@ const stem = (w: string) => w.slice(0, 4);
 function descriptors(description: string, noun: string, color: string): string[] {
   const colorStems = new Set(normalizeText(color).split(" ").map(stem));
   const nounWords = new Set(synonymsOf(noun).flatMap((s) => s.split(" ")));
-  const words = applyAliases(description).split(" ");
+  const words = applyTermAliases(description).split(" ");
   // "sin pinzas": se descarta lo negado, porque buscarlo trae justo lo contrario.
   const negated = new Set(words.flatMap((w, i) => (w === "sin" ? [i + 1] : [])));
   return words.filter(
@@ -231,7 +232,7 @@ export function audienceForProfile(
 export function isRelevantCandidate(text: string, query: ShoppingQuery): boolean | null {
   // Sin esquema ni host: el dominio no describe la prenda.
   const path = text.replace(/https?:\/\/[^/\s]+/g, " ");
-  const words = ` ${applyAliases(path.replace(/[_/.-]+/g, " "))} `;
+  const words = ` ${applyTermAliases(path.replace(/[_/.-]+/g, " "))} `;
   if (!/[a-z]{3,}/.test(words)) return null;
   const has = (w: string) => words.includes(` ${normalizeText(w)} `);
   const hasPrefix = (w: string) => words.includes(` ${normalizeText(w)}`);

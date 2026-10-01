@@ -405,6 +405,7 @@ export type Database = {
           rank: number;
           score: number;
           score_breakdown: NonNullable<Json>;
+          size_status: string | null;
         };
         Insert: {
           created_at?: string;
@@ -415,6 +416,7 @@ export type Database = {
           rank: number;
           score: number;
           score_breakdown?: NonNullable<Json>;
+          size_status?: string | null;
         };
         Update: {
           created_at?: string;
@@ -425,6 +427,7 @@ export type Database = {
           rank?: number;
           score?: number;
           score_breakdown?: NonNullable<Json>;
+          size_status?: string | null;
         };
         Relationships: [
           {
@@ -691,6 +694,33 @@ export type Database = {
           style_risk_level?: Database["public"]["Enums"]["style_risk_level"];
           tattoo_preference?: Database["public"]["Enums"]["tattoo_preference"];
           updated_at?: string;
+        };
+        Relationships: [];
+      };
+      shopping_search_cache: {
+        Row: {
+          created_at: string;
+          expires_at: string;
+          key: string;
+          product_ids: string[];
+          query_json: NonNullable<Json>;
+          stats: NonNullable<Json>;
+        };
+        Insert: {
+          created_at?: string;
+          expires_at: string;
+          key: string;
+          product_ids?: string[];
+          query_json: NonNullable<Json>;
+          stats?: NonNullable<Json>;
+        };
+        Update: {
+          created_at?: string;
+          expires_at?: string;
+          key?: string;
+          product_ids?: string[];
+          query_json?: NonNullable<Json>;
+          stats?: NonNullable<Json>;
         };
         Relationships: [];
       };
@@ -1021,6 +1051,10 @@ export type Database = {
           isOneToOne: true;
           isSetofReturn: false;
         };
+      };
+      replace_look_products: {
+        Args: { p_items: Json; p_look_id: string; p_slot: string };
+        Returns: number;
       };
       retry_job: {
         Args: { p_job_id: string };

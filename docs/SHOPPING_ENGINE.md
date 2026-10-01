@@ -5,20 +5,23 @@
 - **Búsqueda real** (paso 03): LookSpec → `buildShoppingQueries` → `CompositeSearchProvider` (registro de tiendas por plataforma + sitemaps + descubrimiento web) → URLs candidatas de tiendas uruguayas.
 - **Descarga, extracción y normalización reales** (paso 04a): fetcher endurecido (anti-SSRF con DNS y redirects, timeout, tamaño, robots, ritmo por dominio), extracción en cascada JSON-LD → microdata → OpenGraph y normalización de precios locales, categorías de Uruguay, fit, colores, materiales e ids estables.
 - **Talles, stock, Validate y locales físicos** (paso 04b): variantes con talle y disponibilidad desde la plataforma de cada tienda (Fenicio, VTEX, Shopify, WooCommerce), talles normalizados, etapa Validate (página descargada, host de la tienda, Uruguay, precio, URL canónica, tiendas bloqueadas) y productos `IN_STORE_ONLY` con precio opcional, ubicación y contacto.
+- **Ranking y cache persistente** (paso 05): ranking estético con talle del usuario y estado del talle, pesos documentados; cache de pools en Postgres (24 h) re-rankeada por pedido, frescura de producto (8 h) y persistencia idempotente de productos, variantes y `look_products`.
 - **Mocks** (`MockSearchProvider`, `MockProductFetcher`, catálogo ficticio `.test`): solo con `SHOPPING_PROVIDER=mock` (tests y E2E). El default del worker es `live` y en producción `mock` está prohibido por el schema de env.
 
 ## Pipeline
 
 ```
 ShoppingQuery
+  → SearchCache           pool de la prenda (24 h); hit: revalida productos de más de 8 h y salta al ranking
   → SearchProvider        URLs candidatas
   → fetchProductPage      descarga segura (HttpProductFetcher → PoliteHttpClient → transporte con IP validada)
   → extractProduct        JSON-LD → microdata → OpenGraph → RawProduct (con la fuente de cada dato)
   → VariantEnricher       talles y stock de la plataforma (Fenicio, VTEX, Shopify, Woo); si falla, sin verificar
   → normalizeProduct      RawProduct → Product (Zod), o el motivo del descarte
   → validateProduct       página real, host de la tienda, vende en Uruguay, precio > 0, URL canónica
-  → rankProducts          score ponderado + breakdown por factor
-  → Cache
+  → SearchCache           se guarda el pool completo (products, product_variants, shopping_search_cache)
+  → rankProducts          por pedido: score ponderado + breakdown + estado del talle del usuario
+  → saveLookProducts      ranking de la prenda en look_products (paso 06 lo hace desde el job)
 ```
 
 Funciones públicas (`packages/shopping`): `searchProducts`, `loadCandidate(s)`, `summarizeOutcomes`, `fetchProductPage`, `extractProduct`, `PlatformVariantEnricher`, `normalizeProduct(Result)`, `validateProduct`, `canonicalProductUrl`, `rankProducts`, `refreshProduct`. `createLiveShopping` devuelve `searchProvider`, `fetcher` y `variants` (el worker los recibe como dependencias).
@@ -177,33 +180,66 @@ Prueba real: `apps/worker/scripts/real-product-extraction.ts [look-N] [--discove
 | `UNKNOWN`       | No se pudo determinar (o tienda caída) | 0.4              |
 | `OUT_OF_STOCK`  | Sin stock                              | 0                |
 
-## Ranking
+## Ranking (paso 05, D11)
 
-Cada factor puntúa de 0 a 1; el score es el promedio ponderado (`DEFAULT_RANKING_WEIGHTS`, suman 1). Se devuelve el `breakdown` para depurar y para guardarlo en `look_products.score_breakdown`.
+`rankProducts(pool, query)` es puro: ordena el pool de una prenda para **un pedido** (talle y precio máximo de ese usuario). Cada factor puntúa de 0 a 1 y el score es el promedio ponderado (`DEFAULT_RANKING_WEIGHTS`, suman 1). Se devuelve el `breakdown` (va a `look_products.score_breakdown`) y el `size_status` del talle del usuario (va a `look_products.size_status`).
 
-| Factor              | Peso | Cálculo inicial                                                      |
-| ------------------- | ---- | -------------------------------------------------------------------- |
-| `category_match`    | 0.25 | 1 misma categoría, 0.5 relacionada, 0 → se descarta                  |
-| `color_match`       | 0.20 | nombre de color (sin tildes) en los colores del producto             |
-| `visual_similarity` | 0.15 | similitud de texto (Jaccard). Reemplazar por embeddings de imagen    |
-| `size_available`    | 0.10 | 1 talle en stock, 0.25 talle sin stock, 0 no existe, 0.5 sin dato    |
-| `stock`             | 0.10 | tabla de disponibilidad                                              |
-| `fit_match`         | 0.08 | fit coincide / sin dato / no coincide                                |
-| `material_match`    | 0.07 | material coincide / sin dato / no coincide                           |
-| `price`             | 0.05 | con precio máximo: 1 si entra; sin máximo: relativo entre candidatos |
+| Factor              | Peso | Cálculo                                                                                                                                                                                                                                                              |
+| ------------------- | ---- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `category_match`    | 0.20 | 1 misma categoría, 0.5 relacionada (remera ↔ camisa, abrigo ↔ blazer, pantalón ↔ jean), 0 → se descarta                                                                                                                                                              |
+| `color_match`       | 0.20 | 1 si el producto tiene el color pedido (nombre canónico: "charcoal"/"carbón" = gris); si no, cercanía del hex en Lab (CIE76, hasta 0.85); sin colores reconocibles ("Magical Forest") 0.5                                                                            |
+| `visual_similarity` | 0.18 | similitud de estilo: qué parte de lo que describe la prenda aparece en el producto (sinónimos, alias como "desert boots" → botas, raíz corta) y estampado: pedir liso y recibir estampado multiplica por 0.4 (también "stripes", "checks"), liso declarado suma 0.15 |
+| `fit_match`         | 0.12 | mismo fit 1; misma familia 0.75 (holgado: relajado/ancho/oversize/boxy; recto: recto/regular; ajustado: slim/skinny); recto contra otro 0.4; ajustado contra holgado 0; sin dato 0.5                                                                                 |
+| `material_match`    | 0.07 | material pedido presente 1; misma familia 0.5 (lana/cashmere, algodón/piqué/gabardina…); otro 0.15; sin dato 0.5                                                                                                                                                     |
+| `size_available`    | 0.10 | según `size_status`: talle en stock 1, sin verificar 0.4, agotado 0.1, no lo ofrece 0; sin talle pedido o accesorio 0.5                                                                                                                                              |
+| `stock`             | 0.08 | `IN_STOCK` 1, `IN_STORE_ONLY` 0.6, `UNKNOWN` 0.4, `OUT_OF_STOCK` 0                                                                                                                                                                                                   |
+| `price`             | 0.05 | con precio máximo: 1 si entra (y decae si no); sin máximo: relativo dentro del pool. Un producto sin precio (local físico) se rankea sin este factor                                                                                                                 |
+
+**Por qué estos pesos.** El SPEC pide que la prioridad sea "qué tan bien reproduce el outfit" y que el precio sea secundario:
+
+- **Estética (0.77):** categoría, estilo, color, fit y material. Color y categoría pesan lo mismo porque son lo primero que se ve; el estilo (estampado, tipo de prenda) va casi igual; fit y material son más finos y la página no siempre los dice.
+- **Disponibilidad (0.18):** talle y stock. El talle pesa más que el stock porque ya incluye si el talle del usuario está en stock.
+- **Precio (0.05):** con eso, un producto igual pero más barato solo desempata.
+
+Medido con productos reales (`test/rank.test.ts`, pools grabados del paso 04b): la remera negra lisa de Legacy ($1290) le gana a su estampada ($1190) y a la estampada de Jack & Jones ($799); el pantalón ancho "Charcoal" le gana al skinny gris para un "pantalón sastrero relaxed", aunque el skinny tenga el talle 42.
+
+**Talle del usuario** (`sizeStatusFor`): `sizeMatches` compara formas canónicas y entiende talles combinados (`XS/S`, cintura con largo `32/34`, `38 (L33)`, `M / W32 L33`).
+
+| `size_status`    | Cuándo                                                                                           |
+| ---------------- | ------------------------------------------------------------------------------------------------ |
+| `AVAILABLE`      | hay variante de su talle en stock (o en local)                                                   |
+| `OUT_OF_STOCK`   | su talle existe, agotado                                                                         |
+| `NOT_OFFERED`    | la tienda publica talles del mismo sistema y el suyo no está                                     |
+| `UNVERIFIED`     | sin talles publicados, stock desconocido u otro sistema (42 EU contra cintura 32/30 en pulgadas) |
+| `NOT_REQUESTED`  | no cargó talle para esa prenda                                                                   |
+| `NOT_APPLICABLE` | accesorio sin talle                                                                              |
+
+**Filtro estricto**: con `strict_max_price` (paso 09) se descarta lo que supera el máximo y lo que no tiene precio. **Diversidad**: después de ordenar, cada producto de una tienda que ya aparece más arriba resta 0.03 al elegir el siguiente: el score no cambia, solo se evita que una tienda acapare el top con empates cercanos.
 
 Los precios en USD se convierten con una tasa aproximada (`APPROX_UYU_PER_USD`) solo para comparar; nunca se muestra ese valor.
 
-## Cache (previsto)
+## Cache (paso 05, D12)
 
-| Qué                          | TTL  | Clave                        |
-| ---------------------------- | ---- | ---------------------------- |
-| Búsqueda (query → resultado) | 24 h | `search:<query serializada>` |
-| Producto (precio / stock)    | 8 h  | URL del producto             |
+| Qué                                    | TTL  | Dónde                                               | Clave                                                            |
+| -------------------------------------- | ---- | --------------------------------------------------- | ---------------------------------------------------------------- |
+| Búsqueda (pool de productos validados) | 24 h | `shopping_search_cache` (`product_ids`, `stats`)    | sha256 de `poolQueryOf(query)`: prenda, términos, público y país |
+| Producto (precio, stock, variantes)    | 8 h  | `products` + `product_variants` (`last_fetched_at`) | URL canónica                                                     |
 
-- Al **agregar al carrito** se revalida siempre el producto (`refreshProduct`), sin cache.
-- Si la revalidación falla, la disponibilidad pasa a `UNKNOWN` (no se muestran datos viejos como ciertos) y la fecha de verificación no avanza (`refreshProduct` → `gone` o `failed`).
-- Hoy existe `createMemoryCache()` (dev/tests). En producción la cache irá en Postgres: `products.last_fetched_at` para productos y una tabla de búsquedas cacheadas, con jobs `REFRESH_PRODUCT`.
+- **El pool es de la prenda, no del usuario.** La clave no lleva talle, precio máximo, límite ni slot, y la cache guarda **todos** los productos validados, sin score. `searchProducts` re-rankea el pool en cada pedido: el mismo pool da órdenes distintos con talles distintos (test de integración y prueba real). `POOL_VERSION` invalida los pools si cambia qué entra en ellos.
+- **Hit**: los productos verificados hace más de 8 h se revalidan (`refreshProduct`) antes de rankear. Si desaparecieron (404), salen del resultado. Una falla deja el stock en `UNKNOWN` y la fecha como estaba. Los demás no se vuelven a descargar.
+- **Miss o vencido**: búsqueda en vivo; se guardan los productos (`upsertProducts`) y el pool (`savePool`), y se borran los pools vencidos.
+- **Inyección**: `searchProducts(query, { cache })` recibe un `SearchCache`. En el worker es `createPostgresSearchCache(db)` (`@asesor/db`), y el paso 06 la conecta al job. En tests y desarrollo, `createMemorySearchCache()`. Una cache caída no rompe la búsqueda: va en vivo.
+- **Revalidación antes de comprar**: `isProductStale(fetched_at)` (`@asesor/shared`, 8 h) lo usan el carrito y "Comprar" (pasos 08 y 10a). Si la revalidación falla, la disponibilidad pasa a `UNKNOWN` y la fecha no avanza.
+
+## Persistencia (paso 05, `packages/db/src/shopping.ts`)
+
+- `upsertProducts(db, products)` → URL → uuid. Es idempotente: el objetivo de conflicto es la URL canónica y los duplicados del lote se deduplican. Las variantes se upsertean por (producto, id externo) y solo se borran las que la tienda dejó de publicar: las que siguen conservan su uuid, porque el carrito las referencia.
+- `saveLookProducts(db, { lookId, slot, items })`: guarda los productos y reemplaza el ranking de esa prenda de forma atómica (función SQL `replace_look_products`, solo service role).
+- `getLookProducts(db, lookId)`: resultados por prenda y en orden. Con el cliente del usuario, la RLS solo se los muestra al dueño Premium.
+- `getProductById`, `getProductsByIds`, `markProductVerified` (mueve `last_fetched_at`) y `markProductUnverified` (stock `UNKNOWN`, fecha intacta).
+- `Product.id` (externo) ≠ `products.id` (uuid): la traducción la hace esta capa.
+
+Prueba real: `apps/worker/scripts/real-shopping-ranking.ts [--account …] [--top M] [--bottom 42] [--shoe 42]`. Corre el look 1 de una cuenta local con la cache Postgres, guarda `look_products` e imprime el top 5 por prenda con su breakdown y los requests HTTP hechos.
 
 ## Seguridad
 
@@ -213,5 +249,5 @@ Los precios en USD se convierten con una tasa aproximada (`APPROX_UYU_PER_USD`) 
 
 ## Próximos pasos
 
-1. Cache en Postgres y jobs de refresco (05).
+1. Jobs reales: `SEARCH_PRODUCTS` con la cache y la persistencia, `REFRESH_PRODUCT` por uuid y progreso (06).
 2. `visual_similarity` con embeddings de imagen.

@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { PRODUCT_FRESHNESS_MS } from "../constants";
 import { CurrencySchema, MoneySchema, ProductCategorySchema } from "./common";
 import { GarmentSchema, GarmentSlotSchema } from "./look-spec";
 
@@ -117,10 +118,30 @@ export type RankingFactor = z.infer<typeof RankingFactorSchema>;
 export const ScoreBreakdownSchema = z.record(RankingFactorSchema, z.number().min(0).max(1));
 export type ScoreBreakdown = z.infer<typeof ScoreBreakdownSchema>;
 
+/**
+ * Talle del usuario en un producto rankeado (para mostrarlo honestamente en la UI):
+ * - AVAILABLE: hay variante de su talle en stock;
+ * - OUT_OF_STOCK: existe su talle, agotado;
+ * - NOT_OFFERED: la tienda publica talles y el suyo no está;
+ * - UNVERIFIED: no se pudo verificar (sin talles publicados o stock desconocido);
+ * - NOT_REQUESTED: no cargó talle para esa prenda;
+ * - NOT_APPLICABLE: accesorio sin talle.
+ */
+export const SizeStatusSchema = z.enum([
+  "AVAILABLE",
+  "OUT_OF_STOCK",
+  "NOT_OFFERED",
+  "UNVERIFIED",
+  "NOT_REQUESTED",
+  "NOT_APPLICABLE",
+]);
+export type SizeStatus = z.infer<typeof SizeStatusSchema>;
+
 export const RankedProductSchema = z.object({
   product: ProductSchema,
   score: z.number().min(0).max(1),
   breakdown: ScoreBreakdownSchema,
+  size_status: SizeStatusSchema.default("NOT_REQUESTED"),
 });
 export type RankedProduct = z.infer<typeof RankedProductSchema>;
 
@@ -164,3 +185,16 @@ export const ShoppingResultSchema = z.object({
   stats: ShoppingStatsSchema,
 });
 export type ShoppingResult = z.infer<typeof ShoppingResultSchema>;
+
+/**
+ * ¿El dato del producto está viejo (verificado hace más de 8 h)? Antes de agregarlo al
+ * carrito o abrir la compra, un producto viejo se revalida (pasos 08 y 10a).
+ */
+export function isProductStale(
+  fetchedAt: string | Date,
+  now: Date = new Date(),
+  maxAgeMs: number = PRODUCT_FRESHNESS_MS,
+): boolean {
+  const time = typeof fetchedAt === "string" ? Date.parse(fetchedAt) : fetchedAt.getTime();
+  return !Number.isFinite(time) || now.getTime() - time > maxAgeMs;
+}

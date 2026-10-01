@@ -14,8 +14,8 @@ Registro vivo. Cada decisión arranca como **propuesta**, salida del relevamient
 | D8  | Selección de proveedor             | `SHOPPING_PROVIDER=mock\|live` en el env del worker, con default `live`. En producción, `mock` se rechaza. Los tests y el E2E fijan `mock` explícitamente.                                                                                                                                                                                                       | 03      | confirmada (03)         |
 | D9  | Extracción                         | Cascada JSON-LD (Product y ProductGroup) → microdata → OpenGraph (04a), y endpoints de plataforma para talles y stock (04b). Playwright no entra en el MVP: solo se documenta.                                                                                                                                                                                   | 04a/04b | confirmada (04a, 04b)   |
 | D10 | Locales sin ecommerce y sin precio | `IN_STORE_ONLY` con ubicación y contacto (`data_json` o columnas), solo con datos reales. Si el precio puede faltar: migración que lo haga nullable, cambio en `ProductSchema` y que el carrito lo contemple.                                                                                                                                                    | 04b     | confirmada (04b)        |
-| D11 | Pesos del ranking                  | Estética (categoría, estilo, color, fit, material) ≫ talle y stock > precio. Los pesos finales y su justificación van en `docs/SHOPPING_ENGINE.md`.                                                                                                                                                                                                              | 05      | propuesta               |
-| D12 | Cache                              | Tabla Postgres de búsquedas (24 h). La clave no lleva datos del usuario, talle, límite ni precio máximo. Guarda el **pool completo** de productos validados, y el ranking con el talle y el `max_price` de cada pedido se recalcula después del hit. Los productos usan `products.last_fetched_at` (8 h), que solo avanza con una verificación exitosa.          | 05      | propuesta               |
+| D11 | Pesos del ranking                  | Estética (categoría, estilo, color, fit, material) ≫ talle y stock > precio. Los pesos finales y su justificación van en `docs/SHOPPING_ENGINE.md`.                                                                                                                                                                                                              | 05      | confirmada (05)         |
+| D12 | Cache                              | Tabla Postgres de búsquedas (24 h). La clave no lleva datos del usuario, talle, límite ni precio máximo. Guarda el **pool completo** de productos validados, y el ranking con el talle y el `max_price` de cada pedido se recalcula después del hit. Los productos usan `products.last_fetched_at` (8 h), que solo avanza con una verificación exitosa.          | 05      | confirmada (05)         |
 | D13 | Granularidad del job               | Un `SEARCH_PRODUCTS` por look, repartido por prenda, más un modo de una sola prenda (para "más barato"). Idempotencia con un id de pedido, no con una clave fija. Una búsqueda activa por (look, prenda): la del look completo no bloquea el modo de una prenda de otro slot. La búsqueda completa reemplaza todos los slots del look.                           | 06      | propuesta               |
 | D14 | Progreso                           | `jobs.progress jsonb` + `update_job_progress()` (solo service role y solo el worker que tiene el job) + grant de lectura al dueño. Las etapas son un enum en `shared` y los textos viven en la web. Sin porcentajes.                                                                                                                                             | 06      | propuesta               |
 | D15 | Talles                             | `UserSizesSchema` y `sizeKindForCategory` en `shared` (paso 03). Columnas tipadas en `profiles` (`top_size`, `bottom_size`, `shoe_size`, `shoe_size_system`) con grants de UPDATE (paso 07).                                                                                                                                                                     | 03, 07  | shared: confirmada (03) |
@@ -129,3 +129,38 @@ Registro vivo. Cada decisión arranca como **propuesta**, salida del relevamient
 - **Validate** (`validateProduct`): `not_extracted`, `host_mismatch`, `blocked_store`, `invalid_price` y `foreign_store`; la moneda ya se filtra al normalizar. "Vende en Uruguay" = registro, `.uy`, UYU o evidencia en la página (`eligibleRegion`/`areaServed`, país del local, `og:locale es_UY`). Las tiendas ficticias del mock declaran `eligibleRegion: UY` en su JSON-LD, como haría una real, en lugar de exceptuar `.test` en el código.
 - **URL canónica**: `rel=canonical` de la misma tienda (salvo raíz y rutas internas VTEX `/_v/`), sin tracking ni `?variant=`. Se descartan solo parámetros conocidos; los demás se conservan porque pueden identificar la página (`producto.php?id=9`).
 - **Conteos nuevos** en `ShoppingStats` (aditivos, default 0): `unverified_stock` y `unverified_sizes`, sobre los productos válidos (como `products`).
+
+### Paso 05 — ranking y cache persistente
+
+- **D11 confirmada, con pesos nuevos**:
+
+  | Factor    | Peso |
+  | --------- | ---- |
+  | categoría | 0.20 |
+  | color     | 0.20 |
+  | estilo    | 0.18 |
+  | fit       | 0.12 |
+  | material  | 0.07 |
+  | talle     | 0.10 |
+  | stock     | 0.08 |
+  | precio    | 0.05 |
+  - Estética 0.77, disponibilidad 0.18 y precio 0.05: la estética pesa más de 15 veces el precio, con test.
+  - Cambios respecto de la propuesta: la categoría baja de 0.25 a 0.20 (es casi siempre 1: la búsqueda ya filtra por prenda) y el fit sube a 0.12 (la silueta es parte de "reproducir el outfit" y ahora hay fit canónico desde 04a).
+
+- **Estilo en vez de Jaccard.** El Jaccard de texto castigaba títulos largos.
+  - El factor nuevo (`visual_similarity`, sin cambiar el nombre del factor ni el schema) mide qué parte de lo que pide la prenda aparece en el producto, con sinónimos y los mismos alias que la búsqueda (`applyTermAliases`, exportado de `shared`).
+  - Liso contra estampado: penaliza estampado cuando se pide liso, también en inglés ("stripes", "checks"). Salió de la prueba real: una camisa rayada quedaba primera para "camisa oxford cruda".
+  - El estampado no es un factor aparte: un noveno factor cambiaba `RANKING_FACTORS` y el breakdown guardado.
+- **Color por hex**: nombre canónico = 1; si no, cercanía en Lab (CIE76) con un hex aproximado por color canónico (`COLOR_HEX`), hasta 0.85. Los colores de fantasía ("Magical Forest") quedan neutros (0.5). "charcoal" y "carbón" pasaron al vocabulario como gris.
+- **Talle con estado** (`SizeStatus`, aditivo en `RankedProduct` y columna `look_products.size_status`).
+  - Un talle de otro sistema (42 EU contra cintura 32/30 en pulgadas) es `UNVERIFIED`, no `NOT_OFFERED`: no hay conversión confiable.
+  - `sizeMatches` entiende talles combinados (`XS/S`, `32-30`, `38 (L33)`).
+- **Precio**: sin precio (local físico) se rankea sin ese factor, renormalizando los pesos. `strict_max_price` filtra (paso 09).
+- **Diversidad leve**: 0.03 por cada producto anterior de la misma tienda. Solo reordena empates cercanos y no cambia el score.
+- **D12 confirmada**: tabla `shopping_search_cache` con el pool completo (uuids de productos validados, sin score) y clave sha256 de la prenda (sin talle, precio, límite, slot ni datos del usuario). `searchProducts` re-rankea el pool en cada pedido.
+  - En un hit, los productos de más de 8 h se revalidan antes de rankear (los 404 salen del resultado); los demás no se vuelven a descargar.
+  - La cache es inyectable (`SearchCache`): Postgres en `@asesor/db` (cumple la interfaz por estructura, sin que `db` dependa de `shopping`) y memoria en tests.
+  - Los vencidos se purgan al guardar.
+- **Identidad de producto = URL canónica**: el único `(store_domain, external_id)` pasó a índice. Ese único chocaba con el de `url` si una tienda renombra el handle o la página declara su id distinto entre corridas, y la URL ya está canonicalizada (04b).
+- **`look_products`**: reemplazo atómico por prenda (`replace_look_products`, solo service role). Las variantes que siguen publicadas conservan su uuid (el carrito las referencia); solo se borran las que desaparecen.
+- **Frescura**: `isProductStale` en `shared` (8 h), para que la web (carrito, "Comprar") la use sin importar `shopping`.

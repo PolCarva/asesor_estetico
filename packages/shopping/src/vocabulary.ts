@@ -73,7 +73,7 @@ export const COLOR_PATTERNS: Array<[string, RegExp]> = [
   ["marrón", /\b(marron(es)?|brown|chocolate|cafe|tabaco|cognac)\b/],
   ["verde oliva", /\b(verde oliva|oliva|olive|militar)\b/],
   ["verde", /\b(verdes?|green)\b/],
-  ["gris", /\b(gris(es)?|grey|gray|melange|grafito|plomo|antracita)\b/],
+  ["gris", /\b(gris(es)?|grey|gray|melange|grafito|plomo|antracita|charcoal|carbon)\b/],
   ["bordó", /\b(bordo|bordeaux|burgundy|vino|borravino)\b/],
   ["rojo", /\b(roj[oa]s?|red)\b/],
   ["rosa", /\b(rosas?|rosad[oa]s?|pink|fucsia)\b/],
@@ -86,6 +86,38 @@ export const COLOR_PATTERNS: Array<[string, RegExp]> = [
   ["dorado", /\b(dorad[oa]s?|gold)\b/],
   ["plateado", /\b(platead[oa]s?|silver)\b/],
 ];
+
+/**
+ * Hex aproximado de cada color canónico, para medir cercanía con el color de la prenda del
+ * LookSpec (que trae hex). Solo se usa para comparar; nunca se muestra.
+ */
+export const COLOR_HEX: Record<string, string> = {
+  "azul marino": "#1F2A44",
+  celeste: "#8EC5E8",
+  azul: "#2F5DA8",
+  negro: "#111111",
+  blanco: "#F7F7F5",
+  crudo: "#EFE8DA",
+  beige: "#D8C3A5",
+  arena: "#D2B48C",
+  camel: "#C19A6B",
+  caqui: "#A69C6B",
+  marrón: "#6F4E37",
+  "verde oliva": "#6B6B3A",
+  verde: "#3E7B4F",
+  gris: "#808080",
+  bordó: "#6D1A2B",
+  rojo: "#C0392B",
+  rosa: "#E8A0B4",
+  amarillo: "#F2C94C",
+  mostaza: "#D4A017",
+  naranja: "#E67E22",
+  terracota: "#B5553C",
+  violeta: "#7D5BA6",
+  turquesa: "#40B5AD",
+  dorado: "#C9A44C",
+  plateado: "#C0C0C0",
+};
 
 /** Materiales → nombre canónico. `titleOnly`: muy ambiguo en descripciones ("combinalo con un jean"). */
 export const MATERIAL_PATTERNS: Array<[string, RegExp, { titleOnly?: boolean }?]> = [

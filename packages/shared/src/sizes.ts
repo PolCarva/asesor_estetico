@@ -103,9 +103,45 @@ export function normalizeSizeLabel(label: string | null | undefined): string | n
     const value = number((regional[2] ?? regional[3])!);
     return system === "EU" || system === "EUR" ? value : `${system} ${value}`;
   }
-  // Pantalón con cintura y largo ("W32 L34", "32/34", "32x34").
-  const waistLength = /^W?(\d{2})\s?(?:[/X]|\sL)\s?L?(\d{2})$/.exec(s);
+  // Pantalón con cintura y largo ("W32 L34", "32/34", "32x34", "32-30", "38 (L33)").
+  const waistLength = /^W?(\d{2})\s?(?:[/X-]|\sL|\s?\(L)\s?L?(\d{2})\)?$/.exec(s);
   if (waistLength) return `${waistLength[1]}/${waistLength[2]}`;
   if (/^\d{1,2}(?:[.,]5)?$/.test(s)) return number(s);
   return s.slice(0, 20);
+}
+
+/**
+ * ¿El talle de una variante sirve para el talle del usuario? Compara formas canónicas y
+ * entiende los talles combinados de las tiendas: `XS/S` (sirve para XS y para S), `32/34`
+ * (cintura 32 con largo), `M / W32 L33` (letra o cintura).
+ */
+export function sizeMatches(userSize: string | null, variantSize: string | null): boolean {
+  const user = normalizeSizeLabel(userSize);
+  const variant = normalizeSizeLabel(variantSize);
+  if (!user || !variant) return false;
+  if (user === variant) return true;
+  // Cintura con largo: "32/34" sirve para "32".
+  const waist = /^(\d{2})\/\d{2}$/.exec(variant)?.[1];
+  if (waist && waist === user) return true;
+  // Combinados: cada parte por separado ("XS/S", "M / W32 L33").
+  const parts = variant
+    .split(/\s*\/\s*|\s+/)
+    .map((part) => normalizeSizeLabel(part.replace(/^W(\d{2})$/, "$1")))
+    .filter((part): part is string => Boolean(part));
+  return parts.length > 1 && parts.includes(user);
+}
+
+/** Sistema de un talle canónico, para saber si dos talles se pueden comparar. */
+export type SizeSystem = "ALPHA" | "NUMBER" | "WAIST_LENGTH" | "US" | "UK" | "UNIQUE" | "OTHER";
+
+export function sizeSystem(size: string | null): SizeSystem | null {
+  const s = normalizeSizeLabel(size);
+  if (!s) return null;
+  if (s === "ÚNICO") return "UNIQUE";
+  if (ALPHA_SIZES.some(([canonical]) => canonical === s)) return "ALPHA";
+  if (/^\d{1,2}(\.5)?$/.test(s)) return "NUMBER";
+  if (/^\d{2}\/\d{2}$/.test(s)) return "WAIST_LENGTH";
+  if (s.startsWith("US ")) return "US";
+  if (s.startsWith("UK ")) return "UK";
+  return "OTHER";
 }
