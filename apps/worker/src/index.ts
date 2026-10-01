@@ -3,6 +3,7 @@ import { hostname } from "node:os";
 import { createAIProvider } from "@asesor/ai";
 import { AnalyticsService, DatabaseAnalyticsProvider } from "@asesor/analytics";
 import { getWorkerEnv } from "@asesor/config/env/worker";
+import { createPostgresSearchCache } from "@asesor/db";
 import { createWorkerSupabaseClient } from "@asesor/db/worker";
 import { createLogger } from "@asesor/shared";
 import {
@@ -45,24 +46,23 @@ logger.info("proveedor de IA", {
 });
 
 // Shopping: live por defecto (tiendas reales); mock solo en tests/E2E y nunca en producción.
+const discovery = env.SHOPPING_PROVIDER === "live" && Boolean(env.OPENROUTER_API_KEY);
 const shopping =
   env.SHOPPING_PROVIDER === "mock"
     ? { searchProvider: new MockSearchProvider(), fetcher: new MockProductFetcher() }
     : createLiveShopping({
         botContact: env.SHOPPING_BOT_CONTACT,
         // Sin clave de OpenRouter no hay descubrimiento fuera del registro de tiendas.
-        webSearch: env.OPENROUTER_API_KEY
-          ? new OpenRouterWebSearchClient({
-              apiKey: env.OPENROUTER_API_KEY,
-              model: env.OPENROUTER_TEXT_MODEL,
-            })
-          : undefined,
+        webSearch:
+          discovery && env.OPENROUTER_API_KEY
+            ? new OpenRouterWebSearchClient({
+                apiKey: env.OPENROUTER_API_KEY,
+                model: env.OPENROUTER_TEXT_MODEL,
+              })
+            : undefined,
         onError: (source, error) => logger.warn("fuente de shopping falló", { source, error }),
       });
-logger.info("proveedor de shopping", {
-  provider: env.SHOPPING_PROVIDER,
-  discovery: env.SHOPPING_PROVIDER === "live" && Boolean(env.OPENROUTER_API_KEY),
-});
+logger.info("proveedor de shopping", { provider: env.SHOPPING_PROVIDER, discovery });
 
 const runner = new WorkerRunner({
   queue: createPostgresJobQueue(db, { workerId }),
@@ -79,6 +79,12 @@ const runner = new WorkerRunner({
     searchProvider: shopping.searchProvider,
     fetcher: shopping.fetcher,
     variants: "variants" in shopping ? shopping.variants : undefined,
+    // Pools de búsqueda de 24 h en Postgres (paso 05): una prenda ya buscada no se re-scrapea.
+    searchCache: createPostgresSearchCache(db),
+    // El costo de cada búsqueda web va a ai_usage, por job.
+    webSearch: discovery
+      ? { provider: "openrouter", model: `${env.OPENROUTER_TEXT_MODEL}+web_search` }
+      : undefined,
   },
   logger,
   concurrency: env.WORKER_CONCURRENCY,

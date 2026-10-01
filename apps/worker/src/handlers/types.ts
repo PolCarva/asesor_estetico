@@ -1,8 +1,19 @@
 import { AIError, type AIProvider } from "@asesor/ai";
 import type { AnalyticsService } from "@asesor/analytics";
 import type { Json, JobRow, TypedSupabaseClient } from "@asesor/db";
-import { isAppError, type JobType, type Logger } from "@asesor/shared";
-import type { ProductFetcher, SearchProvider, VariantEnricher } from "@asesor/shopping";
+import {
+  isAppError,
+  type JobPayload,
+  JobPayloadSchemas,
+  type JobType,
+  type Logger,
+} from "@asesor/shared";
+import type {
+  ProductFetcher,
+  SearchCache,
+  SearchProvider,
+  VariantEnricher,
+} from "@asesor/shopping";
 import { ZodError } from "zod";
 
 export interface HandlerDeps {
@@ -14,6 +25,10 @@ export interface HandlerDeps {
   fetcher: ProductFetcher;
   /** Talles y stock por plataforma (solo con SHOPPING_PROVIDER=live). */
   variants?: VariantEnricher;
+  /** Pools de búsqueda (24 h); en el worker, Postgres. Sin ella, cada búsqueda va en vivo. */
+  searchCache?: SearchCache;
+  /** Buscador web del descubrimiento de tiendas, para registrar su costo en ai_usage. */
+  webSearch?: { provider: string; model: string };
 }
 
 export interface JobContext {
@@ -21,6 +36,11 @@ export interface JobContext {
   /** Se aborta si el worker se apaga antes de que termine el job. */
   signal: AbortSignal;
   deps: HandlerDeps;
+  /**
+   * Guarda el progreso del job (`jobs.progress`, lo lee el dueño). Best-effort: si falla,
+   * solo se loguea; nunca rompe el job.
+   */
+  reportProgress: (progress: NonNullable<Json>) => Promise<void>;
 }
 
 /** Devuelve el resultado a guardar en jobs.result. */
@@ -33,6 +53,13 @@ export class NonRetryableJobError extends Error {
     super(message, options);
     this.name = "NonRetryableJobError";
   }
+}
+
+export function parsePayload<T extends JobType>(job: JobRow, type: T): JobPayload<T> {
+  const parsed = JobPayloadSchemas[type].safeParse(job.payload);
+  if (!parsed.success)
+    throw new NonRetryableJobError(`Payload inválido para ${type}.`, { cause: parsed.error });
+  return parsed.data as JobPayload<T>;
 }
 
 const PERMANENT_APP_ERRORS = new Set([

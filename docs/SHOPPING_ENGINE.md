@@ -6,6 +6,7 @@
 - **Descarga, extracción y normalización reales** (paso 04a): fetcher endurecido (anti-SSRF con DNS y redirects, timeout, tamaño, robots, ritmo por dominio), extracción en cascada JSON-LD → microdata → OpenGraph y normalización de precios locales, categorías de Uruguay, fit, colores, materiales e ids estables.
 - **Talles, stock, Validate y locales físicos** (paso 04b): variantes con talle y disponibilidad desde la plataforma de cada tienda (Fenicio, VTEX, Shopify, WooCommerce), talles normalizados, etapa Validate (página descargada, host de la tienda, Uruguay, precio, URL canónica, tiendas bloqueadas) y productos `IN_STORE_ONLY` con precio opcional, ubicación y contacto.
 - **Ranking y cache persistente** (paso 05): ranking estético con talle del usuario y estado del talle, pesos documentados; cache de pools en Postgres (24 h) re-rankeada por pedido, frescura de producto (8 h) y persistencia idempotente de productos, variantes y `look_products`.
+- **Jobs reales** (paso 06): `SEARCH_PRODUCTS` (look completo o una prenda) y `REFRESH_PRODUCT` en el worker, con la cache Postgres, progreso por etapas en `jobs.progress`, fallas parciales por prenda, Premium verificado en el servidor y en el worker, y `startLookShopping` / `startLookShoppingAction` para encolar.
 - **Mocks** (`MockSearchProvider`, `MockProductFetcher`, catálogo ficticio `.test`): solo con `SHOPPING_PROVIDER=mock` (tests y E2E). El default del worker es `live` y en producción `mock` está prohibido por el schema de env.
 
 ## Pipeline
@@ -16,13 +17,16 @@ ShoppingQuery
   → SearchProvider        URLs candidatas
   → fetchProductPage      descarga segura (HttpProductFetcher → PoliteHttpClient → transporte con IP validada)
   → extractProduct        JSON-LD → microdata → OpenGraph → RawProduct (con la fuente de cada dato)
+  → normalize + validate  primera pasada sin variantes: descarta lo que no sirve antes de consultar la plataforma
   → VariantEnricher       talles y stock de la plataforma (Fenicio, VTEX, Shopify, Woo); si falla, sin verificar
   → normalizeProduct      RawProduct → Product (Zod), o el motivo del descarte
   → validateProduct       página real, host de la tienda, vende en Uruguay, precio > 0, URL canónica
   → SearchCache           se guarda el pool completo (products, product_variants, shopping_search_cache)
   → rankProducts          por pedido: score ponderado + breakdown + estado del talle del usuario
-  → saveLookProducts      ranking de la prenda en look_products (paso 06 lo hace desde el job)
+  → saveLookProducts      ranking de la prenda en look_products (desde el job SEARCH_PRODUCTS, paso 06)
 ```
+
+`loadCandidates` trabaja por fases sobre todas las candidatas: primero lee todas las páginas, después las compara (normalización y Validate, sin requests) y al final consulta la plataforma solo para las que pasaron. Las variantes solo cambian talles y stock, nunca precio, moneda ni título, así que nada de lo descartado en la primera pasada lo habría salvado la plataforma.
 
 Funciones públicas (`packages/shopping`): `searchProducts`, `loadCandidate(s)`, `summarizeOutcomes`, `fetchProductPage`, `extractProduct`, `PlatformVariantEnricher`, `normalizeProduct(Result)`, `validateProduct`, `canonicalProductUrl`, `rankProducts`, `refreshProduct`. `createLiveShopping` devuelve `searchProvider`, `fetcher` y `variants` (el worker los recibe como dependencias).
 
@@ -228,7 +232,8 @@ Los precios en USD se convierten con una tasa aproximada (`APPROX_UYU_PER_USD`) 
 - **El pool es de la prenda, no del usuario.** La clave no lleva talle, precio máximo, límite ni slot, y la cache guarda **todos** los productos validados, sin score. `searchProducts` re-rankea el pool en cada pedido: el mismo pool da órdenes distintos con talles distintos (test de integración y prueba real). `POOL_VERSION` invalida los pools si cambia qué entra en ellos.
 - **Hit**: los productos verificados hace más de 8 h se revalidan (`refreshProduct`) antes de rankear. Si desaparecieron (404), salen del resultado. Una falla deja el stock en `UNKNOWN` y la fecha como estaba. Los demás no se vuelven a descargar.
 - **Miss o vencido**: búsqueda en vivo; se guardan los productos (`upsertProducts`) y el pool (`savePool`), y se borran los pools vencidos.
-- **Inyección**: `searchProducts(query, { cache })` recibe un `SearchCache`. En el worker es `createPostgresSearchCache(db)` (`@asesor/db`), y el paso 06 la conecta al job. En tests y desarrollo, `createMemorySearchCache()`. Una cache caída no rompe la búsqueda: va en vivo.
+- **Inyección**: `searchProducts(query, { cache })` recibe un `SearchCache`. En el worker es `createPostgresSearchCache(db)` (`@asesor/db`), conectada al job desde el paso 06. En tests y desarrollo, `createMemorySearchCache()`. Una cache caída no rompe la búsqueda: va en vivo.
+- **Qué no se guarda** (paso 06): un pool vacío (puede ser una falla pasajera de las tiendas y escondería productos por 24 h) ni una búsqueda cortada por timeout o apagado.
 - **Revalidación antes de comprar**: `isProductStale(fetched_at)` (`@asesor/shared`, 8 h) lo usan el carrito y "Comprar" (pasos 08 y 10a). Si la revalidación falla, la disponibilidad pasa a `UNKNOWN` y la fecha no avanza.
 
 ## Persistencia (paso 05, `packages/db/src/shopping.ts`)
@@ -241,6 +246,46 @@ Los precios en USD se convierten con una tasa aproximada (`APPROX_UYU_PER_USD`) 
 
 Prueba real: `apps/worker/scripts/real-shopping-ranking.ts [--account …] [--top M] [--bottom 42] [--shoe 42]`. Corre el look 1 de una cuenta local con la cache Postgres, guarda `look_products` e imprime el top 5 por prenda con su breakdown y los requests HTTP hechos.
 
+## Jobs (paso 06, D13 y D14)
+
+### `SEARCH_PRODUCTS`
+
+Payload `{ user_id, look_id, sizes, slot?, max_price? }` (`SearchProductsPayloadSchema`). Un job por look; con `slot`, una sola prenda ("Buscar más barato", paso 09) y `max_price` estricto.
+
+1. **Autorización otra vez en el worker** (corre con service role): el job tiene que ser del usuario del payload, el look del usuario (`getLookForUser`) y el usuario Premium hoy (`isUserPremium`). `PREMIUM_REQUIRED` y `NOT_FOUND` no se reintentan.
+2. **Queries**: `buildShoppingQueries` con los talles del pedido y el público del perfil del look (`getStyleProfileCore` + `audienceForProfile`).
+3. **Prendas en paralelo** con `searchProducts` y la cache Postgres. El cliente HTTP ya limita por tienda (2 a la vez, una cada 300 ms), así que el paralelismo no apura a ninguna tienda. Timeout del job: 4 minutos (`AbortSignal.any` con el apagado del worker); una búsqueda cortada no se cachea.
+4. **Persistencia**: `saveLookProducts` por prenda (reemplazo atómico). En una búsqueda completa, las prendas que fallaron quedan vacías (no conservan resultados viejos) y se borran los resultados de prendas que ya no están en el look (`removeLookProductsExcept`). En el modo de una prenda solo se toca esa prenda.
+5. **Fallas parciales**: cada prenda falla sola. Si fallan todas, el job falla (y se reintenta: `maxAttempts` 2) y los resultados anteriores quedan como estaban.
+6. **Resumen** (`ShoppingSearchSummary`, solo conteos) en `jobs.result` y en el último `progress.summary`: prendas con resultados, prendas fallidas, candidatos, productos, guardados, stock y talle sin verificar, `partial` (alguna prenda falló o quedó sin productos) y hits de cache.
+7. **Analytics y costos**: `shopping_completed` (servidor, propiedades planas) y una fila `WEB_SEARCH` en `ai_usage` con el costo de las búsquedas web del job.
+
+### Progreso por etapas
+
+`searchProducts(query, { onStage })` llama a `onStage` en cada frontera real del pipeline:
+
+| Etapa             | Texto en la UI (paso 07)               | Qué pasa                                                                                |
+| ----------------- | -------------------------------------- | --------------------------------------------------------------------------------------- |
+| `SEARCHING`       | "Buscando prendas…"                    | Buscar la prenda en la cache o URLs candidatas (registro, sitemaps, descubrimiento web) |
+| `CHECKING_STORES` | "Revisando tiendas…"                   | Descargar y leer las páginas de producto                                                |
+| `COMPARING`       | "Comparando opciones…"                 | Normalizar y validar cada producto (sin requests)                                       |
+| `VERIFYING`       | "Verificando precios y talles…"        | Talles y stock por plataforma; con un pool cacheado, revalidar lo de más de 8 h         |
+| `RANKING`         | "Ordenando las mejores coincidencias…" | Ranking con el talle del usuario y guardado                                             |
+
+Con un pool cacheado: `SEARCHING → VERIFYING → RANKING`. El job (`createStageTracker`) reporta la etapa de la prenda **más atrasada**, así nunca retrocede, más `slots_done`/`slots_total`. Solo escribe cuando algo cambia, en orden, y un error al guardarlo no corta la búsqueda. Sin porcentajes.
+
+### Inicio y lectura (`packages/db/src/shopping-jobs.ts`, D22)
+
+- `startLookShopping({ userClient, serviceClient, lookId, sizes, slot?, maxPrice?, requestId })`: Premium (`requirePremium` con el cliente del usuario), dueño del look (RLS), prenda existente en el look, una búsqueda activa por (look, prenda) y encolado con prioridad 8 (debajo del análisis y del look gratis, arriba de los looks Premium), `maxAttempts` 2 y clave `search:<look>:<slot|look>:<requestId>`. Si ya hay una activa, la devuelve (`alreadyRunning`). Una carrera entre dos pedidos la frena el índice único de búsquedas activas.
+- `startLookShoppingAction({ lookId, sizes?, requestId? })` (web, `app/app/looks/[id]/actions.ts`): `requirePremium` → estado `paywall` para free, Zod, rate limit `shoppingSearch` (10 por hora por usuario), `startLookShopping`, `shopping_started` y `revalidatePath`. Nunca devuelve errores técnicos.
+- `getLatestLookSearch(client, lookId, { slot? })` / `getLookShoppingState(lookId)` (web): estado y progreso del último job, con el cliente del usuario.
+
+### `REFRESH_PRODUCT`
+
+Payload `{ product_id }` (uuid de `products`). Carga el producto, lo re-extrae con `refreshProduct` (1 minuto de timeout) y guarda con `markProductVerified` (precio, stock, variantes y `last_fetched_at`) o, si no se pudo verificar (404, bloqueo, falla), `markProductUnverified` (stock `UNKNOWN`, fecha intacta). Devuelve `{ product_id, status, availability }`. Un apagado del worker no marca el producto.
+
+Prueba real: `apps/worker/scripts/real-shopping-job.ts [--keep]`, con el worker en `AI_PROVIDER=mock SHOPPING_PROVIDER=live`: usuarios locales nuevos, la búsqueda de un look seguida etapa por etapa como la UI, una segunda corrida desde la cache con dos pedidos simultáneos, el modo de una prenda con precio máximo, `REFRESH_PRODUCT` y el rechazo de un usuario free.
+
 ## Seguridad
 
 - Anti-SSRF en dos capas: `isSafeProductUrl` por nombre y `createSafeTransport` por IP al conectar (sin DNS rebinding), y cada redirect revalidado. Detalle en "Descarga segura".
@@ -249,5 +294,5 @@ Prueba real: `apps/worker/scripts/real-shopping-ranking.ts [--account …] [--to
 
 ## Próximos pasos
 
-1. Jobs reales: `SEARCH_PRODUCTS` con la cache y la persistencia, `REFRESH_PRODUCT` por uuid y progreso (06).
+1. Guardar las alternativas más baratas aparte del ranking principal (paso 09): hoy el modo de una prenda reemplaza el ranking de esa prenda.
 2. `visual_similarity` con embeddings de imagen.

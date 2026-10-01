@@ -132,6 +132,23 @@ Cola en PostgreSQL (sin Redis ni servicios externos). Ver `DATA_MODEL.md` y `AI_
 - `enqueue_job` (con clave de idempotencia opcional), `claim_next_job` (`FOR UPDATE SKIP LOCKED`, recupera locks vencidos), `complete_job`, `fail_job` (backoff exponencial, errores no reintentables), `retry_job` (manual).
 - Solo `service_role` puede ejecutarlas.
 - `WorkerRunner`: N carriles (`WORKER_CONCURRENCY`), polling con espera, apagado limpio con SIGTERM/SIGINT (deja de tomar jobs, espera los activos, aborta los que exceden el timeout y quedan reintentables).
+- **Progreso** (paso 06, D14): `jobs.progress` (jsonb, nullable) lo escribe solo el worker que tiene el job, con `update_job_progress(job_id, worker_id, progress)` (solo `service_role`; falla si el job no está `RUNNING` bajo ese worker). Los handlers lo reportan con `ctx.reportProgress(...)`, que es best-effort: un error al guardarlo se loguea y el job sigue. El dueño lo lee con su cliente (grant por columna + RLS "jobs: select own"); nunca `payload`, `result` ni `last_error`.
+- **Referencias legibles**: `jobs.look_id` y `jobs.garment_slot` son columnas generadas desde el payload (validado con Zod al encolar), para que la UI encuentre la búsqueda de un look sin abrir `payload`.
+- **Timeouts por job**: los handlers de shopping combinan `ctx.signal` (apagado) con `AbortSignal.timeout(...)` (4 min la búsqueda de un look, 1 min `REFRESH_PRODUCT`).
+
+### Búsqueda de productos (paso 06)
+
+```
+Server action startLookShoppingAction (requirePremium · Zod · rate limit · shopping_started)
+  → startLookShopping (@asesor/db: Premium, dueño del look, una búsqueda activa por (look, prenda), enqueue)
+  → SEARCH_PRODUCTS (worker: dueño y Premium otra vez, prendas en paralelo con cache de pools,
+     progreso por etapas, persistencia, resumen, shopping_completed)
+  → la UI sigue el job con getLatestLookSearch (cliente del usuario) hasta COMPLETED/FAILED
+```
+
+- Premium se verifica en tres lugares: la server action (`requirePremium`), `startLookShopping` y el worker (`isUserPremium`, porque la suscripción pudo vencer entre el encolado y la ejecución).
+- La web nunca espera la búsqueda: encola y devuelve el id del job (SPEC "JOBS": sin requests HTTP abiertos).
+- Detalle del pipeline, etapas y fallas parciales en `SHOPPING_ENGINE.md`.
 
 ## PWA
 
@@ -141,7 +158,7 @@ Cola en PostgreSQL (sin Redis ni servicios externos). Ver `DATA_MODEL.md` y `AI_
 ## Observabilidad
 
 - Logger JSON estructurado (`createLogger` en `@asesor/shared`) en web y worker. Redacta claves sensibles (tokens, cookies, contraseñas, firmas, URLs firmadas, payloads, emails, imágenes) y trunca strings largos.
-- `ai_usage` registra cada operación de IA (tokens, imágenes, costo estimado, duración, éxito).
+- `ai_usage` registra cada operación de IA (tokens, imágenes, costo estimado, duración, éxito), también el costo de las búsquedas web del descubrimiento de tiendas (`WEB_SEARCH`, una fila por job).
 - `analytics_events` guarda eventos de producto; el navegador solo puede emitir una lista blanca vía `/api/analytics`.
 
 ## Decisiones

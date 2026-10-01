@@ -17,6 +17,8 @@ export const rateLimiters = {
   photoUpload: createMemoryRateLimiter({ limit: 20, windowMs: 60 * 60_000 }),
   analytics: createMemoryRateLimiter({ limit: 60, windowMs: 60_000 }),
   webhook: createMemoryRateLimiter({ limit: 120, windowMs: 60_000 }),
+  // Cada búsqueda de productos recorre tiendas reales y puede pagar búsquedas web.
+  shoppingSearch: createMemoryRateLimiter({ limit: 10, windowMs: 60 * 60_000 }),
 } satisfies Record<string, RateLimiter>;
 
 export async function enforceRateLimit(limiter: RateLimiter, key: string) {

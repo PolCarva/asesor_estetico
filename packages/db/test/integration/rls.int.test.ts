@@ -135,6 +135,15 @@ describeIntegration("RLS, auth y Storage", () => {
     // Cache de búsquedas (paso 05): sin `id`, se consulta por su clave.
     const cache = await anon.from("shopping_search_cache").select("key").limit(1);
     expect(cache.error).not.toBeNull();
+    // Progreso de los jobs (paso 06): ni leerlo ni escribirlo.
+    const progress = await anon.from("jobs").select("progress, look_id").limit(1);
+    expect(progress.error !== null || (progress.data ?? []).length === 0).toBe(true);
+    const rpc = await anon.rpc("update_job_progress", {
+      p_job_id: crypto.randomUUID(),
+      p_worker_id: "anon",
+      p_progress: {},
+    });
+    expect(rpc.error?.code).toBe("42501");
   });
 
   it("asesoría: el núcleo lo ve cualquier plan; la asesoría detallada solo Premium", async () => {

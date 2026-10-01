@@ -96,6 +96,23 @@ export async function failJob(
   return data;
 }
 
+/**
+ * Guarda el progreso de un job en curso (`jobs.progress`, lo lee el dueño). Solo funciona
+ * para el worker que lo tiene tomado: si el job ya no es suyo, CONFLICT.
+ */
+export async function updateJobProgress(
+  client: TypedSupabaseClient,
+  input: { jobId: string; workerId: string; progress: NonNullable<Json> },
+): Promise<void> {
+  const { error } = await client.rpc("update_job_progress", {
+    p_job_id: input.jobId,
+    p_worker_id: input.workerId,
+    p_progress: input.progress,
+  });
+  if (error)
+    throw new AppError("CONFLICT", "No se pudo guardar el progreso del job.", { cause: error });
+}
+
 /** Reintento manual de un job FAILED (por ejemplo, desde /admin). */
 export async function retryJob(client: TypedSupabaseClient, jobId: string): Promise<JobRow> {
   const { data, error } = await client.rpc("retry_job", { p_job_id: jobId });

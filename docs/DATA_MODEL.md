@@ -170,6 +170,9 @@ erDiagram
     text locked_by
     timestamptz finished_at
     text last_error
+    jsonb progress
+    uuid look_id "generada desde payload"
+    text garment_slot "generada desde payload"
   }
   AI_USAGE {
     uuid id PK
@@ -213,7 +216,7 @@ erDiagram
 | `payment_events`        | Webhooks recibidos; `unique(provider, event_id)` = idempotencia                | Servidor                               |
 | `chat_threads`          | Conversaciones con el asesor                                                   | Usuario (Premium)                      |
 | `chat_messages`         | Mensajes; el usuario solo puede escribir `role = 'user'`                       | Usuario / servidor                     |
-| `jobs`                  | Cola de trabajos                                                               | Solo service role                      |
+| `jobs`                  | Cola de trabajos, con progreso por etapas (`progress`)                         | Solo service role                      |
 | `ai_usage`              | Costo y uso de cada operación de IA                                            | Solo service role                      |
 | `analytics_events`      | Eventos de producto                                                            | Solo service role                      |
 
@@ -239,10 +242,23 @@ El análisis (`StyleProfile` v3, ver `AI_PIPELINE.md`) se guarda partido para qu
 - **Pools de búsqueda** (`shopping_search_cache`): `key` (sha256 de la prenda, sin talle, precio máximo, límite ni datos del usuario), `query_json`, `product_ids uuid[]`, `stats`, `expires_at` (24 h, con índice para purgar). RLS habilitada y sin grants para `anon` ni `authenticated`: solo el worker.
 - **Resultados por look** (`look_products`): `size_status` (`AVAILABLE`, `OUT_OF_STOCK`, `NOT_OFFERED`, `UNVERIFIED`, `NOT_REQUESTED`, `NOT_APPLICABLE`; null en filas anteriores) para mostrar "talle sin verificar" con honestidad. El ranking de una prenda se reemplaza entero y de forma atómica con `replace_look_products`. Lo lee solo el dueño Premium.
 
+## Jobs de shopping
+
+Migración `20261001000300_shopping_jobs.sql` (paso 06, D13 y D14):
+
+- **`progress`** (jsonb, nullable): `ShoppingProgress` de `@asesor/shared` (`stage` del enum `SEARCHING | CHECKING_STORES | COMPARING | VERIFYING | RANKING`, `slots_total`, `slots_done`, `updated_at` y, en el último, `summary`). Sin porcentajes. Lo escribe solo `update_job_progress` (service role, y solo el worker que tiene el job `RUNNING`).
+- **`look_id` y `garment_slot`**: columnas generadas (`payload ->> 'look_id'` / `'slot'`). No se insertan: salen del payload, que ya se validó con Zod. Sirven para que la UI encuentre la búsqueda de un look sin leer `payload`.
+- **Una búsqueda activa por (look, prenda)**: índice único parcial `jobs_one_active_search_idx (look_id, coalesce(garment_slot, '*')) where type = 'SEARCH_PRODUCTS' and status in ('QUEUED', 'RUNNING')`. La del look completo (`garment_slot` null) no bloquea la de una prenda; dos pedidos simultáneos no encolan dos (el segundo falla con `23505` y `startLookShopping` devuelve el activo).
+- **Lectura del dueño**: `grant select (progress, look_id, garment_slot)` a `authenticated`, con la política "jobs: select own". `payload`, `result` y `last_error` siguen ocultos.
+- **`result`** de `SEARCH_PRODUCTS`: `ShoppingSearchSummary` (prendas con resultados, fallidas, candidatos, productos, guardados, stock y talle sin verificar, parcial, hits de cache). El mismo resumen va en el último `progress.summary`, que es lo que lee la UI.
+- **Payload de `SEARCH_PRODUCTS`**: `{ user_id, look_id, sizes (UserSizes), slot?, max_price? }`. Sin `slot` busca el look completo y reemplaza todas sus prendas; `max_price` es estricto y solo va con `slot`.
+- **`ai_operation`** suma `WEB_SEARCH`: el costo de las búsquedas web del descubrimiento de tiendas, una fila de `ai_usage` por job.
+
 ## Índices principales
 
 - `jobs_queue_idx (priority desc, scheduled_at) where status = 'QUEUED'` — índice parcial para `claim_next_job`.
 - `jobs_running_idx (locked_at) where status = 'RUNNING'` — recuperación de locks vencidos.
+- `jobs_look_id_idx (look_id, created_at desc)` — última búsqueda de un look; `jobs_one_active_search_idx` — una búsqueda activa por (look, prenda).
 - `style_profiles_one_active_per_user` — índice único parcial.
 - Índices en todas las FKs usadas en filtros o joins (`looks.user_id`, `favorites.*`, `cart_items.*`, `chat_*`, `ai_usage.*`...).
 - `analytics_events (name, created_at desc)`, `ai_usage (created_at desc)` para el admin.
@@ -255,7 +271,7 @@ RLS habilitado en **todas** las tablas. Resumen (ver `20260929000300_rls_policie
 - `authenticated`: solo sus filas (`user_id = auth.uid()`), y solo las columnas con `GRANT` explícito. Por ejemplo, en `profiles` puede cambiar `display_name`, `style_risk_level`, `tattoo_preference` y `onboarding_completed`, pero **no** `role` ni `country_code`.
 - Premium reforzado en datos: `looks` con `position > 1`, `style_advice`, `look_products`, `carts`, `cart_items`, `chat_*` y favoritos de productos requieren `current_user_is_premium()`.
 - IDOR: los inserts que referencian otros recursos (favoritos, hilos de chat, ítems del carrito) verifican que el recurso sea del usuario.
-- `jobs`: el usuario puede **leer** el estado de sus jobs (columnas no sensibles); nunca crear ni modificar.
+- `jobs`: el usuario puede **leer** el estado y el progreso de sus jobs (columnas no sensibles: también `progress`, `look_id` y `garment_slot`); nunca crear ni modificar, ni leer `payload`, `result` o `last_error`.
 - `ai_usage`, `analytics_events`, `payment_events`: sin acceso desde el cliente.
 - `service_role` tiene acceso completo (lo usan servidor y worker).
 
@@ -285,5 +301,6 @@ Rutas: `<user_id>/<...>`. Las políticas comparan la primera carpeta con `auth.u
 | `complete_job(...)`                        | service_role     | Marca COMPLETED (solo el worker que lo tomó)                                  |
 | `fail_job(...)`                            | service_role     | Reintenta con delay o marca FAILED                                            |
 | `retry_job(id)`                            | service_role     | Reintento manual de un FAILED                                                 |
+| `update_job_progress(job, worker, prog)`   | service_role     | Guarda el progreso (solo el worker que tiene el job en curso)                 |
 | `admin_overview_metrics()`                 | service_role     | Métricas del overview de `/admin`                                             |
 | `admin_event_counts(days)`                 | service_role     | Conteo de eventos para `/admin/analytics`                                     |

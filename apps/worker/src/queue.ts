@@ -5,6 +5,7 @@ import {
   type Json,
   type JobRow,
   type TypedSupabaseClient,
+  updateJobProgress,
 } from "@asesor/db";
 import type { JobType } from "@asesor/shared";
 
@@ -13,6 +14,8 @@ export interface JobQueue {
   claim(): Promise<JobRow | null>;
   complete(job: JobRow, result: Json | undefined): Promise<void>;
   fail(job: JobRow, error: string, options: { retryable: boolean }): Promise<void>;
+  /** Progreso de un job en curso (opcional: las colas de los tests no lo necesitan). */
+  progress?(job: JobRow, progress: NonNullable<Json>): Promise<void>;
 }
 
 export function createPostgresJobQueue(
@@ -31,6 +34,9 @@ export function createPostgresJobQueue(
     },
     fail: async (job, error, { retryable }) => {
       await failJob(client, { job, workerId: options.workerId, error, retryable });
+    },
+    progress: async (job, progress) => {
+      await updateJobProgress(client, { jobId: job.id, workerId: options.workerId, progress });
     },
   };
 }

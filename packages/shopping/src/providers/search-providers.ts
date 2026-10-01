@@ -1,6 +1,6 @@
 import { audienceWord, isRelevantCandidate, type ShoppingQuery, type Store } from "@asesor/shared";
 
-import type { CandidateUrl, SearchProvider } from "../types";
+import type { CandidateUrl, SearchOptions, SearchProvider } from "../types";
 import type { PoliteHttpClient } from "./http";
 import { detectPlatform, PLATFORM_ADAPTERS, type StoreHit } from "./platforms";
 import {
@@ -49,11 +49,16 @@ export class RegistrySearchProvider implements SearchProvider {
 
   constructor(private readonly options: RegistrySearchOptions) {}
 
-  private async searchStore(store: RegisteredStore, query: ShoppingQuery): Promise<StoreHit[]> {
+  private async searchStore(
+    store: RegisteredStore,
+    query: ShoppingQuery,
+    signal?: AbortSignal,
+  ): Promise<StoreHit[]> {
     const perStore = this.options.perStore ?? 3;
     const terms = termsOf(query).slice(0, this.options.maxTermsPerStore ?? 3);
 
     if (store.search === "SITEMAP" && store.sitemapUrl) {
+      // Sin `signal`: el sitemap se cachea y lo comparten todos los pedidos.
       const hits = await this.options.sitemaps.search(
         store.sitemapUrl,
         terms,
@@ -73,6 +78,7 @@ export class RegistrySearchProvider implements SearchProvider {
         term,
         limit: perStore * 3,
         searchPath: store.searchPath,
+        signal,
       });
       for (const hit of relevant(hits, query)) found.set(hit.url, hit);
       if (found.size >= perStore) break;
@@ -80,11 +86,13 @@ export class RegistrySearchProvider implements SearchProvider {
     return [...found.values()].slice(0, perStore);
   }
 
-  async search(query: ShoppingQuery): Promise<CandidateUrl[]> {
+  async search(query: ShoppingQuery, options: SearchOptions = {}): Promise<CandidateUrl[]> {
     const stores = (this.options.registry ?? STORE_REGISTRY).filter(
       (s) => s.search !== "DISCOVERY" && storeServesAudience(s, query.audience),
     );
-    const results = await Promise.allSettled(stores.map((s) => this.searchStore(s, query)));
+    const results = await Promise.allSettled(
+      stores.map((s) => this.searchStore(s, query, options.signal)),
+    );
     return results.flatMap((result, i) => {
       const store = stores[i];
       if (!store) return [];
@@ -138,13 +146,16 @@ export class DiscoverySearchProvider implements SearchProvider {
       .join(" ");
   }
 
-  async search(query: ShoppingQuery): Promise<CandidateUrl[]> {
+  async search(query: ShoppingQuery, options: SearchOptions = {}): Promise<CandidateUrl[]> {
     const registry = this.options.registry ?? STORE_REGISTRY;
     const { hits, costUsd } = await this.options.webSearch.search(
       DiscoverySearchProvider.buildQueryText(query),
-      { maxResults: this.options.maxResults ?? 10 },
+      { maxResults: this.options.maxResults ?? 10, signal: options.signal },
     );
-    if (costUsd !== null) this.options.onCost?.(costUsd);
+    if (costUsd !== null) {
+      this.options.onCost?.(costUsd);
+      options.onCost?.(costUsd);
+    }
 
     const candidates: CandidateUrl[] = [];
     const newHosts = new Map<string, string>();
@@ -171,7 +182,7 @@ export class DiscoverySearchProvider implements SearchProvider {
 
     const expansions = [...newHosts.entries()].slice(0, this.options.maxExpansions ?? 2);
     const extra = await Promise.allSettled(
-      expansions.map(([host, pageUrl]) => this.expand(host, pageUrl, query)),
+      expansions.map(([host, pageUrl]) => this.expand(host, pageUrl, query, options.signal)),
     );
     extra.forEach((r, i) => {
       if (r.status === "fulfilled") candidates.push(...r.value);
@@ -181,15 +192,20 @@ export class DiscoverySearchProvider implements SearchProvider {
   }
 
   /** Detecta la plataforma de una tienda nueva y busca en ella con su adaptador. */
-  private async expand(host: string, pageUrl: string, query: ShoppingQuery) {
-    const page = await this.options.http.get(pageUrl, { accept: "text/html" });
+  private async expand(host: string, pageUrl: string, query: ShoppingQuery, signal?: AbortSignal) {
+    const page = await this.options.http.get(pageUrl, { accept: "text/html", signal });
     const platform: StorePlatform | null = detectPlatform(page.headers, page.body);
     const adapter = platform ? PLATFORM_ADAPTERS[platform] : undefined;
     if (!platform || !adapter) return [];
     const perStore = this.options.perStore ?? 3;
     const [term] = termsOf(query);
     const hits = relevant(
-      await adapter(this.options.http, { domain: host, term: term ?? "", limit: perStore * 3 }),
+      await adapter(this.options.http, {
+        domain: host,
+        term: term ?? "",
+        limit: perStore * 3,
+        signal,
+      }),
       query,
     ).slice(0, perStore);
     return hits.map((hit): CandidateUrl => ({
@@ -232,8 +248,8 @@ export class CompositeSearchProvider implements SearchProvider {
     private readonly options: CompositeSearchOptions = {},
   ) {}
 
-  async search(query: ShoppingQuery): Promise<CandidateUrl[]> {
-    const results = await Promise.allSettled(this.sources.map((s) => s.search(query)));
+  async search(query: ShoppingQuery, options: SearchOptions = {}): Promise<CandidateUrl[]> {
+    const results = await Promise.allSettled(this.sources.map((s) => s.search(query, options)));
     const byStore = new Map<string, CandidateUrl[]>();
     const seen = new Set<string>();
     const perStore = this.options.perStore ?? 3;

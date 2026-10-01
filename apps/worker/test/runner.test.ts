@@ -30,6 +30,9 @@ function job(type: JobType, payload: NonNullable<Json>, overrides: Partial<JobRo
     locked_by: null,
     finished_at: null,
     last_error: null,
+    progress: null,
+    look_id: null,
+    garment_slot: null,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
     ...overrides,
@@ -82,9 +85,10 @@ async function runUntilIdle(runner: WorkerRunner, isDone: () => boolean) {
 
 describe("WorkerRunner", () => {
   it("procesa jobs con los handlers registrados", async () => {
+    // REFRESH_PRODUCT y SEARCH_PRODUCTS usan la base: se prueban en shopping.int.test.ts.
     const { queue, completed } = memoryQueue([
-      job("REFRESH_PRODUCT", { product_id: LOOK }),
       job("GENERATE_STYLE_BOARD", { user_id: USER, style_profile_id: LOOK }),
+      job("GENERATE_STYLE_BOARD", { user_id: USER, style_profile_id: USER }),
     ]);
     const runner = new WorkerRunner({
       queue,
@@ -95,14 +99,12 @@ describe("WorkerRunner", () => {
       pollIntervalMs: 5,
     });
     await runUntilIdle(runner, () => completed.length === 2);
-    expect(completed.map((c) => c.job.type).sort()).toEqual([
-      "GENERATE_STYLE_BOARD",
-      "REFRESH_PRODUCT",
-    ]);
-    expect(completed.find((c) => c.job.type === "REFRESH_PRODUCT")?.result).toEqual({
-      status: "verified",
-      availability: "IN_STOCK",
-    });
+    expect(completed.map((c) => c.result)).toEqual(
+      expect.arrayContaining([
+        { style_profile_id: LOOK, mock: true },
+        { style_profile_id: USER, mock: true },
+      ]),
+    );
   });
 
   it("respeta la concurrencia configurada", async () => {
@@ -189,6 +191,35 @@ describe("WorkerRunner", () => {
     });
     await runUntilIdle(runner2, () => other.failed.length === 1);
     expect(other.failed[0]?.error).toContain("Sin handler");
+  });
+
+  it("el progreso es best-effort: se guarda en la cola y una falla al guardarlo no rompe el job", async () => {
+    const saved: unknown[] = [];
+    const { queue, completed, failed } = memoryQueue([job("REFRESH_PRODUCT", {})]);
+    let calls = 0;
+    queue.progress = async (_job, progress) => {
+      if (++calls === 2) throw new Error("base caída");
+      saved.push(progress);
+    };
+    const reporting: HandlerRegistry = {
+      REFRESH_PRODUCT: async (_job, ctx) => {
+        await ctx.reportProgress({ stage: "SEARCHING" });
+        await ctx.reportProgress({ stage: "CHECKING_STORES" });
+        await ctx.reportProgress({ stage: "RANKING" });
+        return { ok: true };
+      },
+    };
+    const runner = new WorkerRunner({
+      queue,
+      handlers: reporting,
+      deps: deps().deps,
+      logger: silent,
+      concurrency: 1,
+      pollIntervalMs: 5,
+    });
+    await runUntilIdle(runner, () => completed.length === 1);
+    expect(saved).toEqual([{ stage: "SEARCHING" }, { stage: "RANKING" }]);
+    expect(failed).toEqual([]);
   });
 
   it("apagado limpio: espera el job en curso antes de terminar", async () => {

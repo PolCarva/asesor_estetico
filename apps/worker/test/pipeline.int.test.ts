@@ -62,6 +62,9 @@ function runningJob(type: JobType, userId: string, payload: NonNullable<Json>): 
     locked_by: "test",
     finished_at: null,
     last_error: null,
+    progress: null,
+    look_id: null,
+    garment_slot: null,
     created_at: now,
     updated_at: now,
   };
@@ -73,6 +76,7 @@ describeIntegration("pipeline de análisis (MockAIProvider + Supabase local)", (
   const ctx: JobContext = {
     logger: createLogger({ service: "test", write: () => {} }),
     signal: new AbortController().signal,
+    reportProgress: async () => {},
     deps: {
       db,
       ai: new MockAIProvider(),

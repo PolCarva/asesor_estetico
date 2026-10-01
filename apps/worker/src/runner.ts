@@ -128,6 +128,13 @@ export class WorkerRunner {
         logger,
         signal: this.abortJobs.signal,
         deps: this.options.deps,
+        reportProgress: async (progress) => {
+          try {
+            await this.options.queue.progress?.(job, progress);
+          } catch (error) {
+            logger.warn("no se pudo guardar el progreso del job", { error });
+          }
+        },
       });
       await this.options.queue.complete(job, result);
       logger.info("job completado", { durationMs: Date.now() - started });

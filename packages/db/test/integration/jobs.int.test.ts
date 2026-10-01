@@ -129,6 +129,12 @@ describeIntegration("cola de jobs (Postgres)", () => {
     try {
       const rpc = await user.client.rpc("claim_next_job", { p_worker_id: "hacker" });
       expect(rpc.error).not.toBeNull();
+      const progress = await user.client.rpc("update_job_progress", {
+        p_job_id: crypto.randomUUID(),
+        p_worker_id: "hacker",
+        p_progress: {},
+      });
+      expect(progress.error?.code).toBe("42501");
       const insert = await user.client
         .from("jobs")
         .insert({ type: "GENERATE_LOOK", user_id: user.id });

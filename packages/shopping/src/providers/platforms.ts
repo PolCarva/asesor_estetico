@@ -16,6 +16,7 @@ export interface PlatformSearchInput {
   limit: number;
   /** Fenicio: ruta del listado. */
   searchPath?: string;
+  signal?: AbortSignal;
 }
 
 export type PlatformAdapter = (
@@ -80,9 +81,12 @@ export function parseFenicioListing(html: string, domain: string): StoreHit[] {
   return parseExternal(FenicioHitsSchema, hits, `Fenicio ${domain}`);
 }
 
-export const searchFenicio: PlatformAdapter = async (http, { domain, term, limit, searchPath }) => {
+export const searchFenicio: PlatformAdapter = async (
+  http,
+  { domain, term, limit, searchPath, signal },
+) => {
   const url = `https://${domain}${searchPath ?? "/catalogo"}?q=${encodeURIComponent(term)}`;
-  const res = await http.get(url, { accept: "text/html" });
+  const res = await http.get(url, { accept: "text/html", signal });
   return parseFenicioListing(res.body, domain).slice(0, limit);
 };
 
@@ -103,9 +107,9 @@ export function parseVtexSearch(data: unknown, domain: string): StoreHit[] {
   }));
 }
 
-export const searchVtex: PlatformAdapter = async (http, { domain, term, limit }) => {
+export const searchVtex: PlatformAdapter = async (http, { domain, term, limit, signal }) => {
   const url = `https://${domain}/api/catalog_system/pub/products/search?ft=${encodeURIComponent(term)}&_from=0&_to=${limit - 1}`;
-  const res = await http.get(url, { accept: "application/json" });
+  const res = await http.get(url, { accept: "application/json", signal });
   return parseVtexSearch(parseJson(res.body, `VTEX ${domain}`), domain);
 };
 
@@ -135,9 +139,9 @@ export function parseShopifySuggest(data: unknown, domain: string): StoreHit[] {
   });
 }
 
-export const searchShopify: PlatformAdapter = async (http, { domain, term, limit }) => {
+export const searchShopify: PlatformAdapter = async (http, { domain, term, limit, signal }) => {
   const url = `https://${domain}/search/suggest.json?q=${encodeURIComponent(term)}&resources%5Btype%5D=product&resources%5Blimit%5D=${Math.min(limit, 10)}`;
-  const res = await http.get(url, { accept: "application/json" });
+  const res = await http.get(url, { accept: "application/json", signal });
   return parseShopifySuggest(parseJson(res.body, `Shopify ${domain}`), domain);
 };
 
@@ -158,9 +162,9 @@ export function parseWooProducts(data: unknown, domain: string): StoreHit[] {
   }));
 }
 
-export const searchWoo: PlatformAdapter = async (http, { domain, term, limit }) => {
+export const searchWoo: PlatformAdapter = async (http, { domain, term, limit, signal }) => {
   const url = `https://${domain}/wp-json/wc/store/v1/products?search=${encodeURIComponent(term)}&per_page=${limit}`;
-  const res = await http.get(url, { accept: "application/json" });
+  const res = await http.get(url, { accept: "application/json", signal });
   return parseWooProducts(parseJson(res.body, `WooCommerce ${domain}`), domain);
 };
 

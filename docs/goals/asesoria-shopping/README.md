@@ -115,7 +115,7 @@ source ~/.nvm/nvm.sh && nvm use >/dev/null && pnpm format && pnpm lint && pnpm t
 | 04a | [Shopping: fetcher seguro, extracción y normalización](pasos/04a-fetch-extraccion.md)              | 10–11          | 03         | ✅     |
 | 04b | [Shopping: adaptadores de talles/stock, validación y locales](pasos/04b-adaptadores-validacion.md) | 10–11          | 04a        | ✅     |
 | 05  | [Shopping: ranking y cache persistente](pasos/05-shopping-ranking-cache.md)                        | 12–13          | 04b        | ✅     |
-| 06  | [Shopping: jobs reales, progreso y Premium server-side](pasos/06-shopping-jobs-premium.md)         | 14, 19         | 05         | ⬜     |
+| 06  | [Shopping: jobs reales, progreso y Premium server-side](pasos/06-shopping-jobs-premium.md)         | 14, 19         | 05         | ✅     |
 | 07  | [Talles, CTA "Encontrar este look" y progreso](pasos/07-talles-cta-progreso.md)                    | 16, 15         | 02, 06     | ⬜     |
 | 08  | [UI de resultados de shopping](pasos/08-resultados-ui.md)                                          | 15             | 07         | ⬜     |
 | 09  | ["Buscar más barato"](pasos/09-buscar-mas-barato.md)                                               | 17             | 08         | ⬜     |
@@ -499,3 +499,78 @@ source ~/.nvm/nvm.sh && nvm use >/dev/null && pnpm format && pnpm lint && pnpm t
   - Limitaciones conocidas: el estilo es léxico (un logo que el título no nombra no cuenta como estampado: Adidas "M Lin SJ"). Embeddings de imagen siguen en "próximos pasos". Los pools dependen de lo que las tiendas tienen: con el reloj solo hubo deportivos.
   - Base local: el look 1 de `demo@` ahora tiene en `look_products` los productos reales de la prueba (antes, los ficticios del seed); `pnpm db:seed` lo restaura. Un test de integración del worker llegó a borrar los productos del seed en una corrida intermedia: se corrigió para que use URLs propias y se re-sembró.
 - Commit: `feat(asesoria-shopping): paso 05 — ranking y cache persistente`
+
+### Paso 06 — Shopping: jobs reales, progreso y Premium server-side · 2026-10-01 · ✅
+
+- Hecho:
+  - **Migración `20261001000300_shopping_jobs.sql`** (D13, D14):
+    - `jobs.progress` (jsonb nullable) y `update_job_progress(job, worker, progress)`, solo `service_role` y solo el worker que tiene el job `RUNNING`;
+    - `jobs.look_id` y `jobs.garment_slot`, columnas generadas desde el payload, con `grant select (progress, look_id, garment_slot)` al dueño;
+    - índice único parcial `jobs_one_active_search_idx`: una búsqueda activa por (look, prenda); la del look completo no bloquea la de una prenda;
+    - `ai_operation` suma `WEB_SEARCH`.
+
+    `db:reset` y `db:types`.
+
+  - **Shared**: payload nuevo de `SEARCH_PRODUCTS` (`user_id`, `look_id`, `sizes` con `UserSizesSchema`, `slot?` con `GarmentSlotSchema`, `max_price?` estricto que exige `slot`), `SHOPPING_STAGES` (`SEARCHING | CHECKING_STORES | COMPARING | VERIFYING | RANKING`), `ShoppingProgressSchema` (etapa, `slots_done`/`slots_total`, resumen al final; sin porcentajes) y `ShoppingSearchSummarySchema`. `shopping_completed` en `ANALYTICS_EVENTS` (solo servidor).
+  - **Motor** (`packages/shopping`):
+    - `searchProducts` acepta `onStage` (frontera real de cada etapa) y `onCost`. `SearchProvider.search(query, { signal, onCost })` lleva la señal a los adaptadores de plataforma, al buscador web y a la expansión de tiendas; los sitemaps compartidos no se cortan.
+    - `loadCandidates` por fases: lee todas las páginas, compara (normaliza y valida sin requests) y recién después consulta la plataforma, solo para lo que pasó.
+    - No se cachea una búsqueda cortada (timeout o apagado) ni un pool vacío.
+  - **Worker**:
+    - `JobQueue.progress` (opcional) y `ctx.reportProgress`, best-effort;
+    - `handlers/shopping.ts`: `SEARCH_PRODUCTS` real (re-verifica dueño del job, dueño del look y Premium; queries con el público del perfil del look; prendas en paralelo con la cache Postgres y timeout de 4 min; `saveLookProducts` por prenda; en una búsqueda completa vacía las prendas fallidas y borra las que ya no están en el look; si fallan todas, el job falla y lo anterior queda; resumen en `result` y en el último progreso; `shopping_completed`; costo de búsqueda web en `ai_usage`);
+    - `createStageTracker`: la etapa del job es la de la prenda más atrasada (nunca retrocede), escrita solo si cambia y en orden;
+    - `REFRESH_PRODUCT` real: carga por uuid, re-extrae, `markProductVerified` o `markProductUnverified`; un apagado no lo marca;
+    - `index.ts` conecta `createPostgresSearchCache(db)` y el modelo del buscador web.
+  - **`packages/db`**: `startLookShopping` (Premium con el cliente del usuario, dueño del look por RLS, prenda del look, una búsqueda activa con chequeo previo + índice para la carrera, prioridad 8, `maxAttempts` 2, clave `search:<look>:<slot|look>:<requestId>`), `getLatestLookSearch`, `updateJobProgress`, `removeLookProductsExcept` y `getStyleProfileCore`.
+  - **Web**: `startLookShoppingAction` (`app/app/looks/[id]/actions.ts`): `requirePremium` (free → estado `paywall`, sin error técnico), Zod, rate limit `shoppingSearch` (10/hora por usuario), `startLookShopping`, `shopping_started` y `revalidatePath`. `getLookShoppingState` (`lib/shopping.ts`) lee estado y progreso con el cliente del usuario. Sin UI nueva: el CTA y el progreso visual son del paso 07.
+  - **Tests**:
+    - `shopping/test/stages.test.ts` (6): las cinco etapas en orden en vivo, `SEARCHING → VERIFYING → RANKING` desde la cache, señal y costo al buscador, búsqueda cortada sin cachear, pool vacío sin cachear, sin consultar la plataforma para lo descartado;
+    - `worker/test/shopping-job.test.ts` (4): etapa de la prenda más atrasada, orden de guardado con una falla en el medio, resumen con fallas parciales;
+    - `runner.test.ts`: progreso best-effort (una falla al guardarlo no rompe el job) y el test de handlers registrados sin `REFRESH_PRODUCT` sobre `db = {}`;
+    - integración `db/test/integration/shopping-jobs.int.test.ts` (5): free rechazado sin encolar; Premium encola con prioridad, intentos y `look_id`; sin dos activas; el look completo no bloquea una prenda ni otro look; 4 pedidos simultáneos = 1 job y `23505` en la base; look ajeno, inexistente, prenda que no está e ids inválidos; `update_job_progress` rechaza a otro worker y a un job en cola; `authenticated` no la ejecuta; el dueño lee su progreso pero no `payload`; otro usuario no ve el job; nadie escribe `progress` desde el cliente;
+    - `rls.int.test.ts` y `jobs.int.test.ts`: `anon` y `authenticated` no ejecutan `update_job_progress`;
+    - integración `worker/test/shopping.int.test.ts` (6): look completo (productos y `look_products` por prenda, reemplazo de un producto viejo y de una prenda que ya no está, progreso en orden en `jobs.progress` con el resumen, `shopping_completed`); segunda búsqueda desde la cache con una prenda que falla (queda vacía, parcial, re-ranking por talle); una prenda con precio máximo (solo esa prenda cambia); todas fallan (el job falla y nada cambia); free, look ajeno y job de otro usuario; `REFRESH_PRODUCT` verificado, 404 y producto inexistente.
+
+    Ningún test nuevo reclama jobs de la cola: los "en curso" se insertan o marcan a mano bajo un worker de prueba.
+
+  - **Script** `apps/worker/scripts/real-shopping-job.ts [--keep]`.
+  - **Docs**: `ARCHITECTURE.md` (progreso, referencias, timeouts, flujo de la búsqueda), `DATA_MODEL.md` (jobs de shopping, índices, RLS, función), `SHOPPING_ENGINE.md` (fases, jobs, etapas, inicio y lectura, `REFRESH_PRODUCT`, qué no se cachea), `SECURITY_PRIVACY.md` (Premium en tres lugares, rate limit), `SETUP_STATUS.md` y `DECISIONES.md`.
+- Prueba real (`real-shopping-job.ts` con el worker en `AI_PROVIDER=mock SHOPPING_PROVIDER=live`, descubrimiento web activo, usuarios locales nuevos `real-shopping-premium-*@asesor.test` y `real-shopping-free-*@asesor.test` con los looks del MockAIProvider):
+  - **Corrida 1** (look 1 "Smart casual cálido", M/42/42, cache vacía): encolado con `startLookShopping` y seguido como la UI (`getLatestLookSearch` con el JWT del usuario, cada 1 s):
+
+    | Tiempo | Estado del job                                                   |
+    | ------ | ---------------------------------------------------------------- |
+    | +0 s   | QUEUED, sin progreso                                             |
+    | +1 s   | RUNNING · SEARCHING "Buscando prendas…" · 0/5 prendas            |
+    | +18 s  | CHECKING_STORES "Revisando tiendas…" · 1/5                       |
+    | +32 s  | VERIFYING "Verificando precios y talles…" · 3/5                  |
+    | +43 s  | COMPLETED · RANKING "Ordenando las mejores coincidencias…" · 5/5 |
+
+    (COMPARING duró menos que el intervalo de lectura: es puro.) Resumen: `{"mode":"LOOK","slots":5,"slots_with_results":5,"failed_slots":[],"candidates":89,"products":80,"saved":20,"unverified_stock":0,"unverified_sizes":2,"partial":false,"cache_hits":0}`. Worker: 42 s. `ai_usage`: `WEB_SEARCH`, 5 búsquedas, **USD 0.0546**.
+
+    Productos reales guardados (1.º por prenda, leídos con RLS como el dueño Premium):
+
+    | Prenda      | Producto                                                          | Precio    | Talle          |
+    | ----------- | ----------------------------------------------------------------- | --------- | -------------- |
+    | top         | Indian "Camisa Xavro - Crudo / Natural"                           | UYU 1399  | AVAILABLE      |
+    | bottom      | Jack & Jones "PANTALÓN CHINO SLIM TIRO MEDIO MARCO - Dusty Olive" | UYU 1299  | AVAILABLE      |
+    | layering:0  | guapa.com.uy "SOBRECAMISA ANTONIO - CAMEL"                        | UYU 1498  | AVAILABLE      |
+    | shoes       | Decathlon "BOTINES DE SENDERISMO IMPERMEABLES HOMBRE NH500 MID"   | UYU 2813  | AVAILABLE      |
+    | accessory:0 | diego.com.uy "Reloj pulsera de hombre malla cuero sintético"      | UYU 249.9 | NOT_APPLICABLE |
+
+    Tiendas fuera del registro por descubrimiento: guapa.com.uy, diego.com.uy, pacampania.com.uy, jeanvernier.com.uy, amadeuspde.com.uy, rusty.uy.
+
+  - **Corrida 2** (mismo look, S/40/44, dos pedidos a la vez): "mismo job", uno con `alreadyRunning`. `cache_hits: 5`, 0 búsquedas web, 85 ms en el worker. Talles contrastados en la base: la Xavro y la sobrecamisa tienen S, el NH500 tiene 44 y el chino de J&J usa `42/30`.
+  - **Segunda ejecución del script** (otro usuario nuevo): la corrida 1 salió entera de la cache (el pool es de la prenda, no del usuario; USD 0). **Corrida 3**, modo una prenda (`top`, máximo UYU 1500 estricto): `{"mode":"SLOT","slots":1,"saved":4,"cache_hits":1,…}`; salen la J&J slim (UYU 1699) y la Amadeus (UYU 3290) y entran Kiabi (UYU 1199) y Minot "CAMISA MARU CRUDO" (UYU 800); las otras prendas no cambian. **`REFRESH_PRODUCT`** de la Xavro: `{"status":"verified","availability":"IN_STOCK"}`, `last_fetched_at` 17:35:41 → 17:37:11.
+  - **Usuario free**: `startLookShopping` → `PREMIUM_REQUIRED`; "jobs del usuario free: 0".
+  - Todos los jobs `COMPLETED` en el primer intento, sin `last_error`. Los usuarios de prueba se borraron al terminar.
+- Verificación: format ✓ · lint ✓ · typecheck ✓ · test ✓ (387 unit, 45 integración ejecutados: db 34, worker 11; db antes que worker por `^test:integration`, D23) · build ✓ (worker 1,75 MB) · db:reset ✓ · db:types ✓ (regenerado sin diferencias) · e2e — (sin cambios de UI)
+- Decisiones: D13, D14 y D22 confirmadas; D20 (shopping) y D21 (Premium con los jobs) confirmadas. Detalle en `DECISIONES.md`.
+- Para pasos siguientes:
+  - 07: el CTA llama a `startLookShoppingAction({ lookId, sizes, requestId })` (devuelve `queued`, `already_running`, `paywall` o `error` con texto humano). El progreso sale de `getLookShoppingState(lookId)`: `progress.stage` (los textos del SPEC están en la tabla de `SHOPPING_ENGINE.md`), `slots_done`/`slots_total` y, al terminar, `progress.summary` (`partial`, `failed_slots`, `unverified_stock`, `unverified_sizes`) para el mensaje honesto. `progress` es `null` mientras el job está en cola. Los talles hoy van en el pedido: guardarlos en el perfil y mandarlos desde ahí. La etapa COMPARING dura milisegundos: la UI no debería depender de verla.
+  - 08: leer resultados con `getLookProducts` (RLS) y `look_products.size_status`; una prenda con `failed_slots` o sin productos lleva un mensaje propio.
+  - 09: el modo de una prenda (`slot` + `max_price`) hoy **reemplaza** el ranking de esa prenda. Para "más baratas" hace falta guardarlas aparte (D17) y pasar `slot`/`maxPrice` a `startLookShopping`.
+  - 10a: `REFRESH_PRODUCT` ya es real (`{ product_id }` → `{ status, availability }`); encolarlo o llamar a `refreshProduct` antes de agregar al carrito si `isProductStale`.
+  - 11: rate limit en memoria (una instancia), como el resto.
+- Commit: `feat(asesoria-shopping): paso 06 — jobs reales, progreso y Premium server-side`

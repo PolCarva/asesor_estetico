@@ -15,6 +15,7 @@ export const ANALYTICS_EVENTS = [
   "subscription_started",
   "premium_look_viewed",
   "shopping_started",
+  "shopping_completed",
   "product_clicked",
   "cheaper_alternative_requested",
   "look_saved",

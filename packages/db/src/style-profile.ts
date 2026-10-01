@@ -1,4 +1,9 @@
-import { AppError, parseStoredStyleProfile, type StoredStyleProfile } from "@asesor/shared";
+import {
+  AppError,
+  parseStoredStyleProfile,
+  type StoredStyleProfile,
+  type StyleProfileCore,
+} from "@asesor/shared";
 
 import type { TypedSupabaseClient } from "./types";
 
@@ -39,4 +44,25 @@ export async function getActiveStyleProfile(
 
   const stored = parseStoredStyleProfile(data.profile_json, adviceJson);
   return stored ? { id: data.id, ...stored } : null;
+}
+
+/**
+ * Núcleo de un perfil por id (activo o no), del usuario: el de un look puede no ser el
+ * perfil activo. Lo usa la búsqueda de productos para el público. `null` si no existe o
+ * no es válido.
+ */
+export async function getStyleProfileCore(
+  db: TypedSupabaseClient,
+  profileId: string,
+  userId: string,
+): Promise<StyleProfileCore | null> {
+  const { data, error } = await db
+    .from("style_profiles")
+    .select("profile_json")
+    .eq("id", profileId)
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (error)
+    throw new AppError("INTERNAL", "No se pudo leer el perfil de estilo.", { cause: error });
+  return data ? (parseStoredStyleProfile(data.profile_json)?.profile ?? null) : null;
 }

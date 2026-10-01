@@ -5,6 +5,7 @@ export * from "./auth";
 export * from "./jobs";
 export * from "./pipeline";
 export * from "./shopping";
+export * from "./shopping-jobs";
 export * from "./storage";
 export * from "./style-profile";
 export * from "./types";

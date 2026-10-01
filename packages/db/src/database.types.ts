@@ -332,14 +332,17 @@ export type Database = {
           attempts: number;
           created_at: string;
           finished_at: string | null;
+          garment_slot: string | null;
           id: string;
           idempotency_key: string | null;
           last_error: string | null;
           locked_at: string | null;
           locked_by: string | null;
+          look_id: string | null;
           max_attempts: number;
           payload: NonNullable<Json>;
           priority: number;
+          progress: Json | null;
           result: Json | null;
           scheduled_at: string;
           status: Database["public"]["Enums"]["job_status"];
@@ -351,14 +354,17 @@ export type Database = {
           attempts?: number;
           created_at?: string;
           finished_at?: string | null;
+          garment_slot?: never;
           id?: string;
           idempotency_key?: string | null;
           last_error?: string | null;
           locked_at?: string | null;
           locked_by?: string | null;
+          look_id?: never;
           max_attempts?: number;
           payload?: NonNullable<Json>;
           priority?: number;
+          progress?: Json | null;
           result?: Json | null;
           scheduled_at?: string;
           status?: Database["public"]["Enums"]["job_status"];
@@ -370,14 +376,17 @@ export type Database = {
           attempts?: number;
           created_at?: string;
           finished_at?: string | null;
+          garment_slot?: never;
           id?: string;
           idempotency_key?: string | null;
           last_error?: string | null;
           locked_at?: string | null;
           locked_by?: string | null;
+          look_id?: never;
           max_attempts?: number;
           payload?: NonNullable<Json>;
           priority?: number;
+          progress?: Json | null;
           result?: Json | null;
           scheduled_at?: string;
           status?: Database["public"]["Enums"]["job_status"];
@@ -923,14 +932,17 @@ export type Database = {
           attempts: number;
           created_at: string;
           finished_at: string | null;
+          garment_slot: string | null;
           id: string;
           idempotency_key: string | null;
           last_error: string | null;
           locked_at: string | null;
           locked_by: string | null;
+          look_id: string | null;
           max_attempts: number;
           payload: NonNullable<Json>;
           priority: number;
+          progress: Json | null;
           result: Json | null;
           scheduled_at: string;
           status: Database["public"]["Enums"]["job_status"];
@@ -951,14 +963,17 @@ export type Database = {
           attempts: number;
           created_at: string;
           finished_at: string | null;
+          garment_slot: string | null;
           id: string;
           idempotency_key: string | null;
           last_error: string | null;
           locked_at: string | null;
           locked_by: string | null;
+          look_id: string | null;
           max_attempts: number;
           payload: NonNullable<Json>;
           priority: number;
+          progress: Json | null;
           result: Json | null;
           scheduled_at: string;
           status: Database["public"]["Enums"]["job_status"];
@@ -996,14 +1011,17 @@ export type Database = {
           attempts: number;
           created_at: string;
           finished_at: string | null;
+          garment_slot: string | null;
           id: string;
           idempotency_key: string | null;
           last_error: string | null;
           locked_at: string | null;
           locked_by: string | null;
+          look_id: string | null;
           max_attempts: number;
           payload: NonNullable<Json>;
           priority: number;
+          progress: Json | null;
           result: Json | null;
           scheduled_at: string;
           status: Database["public"]["Enums"]["job_status"];
@@ -1030,14 +1048,17 @@ export type Database = {
           attempts: number;
           created_at: string;
           finished_at: string | null;
+          garment_slot: string | null;
           id: string;
           idempotency_key: string | null;
           last_error: string | null;
           locked_at: string | null;
           locked_by: string | null;
+          look_id: string | null;
           max_attempts: number;
           payload: NonNullable<Json>;
           priority: number;
+          progress: Json | null;
           result: Json | null;
           scheduled_at: string;
           status: Database["public"]["Enums"]["job_status"];
@@ -1062,14 +1083,48 @@ export type Database = {
           attempts: number;
           created_at: string;
           finished_at: string | null;
+          garment_slot: string | null;
           id: string;
           idempotency_key: string | null;
           last_error: string | null;
           locked_at: string | null;
           locked_by: string | null;
+          look_id: string | null;
           max_attempts: number;
           payload: NonNullable<Json>;
           priority: number;
+          progress: Json | null;
+          result: Json | null;
+          scheduled_at: string;
+          status: Database["public"]["Enums"]["job_status"];
+          type: Database["public"]["Enums"]["job_type"];
+          updated_at: string;
+          user_id: string | null;
+        };
+        SetofOptions: {
+          from: "*";
+          to: "jobs";
+          isOneToOne: true;
+          isSetofReturn: false;
+        };
+      };
+      update_job_progress: {
+        Args: { p_job_id: string; p_progress: Json; p_worker_id: string };
+        Returns: {
+          attempts: number;
+          created_at: string;
+          finished_at: string | null;
+          garment_slot: string | null;
+          id: string;
+          idempotency_key: string | null;
+          last_error: string | null;
+          locked_at: string | null;
+          locked_by: string | null;
+          look_id: string | null;
+          max_attempts: number;
+          payload: NonNullable<Json>;
+          priority: number;
+          progress: Json | null;
           result: Json | null;
           scheduled_at: string;
           status: Database["public"]["Enums"]["job_status"];
@@ -1091,7 +1146,8 @@ export type Database = {
         | "ANALYZE_STYLE_PROFILE"
         | "GENERATE_LOOK_SPECS"
         | "GENERATE_LOOK_IMAGE"
-        | "CHAT";
+        | "CHAT"
+        | "WEB_SEARCH";
       chat_role: "user" | "assistant";
       currency_code: "UYU" | "USD";
       job_status: "QUEUED" | "RUNNING" | "COMPLETED" | "FAILED";
@@ -1251,6 +1307,7 @@ export const Constants = {
         "GENERATE_LOOK_SPECS",
         "GENERATE_LOOK_IMAGE",
         "CHAT",
+        "WEB_SEARCH",
       ],
       chat_role: ["user", "assistant"],
       currency_code: ["UYU", "USD"],

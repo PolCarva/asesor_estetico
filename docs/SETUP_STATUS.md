@@ -38,7 +38,7 @@
 | Búsqueda de productos    | Real por defecto (`SHOPPING_PROVIDER=live`). `MockSearchProvider` (catálogo ficticio `.test`) solo con `SHOPPING_PROVIDER=mock` en tests/E2E | `packages/shopping/src/mocks.ts`    |
 | Páginas de tiendas       | Real (`HttpProductFetcher`) con `live`; `MockProductFetcher` (HTML con JSON-LD) con `mock`                                                   | idem                                |
 | Pagos                    | `MockPaymentProvider` (en memoria)                                                                                                           | `packages/payments/src/mock.ts`     |
-| Handlers del worker      | Solo `SEARCH_PRODUCTS`, `REFRESH_PRODUCT` y `GENERATE_STYLE_BOARD` (el pipeline de análisis es real)                                         | `apps/worker/src/handlers`          |
+| Handlers del worker      | Solo `GENERATE_STYLE_BOARD` (el análisis y el shopping, `SEARCH_PRODUCTS` y `REFRESH_PRODUCT`, son reales desde los pasos 01 y 06)           | `apps/worker/src/handlers`          |
 | Contenido de la UI       | Looks de ejemplo (fixtures) cuando el usuario no tiene looks; paywall sin checkout                                                           | `apps/web`                          |
 
 ## Proveedores reales que faltan

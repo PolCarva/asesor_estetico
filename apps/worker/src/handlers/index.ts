@@ -13,7 +13,6 @@ import {
   getStylePreferences,
   getUserPhotos,
   isUserPremium,
-  type Json,
   type JobRow,
   removeGeneratedLookImage,
   saveStyleProfileWithLooks,
@@ -22,38 +21,26 @@ import {
   uploadGeneratedLookImage,
   type UserPhotoRow,
 } from "@asesor/db";
-import {
-  FREE_LOOKS,
-  type JobPayload,
-  JobPayloadSchemas,
-  type JobType,
-  StoredLookSpecSchema,
-} from "@asesor/shared";
-import { FIXTURE_PRODUCTS } from "@asesor/shared/fixtures";
-import { refreshProduct, searchProducts } from "@asesor/shopping";
-
+import { FREE_LOOKS, StoredLookSpecSchema } from "@asesor/shared";
+import { refreshStoredProduct, searchLookProducts } from "./shopping";
 import {
   type HandlerRegistry,
   isFinalFailure,
   type JobContext,
   NonRetryableJobError,
+  parsePayload,
 } from "./types";
 
+export * from "./shopping";
 export * from "./types";
 
 /**
  * Handlers de jobs. El pipeline de análisis es real (usa el AIProvider configurado:
- * mock u OpenRouter). Shopping y style board siguen con mocks.
+ * mock u OpenRouter) y el de shopping también (`./shopping`, proveedores según
+ * SHOPPING_PROVIDER). El style board sigue con un mock.
  *
  * VALIDATE_PHOTOS → ANALYZE_STYLE_PROFILE → GENERATE_LOOK (look 1; 2 y 3 si es Premium)
  */
-
-function parsePayload<T extends JobType>(job: JobRow, type: T): JobPayload<T> {
-  const parsed = JobPayloadSchemas[type].safeParse(job.payload);
-  if (!parsed.success)
-    throw new NonRetryableJobError(`Payload inválido para ${type}.`, { cause: parsed.error });
-  return parsed.data as JobPayload<T>;
-}
 
 async function recordUsage(ctx: JobContext, job: JobRow, result: AIResult<unknown>) {
   await ctx.deps.analytics.recordAIUsage({
@@ -272,30 +259,6 @@ export const handlers: HandlerRegistry = {
     return { style_profile_id: payload.style_profile_id, mock: true };
   },
 
-  async SEARCH_PRODUCTS(job, ctx) {
-    const payload = parsePayload(job, "SEARCH_PRODUCTS");
-    const result = await searchProducts(payload.query, {
-      searchProvider: ctx.deps.searchProvider,
-      fetcher: ctx.deps.fetcher,
-      variants: ctx.deps.variants,
-      signal: ctx.signal,
-    });
-    return {
-      slot: payload.slot,
-      items: result.items.map((i) => ({ product: i.product.id, score: i.score })),
-      stats: result.stats,
-    } satisfies Json;
-  },
-
-  async REFRESH_PRODUCT(job, ctx) {
-    parsePayload(job, "REFRESH_PRODUCT");
-    const [product] = FIXTURE_PRODUCTS;
-    if (!product) throw new NonRetryableJobError("Catálogo vacío.");
-    const refreshed = await refreshProduct(product, {
-      fetcher: ctx.deps.fetcher,
-      variants: ctx.deps.variants,
-      signal: ctx.signal,
-    });
-    return { status: refreshed.status, availability: refreshed.product.availability };
-  },
+  SEARCH_PRODUCTS: searchLookProducts,
+  REFRESH_PRODUCT: refreshStoredProduct,
 };

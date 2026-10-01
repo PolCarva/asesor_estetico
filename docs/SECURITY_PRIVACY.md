@@ -28,6 +28,8 @@ Helpers en `@asesor/db`:
 | `requireAdmin()`         | `FORBIDDEN` 403        | `/admin` (la página responde 404)                           |
 | `requireResourceOwner()` | `NOT_FOUND` 404        | acceso a un recurso por id (no revela si existe: anti-IDOR) |
 
+La búsqueda de productos verifica Premium tres veces: en la server action (`requirePremium`), en `startLookShopping` y en el worker al ejecutar el job (corre con service role y la suscripción pudo vencer en el medio). Del job, el usuario solo lee estado y progreso (etapa y conteos): nunca `payload`, `result` ni `last_error`.
+
 Y en la base, RLS en todas las tablas (detalle en `DATA_MODEL.md`). Los permisos de columna impiden, por ejemplo, que un usuario se asigne `role = 'admin'` o se active una suscripción.
 
 ### Análisis de estilo: qué es Premium
@@ -79,7 +81,7 @@ De las respuestas solo se usan los datos de producto extraídos (validados con Z
 
 ## Rate limiting
 
-Interfaz `RateLimiter` (`@asesor/shared`) con implementación en memoria. Límites actuales: auth 10/min por IP en producción (200/min en desarrollo, para los E2E), subida de fotos 20/hora por usuario, analytics 60/min por IP, webhooks 120/min por IP. Pendiente: implementación compartida en Postgres para múltiples instancias y límites para endpoints de IA/shopping cuando existan.
+Interfaz `RateLimiter` (`@asesor/shared`) con implementación en memoria. Límites actuales: auth 10/min por IP en producción (200/min en desarrollo, para los E2E), subida de fotos 20/hora por usuario, analytics 60/min por IP, webhooks 120/min por IP, búsqueda de productos 10/hora por usuario (recorre tiendas reales y puede pagar búsquedas web; además, una sola búsqueda activa por look y prenda). Pendiente: implementación compartida en Postgres para múltiples instancias.
 
 ## Headers de seguridad
 

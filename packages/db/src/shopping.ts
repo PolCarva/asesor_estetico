@@ -1,6 +1,7 @@
 import {
   AppError,
   type GarmentSlot,
+  GarmentSlotSchema,
   type Product,
   ProductSchema,
   type ProductVariant,
@@ -225,6 +226,25 @@ export async function saveLookProducts(
   });
   if (error) fail("No se pudo guardar el ranking del look.", error);
   return data ?? 0;
+}
+
+/**
+ * Borra los resultados de las prendas que ya no están en el look (una búsqueda completa
+ * reemplaza el look entero: no quedan productos viejos en slots que no volvieron).
+ */
+export async function removeLookProductsExcept(
+  db: TypedSupabaseClient,
+  lookId: string,
+  keepSlots: GarmentSlot[],
+): Promise<void> {
+  // Los slots van al filtro de PostgREST como texto: solo los que cumplen el formato.
+  const slots = keepSlots.filter((s) => GarmentSlotSchema.safeParse(s).success);
+  let query = db.from("look_products").delete().eq("look_id", lookId);
+  if (slots.length > 0) {
+    query = query.not("garment_slot", "in", `(${slots.map((s) => `"${s}"`).join(",")})`);
+  }
+  const { error } = await query;
+  if (error) fail("No se pudieron limpiar los resultados del look.", error);
 }
 
 export interface LookProductResult {

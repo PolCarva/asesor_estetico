@@ -17,10 +17,18 @@ export interface CandidateUrl {
   platform?: string | null;
 }
 
+/** Opciones de un pedido de búsqueda (las del proveedor viven en su constructor). */
+export interface SearchOptions {
+  /** Corta los requests de este pedido (timeout del job o apagado del worker). */
+  signal?: AbortSignal;
+  /** Costo (USD) de cada búsqueda web de este pedido, para registrarlo por job. */
+  onCost?: (usd: number) => void;
+}
+
 /** Busca URLs de producto en tiendas para una prenda. */
 export interface SearchProvider {
   readonly name: string;
-  search(query: ShoppingQuery): Promise<CandidateUrl[]>;
+  search(query: ShoppingQuery, options?: SearchOptions): Promise<CandidateUrl[]>;
 }
 
 export interface FetchedPage {

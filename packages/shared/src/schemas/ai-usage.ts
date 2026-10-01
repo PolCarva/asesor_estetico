@@ -6,6 +6,8 @@ export const AIOperationSchema = z.enum([
   "GENERATE_LOOK_SPECS",
   "GENERATE_LOOK_IMAGE",
   "CHAT",
+  /** Búsqueda web del descubrimiento de tiendas (shopping, paso 06). */
+  "WEB_SEARCH",
 ]);
 export type AIOperation = z.infer<typeof AIOperationSchema>;
 
