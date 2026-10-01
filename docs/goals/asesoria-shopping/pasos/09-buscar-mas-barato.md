@@ -14,6 +14,10 @@ Cada producto de los resultados permite "Buscar más barato". Al tocarlo, se bus
 
 La restricción dura es **precio < precio actual**. **No se regenera el look** ni se vuelven a buscar las otras prendas.
 
+## Diseño (`docs/DESIGN_SYSTEM.md`, pantalla 2h)
+
+"Buscar más barato" va dentro de la fila de la prenda en `/app/looks/[id]`, junto a las alternativas que abre el paso 08, como acción secundaria (vidrio) del producto. El progreso del modo de una sola prenda usa el mismo componente de etapas del paso 07, en chico y dentro de la fila.
+
 ## Lo que ya hay (verificalo)
 
 - **Pasos previos.** El paso 05 agrega el filtro estricto y re-rankea sobre el pool cacheado. El paso 06 agrega el modo de una sola prenda en `SEARCH_PRODUCTS` (`slot` + `max_price` estricto) y el patrón de lógica testeable en `packages/db` (`startLookShopping`).

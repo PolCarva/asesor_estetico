@@ -11,7 +11,7 @@ import { type AuthFormState, signInAction, signUpAction } from "./actions";
 const initial: AuthFormState = { error: null };
 
 const inputClass =
-  "border-line bg-paper placeholder:text-stone/60 focus:border-ink mt-2 block h-12 w-full rounded-2xl border px-4 text-base outline-none transition-colors";
+  "well placeholder:text-stone/60 focus:bg-cream mt-2 block h-12 w-full rounded-2xl px-4 text-base outline-none transition-colors focus-visible:outline-2 focus-visible:outline-moss";
 
 function Field({
   label,

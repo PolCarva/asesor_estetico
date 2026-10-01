@@ -1,132 +1,175 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import type { ReactNode } from "react";
 
 import { AutoRefresh } from "@/components/auto-refresh";
+import { PrivateImage } from "@/components/private-image";
 import { LinkButton } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { PageHeader } from "@/components/ui/page-header";
 import { FormMessage } from "@/components/ui/states";
 import { requireUser } from "@/lib/auth";
-import { getProfile } from "@/lib/data";
-import { getPipelineState, type PipelineStage } from "@/lib/pipeline";
+import { getActiveStyleProfile, getPhotoUrls, getProfile } from "@/lib/data";
+import { firstName } from "@/lib/labels";
+import { getPipelineState, type PhotoState } from "@/lib/pipeline";
 
 import { AnalysisForm } from "./analysis-form";
+import { AnalysisStage } from "./analysis-stage";
 
-export const metadata: Metadata = { title: "Onboarding" };
+export const metadata: Metadata = { title: "Tu análisis" };
 
-const PROGRESS: Array<{ stage: PipelineStage; label: string }> = [
-  { stage: "VALIDATING", label: "Revisando tus fotos" },
-  { stage: "ANALYZING", label: "Analizando tu estilo y armando tus 3 looks" },
-  { stage: "GENERATING", label: "Generando la imagen de tu look" },
-];
+const PHOTO_CHIP: Record<PhotoState["status"], string> = {
+  UPLOADED: "Lista",
+  VALIDATING: "Revisando…",
+  VALID: "✓ Validada",
+  INVALID: "Conviene cambiarla",
+};
+
+/** Foto flotando con su estado, como las tarjetas inclinadas del diseño (2c). */
+function FloatingPhoto({
+  url,
+  label,
+  status,
+  className,
+}: {
+  url: string | null;
+  label: string;
+  status: PhotoState["status"] | null;
+  className: string;
+}) {
+  return (
+    <figure
+      className={`relative overflow-hidden rounded-[26px] border-[6px] border-paper/90 bg-sand shadow-contact ${className}`}
+    >
+      <PrivateImage src={url} alt={`Tu foto: ${label}`} className="size-full object-cover" />
+      <figcaption className="absolute bottom-3 left-3 rounded-xl glass-strong px-2.5 py-1.5 font-mono text-[0.6875rem] tracking-[0.04em] uppercase">
+        {status ? `${label} · ${PHOTO_CHIP[status]}` : `${label} · Falta`}
+      </figcaption>
+    </figure>
+  );
+}
 
 export default async function OnboardingPage() {
   const user = await requireUser("/app/onboarding");
-  const [profile, pipeline] = await Promise.all([getProfile(user.id), getPipelineState(user.id)]);
-  const current = PROGRESS.findIndex((p) => p.stage === pipeline.stage);
+  const [profile, pipeline, photoUrls] = await Promise.all([
+    getProfile(user.id),
+    getPipelineState(user.id),
+    getPhotoUrls(user.id),
+  ]);
+  const photoOf = (type: PhotoState["type"]) => pipeline.photos.find((p) => p.type === type);
+  const name = firstName(profile?.display_name);
+
+  if (pipeline.busy) {
+    const busyStage = pipeline.stage as "VALIDATING" | "ANALYZING" | "GENERATING";
+    // Solo en GENERATING el perfil activo es el de este análisis (en un re-análisis, antes es el viejo).
+    const styleProfile = busyStage === "GENERATING" ? await getActiveStyleProfile(user.id) : null;
+    return (
+      <>
+        <AutoRefresh active />
+        <p className="mb-5 eyebrow">Paso 2 / 3 — Tu análisis</p>
+        <AnalysisStage
+          stage={busyStage}
+          faceUrl={photoUrls.FACE_DETAIL ?? null}
+          bodyUrl={photoUrls.MAIN_BODY ?? null}
+          profile={styleProfile}
+        />
+        <p className="mt-4 text-center text-xs text-stone">
+          Tarda uno o dos minutos. Podés salir de esta pantalla: seguimos trabajando.
+        </p>
+      </>
+    );
+  }
+
   const invalid = pipeline.photos.filter((p) => p.status === "INVALID");
+  let title: ReactNode = (
+    <>
+      Fotos listas{name ? "," : "."} {name ? <em>{name}.</em> : null}
+    </>
+  );
+  let notice: ReactNode = null;
+  if (pipeline.stage === "NEEDS_PHOTOS") {
+    title = (
+      <>
+        Primero, <em>tus fotos.</em>
+      </>
+    );
+    notice = (
+      <div className="flex flex-col items-start gap-4">
+        <p className="text-sm leading-relaxed text-bark">
+          Necesitamos una de cuerpo entero y una de rostro.
+        </p>
+        <LinkButton href="/app/onboarding/photos">Subir mis fotos</LinkButton>
+      </div>
+    );
+  } else if (pipeline.stage === "PHOTOS_INVALID") {
+    title = (
+      <>
+        Una foto <em>no sirve.</em>
+      </>
+    );
+    notice = (
+      <FormMessage>
+        {invalid.flatMap((p) => p.issues.map((i) => i.message)).join(" ")}{" "}
+        <Link href="/app/onboarding/photos" className="underline underline-offset-4">
+          Cambiar fotos
+        </Link>
+      </FormMessage>
+    );
+  } else if (pipeline.stage === "FAILED") {
+    notice = (
+      <FormMessage>No pudimos completar el análisis. Probá de nuevo en unos minutos.</FormMessage>
+    );
+  } else if (pipeline.stage === "DONE") {
+    title = (
+      <>
+        Tu análisis <em>está listo.</em>
+      </>
+    );
+    notice = (
+      <div className="flex flex-col items-start gap-3">
+        <p className="text-sm leading-relaxed text-bark">
+          Ya tenés tu perfil de estilo y tus tres looks.
+        </p>
+        <LinkButton href="/app/looks">Ver mis looks</LinkButton>
+      </div>
+    );
+  }
+
+  const body = photoOf("MAIN_BODY");
+  const face = photoOf("FACE_DETAIL");
 
   return (
-    <>
-      <AutoRefresh active={pipeline.busy} />
-      <PageHeader
-        eyebrow="Onboarding"
-        title="Empecemos por conocerte"
-        description="Subí tus fotos, contanos cuánto querés cambiar y nuestro asesor arma tu perfil de estilo y tres looks pensados para vos."
-      />
+    <div className="grid overflow-hidden rounded-[32px] shadow-[0_30px_60px_-40px_rgb(48_44_30/0.5)] lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
+      <div className="relative flex min-h-[26rem] items-center justify-center gap-[6%] overflow-hidden bg-sand/60 px-6 py-12 sm:min-h-[34rem]">
+        <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-topo" />
+        <FloatingPhoto
+          url={photoUrls.MAIN_BODY ?? null}
+          label="Cuerpo"
+          status={body?.status ?? null}
+          className="relative aspect-[3/4] w-[46%] max-w-[20rem] -rotate-3"
+        />
+        <FloatingPhoto
+          url={photoUrls.FACE_DETAIL ?? null}
+          label="Rostro"
+          status={face?.status ?? null}
+          className="relative mt-16 aspect-[4/5] w-[38%] max-w-[16.5rem] rotate-3"
+        />
+      </div>
 
-      {pipeline.busy ? (
-        <Card aria-live="polite">
-          <p className="eyebrow">En curso</p>
-          <ol className="mt-5 space-y-4">
-            {PROGRESS.map((step, i) => {
-              const state = i < current ? "done" : i === current ? "current" : "todo";
-              return (
-                <li key={step.stage} className="flex items-center gap-4">
-                  <span
-                    aria-hidden="true"
-                    className={`flex size-8 items-center justify-center rounded-full text-sm ${
-                      state === "done"
-                        ? "bg-moss text-ivory"
-                        : state === "current"
-                          ? "animate-pulse bg-ink text-ivory"
-                          : "bg-sand"
-                    }`}
-                  >
-                    {state === "done" ? "✓" : i + 1}
-                  </span>
-                  <span className={state === "todo" ? "text-stone" : "font-medium"}>
-                    {step.label}
-                  </span>
-                  <span className="sr-only">
-                    {state === "done"
-                      ? "completado"
-                      : state === "current"
-                        ? "en curso"
-                        : "pendiente"}
-                  </span>
-                </li>
-              );
-            })}
-          </ol>
-          {pipeline.stage === "GENERATING" ? (
-            <div className="mt-6">
-              <LinkButton href="/app/looks" variant="secondary">
-                Ver mis looks
-              </LinkButton>
-            </div>
-          ) : null}
-        </Card>
-      ) : (
-        <div className="space-y-8">
-          {pipeline.stage === "NEEDS_PHOTOS" ? (
-            <Card className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <h2 className="text-2xl">Primero, tus fotos</h2>
-                <p className="mt-1 text-sm text-stone">
-                  Necesitamos una de cuerpo entero y una de rostro.
-                </p>
-              </div>
-              <LinkButton href="/app/onboarding/photos">Subir mis fotos</LinkButton>
-            </Card>
-          ) : null}
-
-          {pipeline.stage === "PHOTOS_INVALID" ? (
-            <FormMessage>
-              Alguna foto no sirve para el análisis:{" "}
-              {invalid.flatMap((p) => p.issues.map((i) => i.message)).join(" ")}{" "}
-              <Link href="/app/onboarding/photos" className="underline underline-offset-4">
-                Cambiar fotos
-              </Link>
-            </FormMessage>
-          ) : null}
-          {pipeline.stage === "FAILED" ? (
-            <FormMessage>
-              No pudimos completar el análisis. Probá de nuevo en unos minutos.
-            </FormMessage>
-          ) : null}
-          {pipeline.stage === "DONE" ? (
-            <Card className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <h2 className="text-2xl">Tu análisis está listo</h2>
-                <p className="mt-1 text-sm text-stone">
-                  Ya tenés tu perfil de estilo y tus tres looks.
-                </p>
-              </div>
-              <LinkButton href="/app/looks">Ver mis looks</LinkButton>
-            </Card>
-          ) : null}
-
-          <Card>
-            <AnalysisForm
-              risk={profile?.style_risk_level ?? "BALANCED"}
-              tattoo={profile?.tattoo_preference ?? "NEUTRAL"}
-              canSubmit={pipeline.stage !== "NEEDS_PHOTOS" && pipeline.stage !== "PHOTOS_INVALID"}
-              submitLabel={pipeline.hasProfile ? "Volver a analizar" : "Analizar mis fotos"}
-            />
-          </Card>
+      <div className="flex flex-col gap-7 bg-paper px-6 py-8 sm:px-9 sm:py-10">
+        <span aria-hidden="true" className="size-16 animate-float orb" />
+        <div>
+          <p className="eyebrow">Paso 2 / 3 — Tu análisis</p>
+          <h1 className="mt-3 text-4xl leading-[1.02] sm:text-[2.75rem] [&_em]:text-moss">
+            {title}
+          </h1>
         </div>
-      )}
-    </>
+        {notice}
+        <AnalysisForm
+          risk={profile?.style_risk_level ?? "BALANCED"}
+          tattoo={profile?.tattoo_preference ?? "NEUTRAL"}
+          canSubmit={pipeline.stage !== "NEEDS_PHOTOS" && pipeline.stage !== "PHOTOS_INVALID"}
+          submitLabel={pipeline.hasProfile ? "Volver a analizar" : "Descubrir mi mejor versión"}
+        />
+      </div>
+    </div>
   );
 }

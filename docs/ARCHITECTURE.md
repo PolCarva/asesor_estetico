@@ -62,7 +62,7 @@ packages/
   payments/   PaymentProvider, MockPaymentProvider, esqueleto Mercado Pago, estados
   analytics/  AnalyticsService + DatabaseAnalyticsProvider, registro de uso de IA
 supabase/     config.toml, migraciones y seed.sql mínimo
-docs/         Esta documentación
+docs/         Esta documentación (sistema visual en DESIGN_SYSTEM.md)
 ```
 
 ### Dependencias entre paquetes
@@ -81,7 +81,7 @@ Sin ciclos. `shared` no depende de nadie interno ni hace I/O de red.
 
 ## Separación de capas
 
-- **UI** (`apps/web/src/app`, `apps/web/src/components`): renderiza y llama a Server Actions / Route Handlers. No contiene reglas de negocio ni prompts.
+- **UI** (`apps/web/src/app`, `apps/web/src/components`): renderiza y llama a Server Actions / Route Handlers. No contiene reglas de negocio ni prompts. Sistema visual, componentes y mapa de pantallas en `DESIGN_SYSTEM.md`.
 - **Dominio** (`packages/shared`): schemas, tipos y reglas puras (p. ej. `isPremiumSubscription`, `checkPhotoFile`, `computeRetryDelaySeconds`).
 - **Integraciones** (`packages/db`, `ai`, `shopping`, `payments`, `analytics`): adaptadores a proveedores externos detrás de interfaces (`AIProvider`, `SearchProvider`, `ProductFetcher`, `PaymentProvider`, `AnalyticsProvider`).
 

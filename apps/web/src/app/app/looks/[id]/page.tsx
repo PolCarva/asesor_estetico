@@ -1,9 +1,4 @@
-import {
-  type Garment,
-  type GarmentSlot,
-  listLookGarments,
-  type ProductCategory,
-} from "@asesor/shared";
+import type { Garment, GarmentSlot, LookSpec } from "@asesor/shared";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -11,96 +6,139 @@ import { notFound } from "next/navigation";
 import { AutoRefresh } from "@/components/auto-refresh";
 import { LockedLookCard, LookCard } from "@/components/look-card";
 import { PaywallCard } from "@/components/paywall-card";
+import { PaletteRing, Pebble } from "@/components/swatches";
 import { TrackEvent } from "@/components/track-event";
 import { requireUser } from "@/lib/auth";
-import { getLook, getPlan } from "@/lib/data";
+import { getLook, getLookSummaries, getPlan } from "@/lib/data";
+import { CATEGORY_LABEL, twoDigits } from "@/lib/labels";
 
 export const metadata: Metadata = { title: "Look" };
 
-const CATEGORY: Record<ProductCategory, string> = {
-  SHIRT: "Camisa",
-  T_SHIRT: "Remera",
-  KNITWEAR: "Tejido",
-  TOP: "Top",
-  OUTERWEAR: "Abrigo",
-  BLAZER: "Blazer",
-  PANTS: "Pantalón",
-  JEANS: "Jean",
-  SHORTS: "Short",
-  SKIRT: "Pollera",
-  DRESS: "Vestido",
-  SHOES: "Calzado",
-  BAG: "Bolso",
-  BELT: "Cinto",
-  JEWELRY: "Joyería",
-  EYEWEAR: "Anteojos",
-  WATCH: "Reloj",
-  HAT: "Gorro",
-  SCARF: "Bufanda",
-  OTHER: "Accesorio",
-};
-
-function slotLabel(slot: GarmentSlot): string {
-  if (slot === "top") return "Arriba";
-  if (slot === "bottom") return "Abajo";
-  if (slot === "shoes") return "Calzado";
-  return slot.startsWith("layering") ? "Capa" : "Accesorio";
+/**
+ * Piezas del look en el orden del diseño: de arriba hacia abajo y de afuera hacia
+ * adentro (capas antes que la prenda de arriba). Los accesorios van al final.
+ */
+function lookPieces(spec: LookSpec): Array<{ slot: GarmentSlot; garment: Garment }> {
+  const pieces: Array<{ slot: GarmentSlot; garment: Garment }> = [];
+  spec.layering.forEach((garment, i) => pieces.push({ slot: `layering:${i}`, garment }));
+  pieces.push({ slot: "top", garment: spec.top });
+  if (spec.bottom) pieces.push({ slot: "bottom", garment: spec.bottom });
+  pieces.push({ slot: "shoes", garment: spec.shoes });
+  spec.accessories.forEach((garment, i) => pieces.push({ slot: `accessory:${i}`, garment }));
+  return pieces;
 }
 
-function GarmentRow({ slot, garment }: { slot: GarmentSlot; garment: Garment }) {
-  const details = [garment.fit, garment.material, garment.pattern].filter(Boolean);
+/**
+ * Dónde va cada pin sobre un render de cuerpo entero (% del ancho y del alto). Es una
+ * ubicación aproximada por zona del cuerpo, no una detección: por eso solo se usa con
+ * `framing: FULL_BODY` y con imagen. Capas extra y accesorios no llevan pin.
+ */
+const PIN_POSITION: Partial<Record<GarmentSlot | "hair", { left: number; top: number }>> = {
+  hair: { left: 43, top: 9 },
+  "layering:0": { left: 20, top: 28 },
+  top: { left: 52, top: 38 },
+  bottom: { left: 30, top: 64 },
+  shoes: { left: 50, top: 88 },
+};
+
+function Pin({ n, label, at }: { n: number; label: string; at: { left: number; top: number } }) {
   return (
-    <li className="flex gap-4 border-b border-line py-4 last:border-b-0">
-      <span
-        className="mt-1 size-8 shrink-0 rounded-full border border-ink/10"
-        style={{ backgroundColor: garment.color.hex }}
-        aria-hidden="true"
-      />
+    <span
+      className="absolute flex items-center gap-1.5 rounded-2xl glass-strong py-1 pr-2.5 pl-1 text-[0.6875rem] shadow-[0_8px_16px_-8px_rgb(0_0_0/0.35)]"
+      style={{ left: `${at.left}%`, top: `${at.top}%` }}
+    >
+      <span className="grid size-5 place-items-center rounded-full bg-ink font-mono text-[0.625rem] text-paper">
+        {n}
+      </span>
+      {label}
+    </span>
+  );
+}
+
+/** Fila de vidrio de una pieza. El lado derecho queda para el producto (pasos 07–08). */
+function PieceRow({ garment }: { garment: Garment }) {
+  const details = [
+    CATEGORY_LABEL[garment.category],
+    garment.color.name,
+    garment.fit,
+    garment.material,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+  return (
+    <li className="grid grid-cols-[3.75rem_minmax(0,1fr)] items-center gap-3.5 rounded-[20px] glass p-2.5">
+      <span className="grid size-[3.75rem] place-items-center rounded-[14px] bg-sand/80">
+        <Pebble hex={garment.color.hex} size="lg" />
+      </span>
       <div className="min-w-0">
-        <p className="eyebrow">
-          {slotLabel(slot)} · {CATEGORY[garment.category]}
-        </p>
-        <p className="mt-1 text-sm font-medium">{garment.description}</p>
-        <p className="mt-1 text-xs text-stone">{[garment.color.name, ...details].join(" · ")}</p>
+        <p className="text-sm font-medium">{garment.description}</p>
+        <p className="mt-0.5 text-xs text-stone">{details}</p>
       </div>
+      {/* Pasos 07–08: precio del producto recomendado y "Comprar ↗" a la derecha de la fila. */}
     </li>
   );
 }
 
-function Bullets({ items, tone }: { items: string[]; tone: "do" | "avoid" }) {
+/** Tonos de las tarjetas "Por qué te queda bien" (arcilla, musgo, neutro), como en el diseño. */
+const REASON_TONES = [
+  "bg-tint-clay [--topo-line:rgb(184_101_63/0.18)]",
+  "bg-tint-moss [--topo-line:rgb(78_91_60/0.18)]",
+  "bg-tint-stone [--topo-line:rgb(31_36_32/0.12)]",
+];
+
+/** Último término del nombre en itálica de acento ("Smart casual *cálido*"). */
+function AccentTitle({ name }: { name: string }) {
+  const words = name.trim().split(/\s+/);
+  if (words.length < 2) return <>{name}</>;
   return (
-    <ul className="mt-3 space-y-2">
-      {items.map((item) => (
-        <li key={item} className="flex gap-3 text-sm leading-snug">
-          <span aria-hidden="true" className={tone === "do" ? "text-moss" : "text-danger"}>
-            {tone === "do" ? "✓" : "×"}
-          </span>
-          <span>{item}</span>
-        </li>
-      ))}
-    </ul>
+    <>
+      {words.slice(0, -1).join(" ")} <em className="text-moss">{words.at(-1)}</em>
+    </>
   );
 }
 
 export default async function LookDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const user = await requireUser(`/app/looks/${id}`);
-  const [look, plan] = await Promise.all([getLook(user.id, id), getPlan(user.id)]);
+  const [look, plan, looks] = await Promise.all([
+    getLook(user.id, id),
+    getPlan(user.id),
+    getLookSummaries(user.id),
+  ]);
   if (!look) notFound();
 
-  const back = (
-    <Link href="/app/looks" className="text-sm text-stone hover:text-ink">
-      ← Tus looks
-    </Link>
+  const header = (
+    <div className="flex items-center gap-3 text-[0.8125rem] text-stone">
+      <Link href="/app/looks" className="hover:text-ink">
+        ← Mis looks
+      </Link>
+      <span className="flex-1" />
+      <nav aria-label="Otros looks">
+        <ul className="flex gap-1 rounded-2xl well p-1 font-mono text-[0.6875rem]">
+          {looks.map((other) => (
+            <li key={other.id}>
+              <Link
+                href={`/app/looks/${other.id}`}
+                aria-current={other.id === look.id ? "page" : undefined}
+                aria-label={`Look ${other.position}`}
+                className={`block rounded-xl px-2.5 py-1 ${other.id === look.id ? "bg-cream text-ink shadow-[0_2px_6px_rgb(48_44_30/0.15)]" : "hover:text-ink"}`}
+              >
+                {twoDigits(other.position)}
+              </Link>
+            </li>
+          ))}
+        </ul>
+      </nav>
+    </div>
   );
 
   if (look.locked) {
     return (
       <>
         <TrackEvent name="locked_look_clicked" properties={{ position: look.position }} />
-        {back}
-        <div className="mt-6 grid gap-10 md:grid-cols-2">
-          <LockedLookCard name={look.name} position={look.position} />
+        {header}
+        <div className="mt-8 grid gap-10 md:grid-cols-2">
+          <LockedLookCard name={look.name} position={look.position} featured />
           <div id="premium">
             <PaywallCard />
           </div>
@@ -111,6 +149,22 @@ export default async function LookDetailPage({ params }: { params: Promise<{ id:
 
   const { spec } = look;
   const generating = look.status === "PENDING" || look.status === "GENERATING";
+  const pieces = lookPieces(spec);
+  const showPins = Boolean(look.imageUrl) && spec.image_prompt_data.framing === "FULL_BODY";
+  // El pelo es la pieza 1; las prendas siguen en el orden de la lista.
+  const pins = showPins
+    ? [
+        { n: 1, label: "Corte", at: PIN_POSITION.hair },
+        ...pieces.map((piece, i) => ({
+          n: i + 2,
+          label: CATEGORY_LABEL[piece.garment.category],
+          at: PIN_POSITION[piece.slot],
+        })),
+      ].filter((pin): pin is { n: number; label: string; at: { left: number; top: number } } =>
+        Boolean(pin.at),
+      )
+    : [];
+
   return (
     <>
       <AutoRefresh active={generating} />
@@ -118,63 +172,146 @@ export default async function LookDetailPage({ params }: { params: Promise<{ id:
         name={plan.isPremium ? "premium_look_viewed" : "free_look_viewed"}
         properties={{ position: look.position }}
       />
-      {back}
-      <div className="mt-6 grid gap-10 md:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
-        <div>
-          <LookCard
-            look={spec}
-            position={look.position}
-            imageUrl={look.imageUrl}
-            status={look.status}
-          />
-          {/* Paso 07: CTA "Encontrar este look" (shopping). */}
+      <div className="grid gap-8 lg:grid-cols-[minmax(0,22rem)_minmax(0,1fr)] lg:gap-9 xl:grid-cols-[minmax(0,24rem)_minmax(0,1fr)]">
+        <div className="lg:sticky lg:top-24 lg:self-start">
+          {look.imageUrl ? (
+            <figure className="relative aspect-[3/4] overflow-hidden rounded-[34px] shadow-[0_40px_60px_-40px_rgb(48_44_30/0.6)]">
+              {/* <img>: imagen privada con URL firmada, fuera del optimizador. */}
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={look.imageUrl}
+                alt={`Vos con el look ${spec.name}`}
+                className="absolute inset-0 size-full object-cover"
+              />
+              {pins.length ? (
+                <div aria-hidden="true">
+                  {pins.map((pin) => (
+                    <Pin key={pin.n} n={pin.n} label={pin.label} at={pin.at} />
+                  ))}
+                </div>
+              ) : null}
+            </figure>
+          ) : (
+            <LookCard
+              look={spec}
+              position={look.position}
+              imageUrl={null}
+              status={look.status}
+              featured
+            />
+          )}
         </div>
 
-        <div className="space-y-10">
-          <section aria-labelledby="look-garments">
-            <h2 id="look-garments" className="text-3xl">
-              Prendas
-            </h2>
-            <p className="mt-2 text-sm text-stone">Fit general: {spec.fit.overall}</p>
-            <ul className="mt-4">
-              {listLookGarments(spec).map(({ slot, garment }) => (
-                <GarmentRow key={slot} slot={slot} garment={garment} />
-              ))}
-            </ul>
-            {spec.fit.notes.length ? <Bullets items={spec.fit.notes} tone="do" /> : null}
-          </section>
-
-          <section aria-labelledby="look-hair" className="grid gap-6 sm:grid-cols-2">
-            <h2 id="look-hair" className="sr-only">
-              Pelo y grooming
-            </h2>
-            <div className="rounded-3xl border border-line bg-paper p-6">
-              <p className="eyebrow">Pelo</p>
-              <p className="mt-2 text-sm font-medium">{spec.hair.style}</p>
-              {spec.hair.notes ? (
-                <p className="mt-1 text-sm text-stone">{spec.hair.notes}</p>
-              ) : null}
+        <div className="flex flex-col gap-8 xl:grid xl:grid-cols-[minmax(0,1fr)_16rem] xl:gap-7">
+          <div className="flex flex-col gap-4">
+            {header}
+            <div className="mt-2 flex items-center gap-3.5">
+              <PaletteRing
+                colors={spec.palette.map((c) => c.hex)}
+                label={twoDigits(look.position)}
+                size="lg"
+                inner="bg-ivory"
+              />
+              <h1 className="text-4xl leading-none text-balance sm:text-[2.625rem]">
+                <AccentTitle name={spec.name} />
+              </h1>
             </div>
-            <div className="rounded-3xl border border-line bg-paper p-6">
-              <p className="eyebrow">Grooming</p>
-              <p className="mt-2 text-sm">{spec.grooming.description}</p>
-            </div>
-          </section>
+            <p className="text-sm leading-relaxed text-bark">{spec.concept}</p>
 
-          <section aria-labelledby="look-why" className="grid gap-6 sm:grid-cols-2">
-            <div>
-              <h2 id="look-why" className="text-2xl">
-                Por qué te queda
+            <section aria-labelledby="look-pieces" className="mt-2">
+              <h2 id="look-pieces" className="eyebrow">
+                {pieces.length + 1} piezas
               </h2>
-              <Bullets items={spec.reasoning} tone="do" />
-            </div>
+              <ul className="mt-3 flex flex-col gap-2">
+                <li className="rounded-[20px] glass">
+                  <details className="group">
+                    <summary className="grid cursor-pointer list-none grid-cols-[3.75rem_minmax(0,1fr)_auto] items-center gap-3.5 p-2.5 [&::-webkit-details-marker]:hidden">
+                      <span className="relative size-[3.75rem] overflow-hidden rounded-[14px] bg-sand">
+                        {look.imageUrl ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={look.imageUrl}
+                            alt=""
+                            className="absolute inset-0 size-full origin-[50%_8%] scale-[2.2] object-cover object-top"
+                          />
+                        ) : null}
+                      </span>
+                      <span className="min-w-0">
+                        <span className="block text-sm font-medium">{spec.hair.style}</span>
+                        <span className="block text-xs text-stone">Peinado y grooming</span>
+                      </span>
+                      <span className="rounded-2xl bg-sand px-3.5 py-2 text-xs group-open:bg-ink group-open:text-paper">
+                        Ver ficha
+                      </span>
+                    </summary>
+                    <div className="space-y-2 px-4 pt-1 pb-4 text-sm leading-relaxed text-bark">
+                      {spec.hair.notes ? <p>{spec.hair.notes}</p> : null}
+                      <p>
+                        <span className="font-medium text-ink">Grooming: </span>
+                        {spec.grooming.description}
+                      </p>
+                    </div>
+                  </details>
+                </li>
+                {pieces.map(({ slot, garment }) => (
+                  <PieceRow key={slot} garment={garment} />
+                ))}
+              </ul>
+              <p className="mt-5 text-[0.8125rem] text-bark">
+                <span className="font-medium text-ink">Fit: </span>
+                {spec.fit.overall}
+              </p>
+              {spec.fit.notes.length ? (
+                <ul className="mt-2 space-y-1.5 text-[0.8125rem] text-bark">
+                  {spec.fit.notes.map((note) => (
+                    <li key={note} className="flex gap-2.5">
+                      <span aria-hidden="true" className="text-moss">
+                        +
+                      </span>
+                      {note}
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+              {/* Paso 07: CTA "Encontrar este look" (píldora oscura a lo ancho) + ♡ guardar (paso 10b). */}
+            </section>
+          </div>
+
+          <aside aria-labelledby="look-why" className="flex flex-col gap-3 xl:pt-14">
+            <h2 id="look-why" className="text-[1.625rem] italic">
+              Por qué te queda bien
+            </h2>
+            {spec.reasoning.map((reason, i) => (
+              <div
+                key={reason}
+                className={`relative overflow-hidden rounded-[22px] p-[1.125rem] ${REASON_TONES[i % REASON_TONES.length]}`}
+              >
+                <div aria-hidden="true" className="absolute inset-0 topo-card" />
+                <p className="relative font-mono text-[0.625rem] text-bark">{twoDigits(i + 1)}</p>
+                <p className="relative mt-1.5 text-[0.8125rem] leading-relaxed text-ink">
+                  {reason}
+                </p>
+              </div>
+            ))}
             {spec.avoid.length ? (
-              <div>
-                <h2 className="text-2xl">Con este look, evitá</h2>
-                <Bullets items={spec.avoid} tone="avoid" />
+              <div className="mt-2 rounded-[22px] glass p-[1.125rem]">
+                <p className="eyebrow">Con este look, evitá</p>
+                <ul className="mt-2 space-y-1.5 text-[0.8125rem] text-bark">
+                  {spec.avoid.map((item) => (
+                    <li key={item} className="flex gap-2.5">
+                      <span aria-hidden="true" className="text-clay-dark">
+                        −
+                      </span>
+                      <span>
+                        <span className="sr-only">Evitar: </span>
+                        {item}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
               </div>
             ) : null}
-          </section>
+          </aside>
         </div>
       </div>
     </>

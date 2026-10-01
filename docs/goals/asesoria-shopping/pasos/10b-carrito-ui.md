@@ -16,6 +16,16 @@ TOTAL APROX: $5.157
 
 "Comprar" abre la tienda original.
 
+## Diseño (`docs/DESIGN_SYSTEM.md`)
+
+- **Navegación.** La sección de favoritos se llama **"Guardados"** (`/app/favorites`, en la barra y en el título). El carrito es el ícono del header, junto al avatar: sumale la cantidad de ítems.
+- **Guardar.** ♡ en un círculo de vidrio a la derecha de la píldora oscura del detalle del look (2h). En las cards de `/app/looks` y en los productos, el mismo ♡ chico.
+- **Agregar al carrito.** Desde el detalle, la píldora oscura del paso 08 pasa a "Agregar el look al carrito · $ total". Por producto, una acción en la fila.
+- **`/app/cart` y `/app/favorites`.**
+  - Filas de vidrio como las piezas del look: miniatura, nombre, "tienda · talle", precio y "Comprar ↗".
+  - Total en Familjen.
+  - Estados vacíos con el orbe (`EmptyState`).
+
 ## Lo que ya hay (verificalo)
 
 - **`/app/cart`.** Server Component de solo lectura: no tiene acciones, subtotal, agrupación, imagen ni talle. Al usuario free le muestra `PaywallCard`.

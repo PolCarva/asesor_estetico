@@ -3,6 +3,7 @@ import "server-only";
 import {
   getActiveStyleProfile as readActiveStyleProfile,
   getLatestSubscription,
+  getUserPhotoSignedUrl,
   type LookRow,
 } from "@asesor/db";
 import { createServerSupabaseClient } from "@asesor/db/server";
@@ -15,7 +16,9 @@ import {
   SIGNED_URL_TTL_SECONDS,
   STORAGE_BUCKETS,
   selectAdviceForPlan,
+  type StyleAdvice,
   type StyleProfileCore,
+  type UserPhotoType,
 } from "@asesor/shared";
 import { cache } from "react";
 
@@ -44,15 +47,48 @@ export async function getActiveStyleProfile(userId: string): Promise<StyleProfil
 }
 
 /**
- * Asesoría de la pantalla de resultados. La parte Premium (`style_advice`) se consulta
- * solo si el usuario es Premium, con su cliente (RLS); a free nunca le llega.
+ * Perfil activo para "Mi perfil": núcleo para cualquier plan y asesoría solo Premium. La
+ * parte Premium (`style_advice`) se consulta solo si el usuario es Premium, con su
+ * cliente (RLS); a free nunca le llega (ni la de un perfil v1 guardado en `profile_json`).
  */
-export const getAdviceView = cache(async (userId: string): Promise<AdviceView | null> => {
-  const [client, plan] = await Promise.all([createServerSupabaseClient(), getPlan(userId)]);
-  const stored = await readActiveStyleProfile(client, userId, { includeAdvice: plan.isPremium });
-  if (!stored) return null;
-  return selectAdviceForPlan(stored.profile, stored.advice, plan.isPremium);
-});
+export const getStyleData = cache(
+  async (
+    userId: string,
+  ): Promise<{ core: StyleProfileCore; advice: StyleAdvice | null; view: AdviceView } | null> => {
+    const [client, plan] = await Promise.all([createServerSupabaseClient(), getPlan(userId)]);
+    const stored = await readActiveStyleProfile(client, userId, {
+      includeAdvice: plan.isPremium,
+    });
+    if (!stored) return null;
+    return {
+      core: stored.profile,
+      advice: plan.isPremium ? stored.advice : null,
+      view: selectAdviceForPlan(stored.profile, stored.advice, plan.isPremium),
+    };
+  },
+);
+
+/** Asesoría de imagen según el plan (view model de `selectAdviceForPlan`). */
+export async function getAdviceView(userId: string): Promise<AdviceView | null> {
+  return (await getStyleData(userId))?.view ?? null;
+}
+
+/** URLs firmadas de corta duración de las fotos del usuario, por tipo. Nunca se cachean. */
+export async function getPhotoUrls(
+  userId: string,
+): Promise<Partial<Record<UserPhotoType, string>>> {
+  const client = await createServerSupabaseClient();
+  const { data } = await client.from("user_photos").select("id, type").eq("user_id", userId);
+  const entries = await Promise.all(
+    (data ?? []).map(async (photo) => {
+      const url = await getUserPhotoSignedUrl(client, { userId, photoId: photo.id }).catch(
+        () => null,
+      );
+      return [photo.type, url] as const;
+    }),
+  );
+  return Object.fromEntries(entries.filter(([, url]) => url !== null));
+}
 
 export type LookView =
   | {
@@ -113,6 +149,19 @@ export async function getLooks(userId: string): Promise<LookView[]> {
       };
     }),
   );
+}
+
+/** Número e id de los looks del perfil activo (para navegar entre ellos). Sin datos del spec. */
+export async function getLookSummaries(
+  userId: string,
+): Promise<Array<{ id: string; position: number }>> {
+  const { data } = await getServiceRoleClient()
+    .from("looks")
+    .select("id, position, style_profiles!inner(active)")
+    .eq("user_id", userId)
+    .eq("style_profiles.active", true)
+    .order("position");
+  return (data ?? []).map(({ id, position }) => ({ id, position }));
 }
 
 export type LookDetail =

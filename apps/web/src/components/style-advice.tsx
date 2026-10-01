@@ -5,22 +5,16 @@ import { Swatches } from "./swatches";
 import { TrackEvent } from "./track-event";
 import { LinkButton } from "./ui/button";
 
-const MARK = { do: "✓", avoid: "×", info: "·" } as const;
-const MARK_CLASS = {
-  do: "bg-moss/10 text-moss",
-  avoid: "bg-danger/10 text-danger",
-  info: "bg-sand text-stone",
-} as const;
+const MARK = { do: "+", avoid: "−", info: "·" } as const;
+const MARK_CLASS = { do: "text-moss", avoid: "text-clay-dark", info: "text-stone" } as const;
 const MARK_LABEL = { do: "Te favorece", avoid: "Evitar", info: "Dato" } as const;
 
 function ItemList({ items, tone }: { items: string[]; tone: AdviceGroup["tone"] }) {
   return (
-    <ul className="space-y-2">
+    <ul className="space-y-1.5">
       {items.map((item) => (
-        <li key={item} className="flex gap-3 text-sm leading-snug">
-          <span
-            className={`mt-px inline-flex size-5 shrink-0 items-center justify-center rounded-full text-xs font-medium ${MARK_CLASS[tone]}`}
-          >
+        <li key={item} className="flex gap-2.5 text-sm leading-snug">
+          <span className={`w-2.5 shrink-0 font-medium ${MARK_CLASS[tone]}`}>
             <span aria-hidden="true">{MARK[tone]}</span>
             <span className="sr-only">{MARK_LABEL[tone]}:</span>
           </span>
@@ -35,25 +29,29 @@ function Section({ section }: { section: AdviceSection }) {
   const headingId = `advice-${section.id}`;
   return (
     <section
+      id={section.id === "hair" ? "pelo" : undefined}
       aria-labelledby={headingId}
-      className="break-inside-avoid rounded-3xl border border-line bg-paper p-6"
+      className="break-inside-avoid rounded-[28px] glass p-6"
     >
-      <h3 id={headingId} className="text-2xl">
+      <h3 id={headingId} className="text-[1.625rem] leading-none">
         {section.title}
       </h3>
       {section.highlight ? (
-        <div className="mt-4 rounded-2xl bg-sand/70 p-4">
-          <div className="flex items-center justify-between gap-3">
-            <p className="eyebrow">{section.highlight.label}</p>
+        <div className="relative mt-5 overflow-hidden rounded-[22px] bg-tint-moss p-4 [--topo-line:rgb(78_91_60/0.16)]">
+          <div aria-hidden="true" className="absolute inset-0 topo-card" />
+          <div className="relative flex items-center justify-between gap-3">
+            <p className="font-mono text-[0.625rem] tracking-[0.08em] text-moss uppercase">
+              {section.highlight.label}
+            </p>
             <CopyButton text={section.highlight.text} />
           </div>
-          <p className="mt-2 text-sm leading-relaxed">{section.highlight.text}</p>
+          <p className="relative mt-2 text-sm leading-relaxed">{section.highlight.text}</p>
         </div>
       ) : null}
       <div className="mt-5 space-y-5">
         {section.groups.map((group) => (
           <div key={group.label}>
-            <h4 className="mb-2 font-sans text-xs font-medium text-stone">{group.label}</h4>
+            <h4 className="mb-2 eyebrow">{group.label}</h4>
             <ItemList items={group.items} tone={group.tone} />
           </div>
         ))}
@@ -81,16 +79,13 @@ function LockIcon() {
 /** Secciones Premium bloqueadas: solo títulos y líneas de relleno, sin datos reales. */
 function LockedSections({ locked }: { locked: AdviceView["locked"] }) {
   return (
-    <section
-      aria-labelledby="advice-locked"
-      className="relative overflow-hidden rounded-3xl border border-line bg-paper p-6"
-    >
+    <section aria-labelledby="advice-locked" className="rounded-[28px] glass p-6">
       <h3 id="advice-locked" className="sr-only">
         Asesoría completa (Premium)
       </h3>
       <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {locked.map((s) => (
-          <li key={s.id} className="rounded-2xl bg-sand/60 p-4">
+          <li key={s.id} className="rounded-[20px] well p-4">
             <p className="flex items-center gap-2 text-sm font-medium">
               <LockIcon />
               {s.title}
@@ -104,11 +99,11 @@ function LockedSections({ locked }: { locked: AdviceView["locked"] }) {
         ))}
       </ul>
       <div className="mt-6 flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <p className="max-w-md text-sm text-stone">
+        <p className="max-w-md text-sm text-bark">
           Corte e indicaciones para tu peluquero, barba y cejas, ropa y fit, calzado, accesorios,
           tatuajes y un plan de por dónde empezar.
         </p>
-        <LinkButton href="#premium" variant="accent" size="sm">
+        <LinkButton href="#premium" size="sm">
           Ver la asesoría completa
         </LinkButton>
       </div>
@@ -116,11 +111,39 @@ function LockedSections({ locked }: { locked: AdviceView["locked"] }) {
   );
 }
 
-/** Asesoría de imagen: teaser para free, completa para Premium. Server Component. */
+/** Tarjeta corta de la fila de arriba (te favorece / mejor evitar). */
+function KeyList({
+  id,
+  title,
+  items,
+  tone,
+}: {
+  id: string;
+  title: string;
+  items: string[];
+  tone: AdviceGroup["tone"];
+}) {
+  return (
+    <section aria-labelledby={id} className="rounded-[28px] glass p-6">
+      <h3 id={id} className="eyebrow">
+        {title}
+      </h3>
+      <div className="mt-4">
+        <ItemList items={items} tone={tone} />
+      </div>
+    </section>
+  );
+}
+
+/**
+ * Asesoría de imagen en la pantalla de resultados, debajo de los looks (SPEC, "UI DEL
+ * ASESORAMIENTO"): te favorece, mejor evitar y colores para todos; secciones completas
+ * para Premium y bloqueadas para free.
+ */
 export function StyleAdvice({ view }: { view: AdviceView }) {
   const isPremium = view.plan === "PREMIUM";
   return (
-    <section aria-labelledby="advice-title" className="mt-16">
+    <section aria-labelledby="advice-title" className="mt-20">
       <TrackEvent
         name="style_advice_viewed"
         properties={{
@@ -130,57 +153,39 @@ export function StyleAdvice({ view }: { view: AdviceView }) {
         }}
       />
       <p className="eyebrow">Tu asesoría de imagen</p>
-      <h2 id="advice-title" className="mt-2 text-4xl">
-        {view.direction.primary}
+      <h2 id="advice-title" className="mt-3 text-4xl leading-none sm:text-5xl">
+        Cómo llevarlo <em className="text-moss">a tu día.</em>
       </h2>
-      {view.direction.keywords.length ? (
-        <p className="mt-3 text-sm text-stone">{view.direction.keywords.join(" · ")}</p>
-      ) : null}
+      <p className="mt-3 text-sm text-bark">
+        {view.direction.primary}
+        {view.direction.keywords.length ? ` · ${view.direction.keywords.join(" · ")}` : ""}
+      </p>
 
-      <div className="mt-8 grid gap-6 lg:grid-cols-3">
-        <section
-          aria-labelledby="advice-favors"
-          className="rounded-3xl border border-line bg-paper p-6"
-        >
-          <h3 id="advice-favors" className="eyebrow">
-            Te favorece
-          </h3>
-          <div className="mt-4">
-            <ItemList items={view.favors} tone="do" />
-          </div>
-        </section>
-        <section
-          aria-labelledby="advice-avoid"
-          className="rounded-3xl border border-line bg-paper p-6"
-        >
-          <h3 id="advice-avoid" className="eyebrow">
-            Mejor evitar
-          </h3>
-          <div className="mt-4">
-            <ItemList items={view.avoid} tone="avoid" />
-          </div>
-        </section>
+      <div className="mt-8 grid gap-4 lg:grid-cols-3">
+        <KeyList id="advice-favors" title="Te favorece" items={view.favors} tone="do" />
+        <KeyList id="advice-avoid" title="Mejor evitar" items={view.avoid} tone="avoid" />
         <section
           aria-labelledby="advice-colors"
-          className="rounded-3xl border border-line bg-paper p-6"
+          className="relative overflow-hidden rounded-[28px] bg-tint-clay p-6 [--topo-line:rgb(184_101_63/0.14)]"
         >
-          <h3 id="advice-colors" className="eyebrow">
+          <div aria-hidden="true" className="absolute inset-0 topo-card" />
+          <h3 id="advice-colors" className="relative eyebrow text-clay-dark">
             Colores
           </h3>
-          <div className="mt-4 space-y-4">
+          <div className="relative mt-4 space-y-4">
             <div>
-              <p className="mb-2 font-sans text-xs font-medium text-stone">Tus mejores colores</p>
+              <p className="mb-2 text-xs font-medium text-bark">Tus mejores colores</p>
               <Swatches colors={view.colors.best} />
             </div>
             {view.colors.neutrals.length ? (
               <div>
-                <p className="mb-2 font-sans text-xs font-medium text-stone">Neutros</p>
+                <p className="mb-2 text-xs font-medium text-bark">Neutros</p>
                 <Swatches colors={view.colors.neutrals} />
               </div>
             ) : null}
             {view.colors.avoid.length ? (
               <div>
-                <p className="mb-2 font-sans text-xs font-medium text-stone">Mejor evitar</p>
+                <p className="mb-2 text-xs font-medium text-bark">Mejor evitar</p>
                 <Swatches colors={view.colors.avoid} />
               </div>
             ) : null}
@@ -189,19 +194,19 @@ export function StyleAdvice({ view }: { view: AdviceView }) {
       </div>
 
       {isPremium && view.sections.length ? (
-        <div className="mt-6 gap-6 md:columns-2 [&>*]:mb-6">
+        <div className="mt-4 gap-4 md:columns-2 [&>*]:mb-4">
           {view.sections.map((section) => (
             <Section key={section.id} section={section} />
           ))}
         </div>
       ) : null}
       {isPremium && view.pendingNextAnalysis ? (
-        <p className="mt-6 rounded-2xl bg-sand/60 p-4 text-sm text-stone">
+        <p className="mt-4 rounded-[22px] glass p-4 text-sm text-bark">
           La asesoría detallada (corte, barba, ropa, calzado y más) aparece en tu próximo análisis.
         </p>
       ) : null}
       {view.locked.length ? (
-        <div className="mt-6">
+        <div className="mt-4">
           <LockedSections locked={view.locked} />
         </div>
       ) : null}

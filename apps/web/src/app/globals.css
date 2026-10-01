@@ -1,25 +1,101 @@
 @import "tailwindcss";
 
 /*
- * Sistema visual: editorial y cálido. Papel marfil, tinta casi negra, acento arcilla.
- * Tipografía display serif (Fraunces) + sans neutra (Inter).
+ * Sistema visual "Espejo" (dirección tech-orgánica): papel arena con grano, tinta verde
+ * casi negra, musgo y arcilla como acentos, vidrio esmerilado y curvas topográficas.
+ * Titulares en Familjen Grotesk (con itálica de acento), texto en Geist y la capa
+ * técnica (etiquetas, números) en Geist Mono. Ver docs/DESIGN_SYSTEM.md.
  */
 @theme {
-  --color-ivory: #f6f2ec;
-  --color-paper: #fbf9f5;
-  --color-sand: #ebe3d7;
-  --color-line: #ddd3c5;
-  --color-stone: #6f675e;
-  --color-ink: #1b1815;
-  --color-clay: #9a5636;
-  --color-clay-dark: #7a3f24;
-  --color-moss: #4c563a;
+  --color-ivory: #efeae0;
+  --color-paper: #f5f1e9;
+  --color-cream: #f7f3eb;
+  --color-sand: #e6dfd1;
+  --color-sand-deep: #e2dacb;
+  --color-line: #dcd4c4;
+  --color-stone: #5f6358;
+  --color-bark: #4a5046;
+  --color-ink: #1f2420;
+  --color-ink-deep: #1c211b;
+  --color-clay: #b8653f;
+  --color-clay-dark: #8a4a2c;
+  --color-copper: #c7825a;
+  --color-peach: #f0c9a0;
+  --color-moss: #4e5b3c;
+  --color-sage: #b5c29e;
+  --color-night: #171b15;
+  --color-forest: #2a3125;
+  --color-mist: #a39e90;
+  --color-bone: #f2ecdf;
+  --color-tint-clay: #e4dccb;
+  --color-tint-moss: #dde0cf;
+  --color-tint-stone: #e8e1d3;
   --color-danger: #a3322a;
 
-  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
-  --font-display: var(--font-fraunces), ui-serif, Georgia, serif;
+  --font-sans: var(--font-geist), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-familjen), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
 
-  --tracking-eyebrow: 0.18em;
+  --tracking-eyebrow: 0.08em;
+
+  --animate-scan: es-scan 3.4s cubic-bezier(0.6, 0, 0.4, 1) infinite;
+  --animate-blink: es-blink 1.2s ease-in-out infinite;
+  --animate-breath: es-breath 3.4s ease-in-out infinite;
+  --animate-float: es-float 3s ease-in-out infinite;
+  --animate-dots: es-dots 2.2s ease-in-out infinite;
+  --animate-orbit: es-orbit 7s linear infinite;
+
+  @keyframes es-scan {
+    0% {
+      top: -110px;
+    }
+    100% {
+      top: 100%;
+    }
+  }
+  @keyframes es-blink {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.3;
+    }
+  }
+  @keyframes es-breath {
+    0%,
+    100% {
+      transform: translate(-50%, -50%) scale(1);
+      opacity: 0.9;
+    }
+    50% {
+      transform: translate(-50%, -50%) scale(1.06);
+      opacity: 0.45;
+    }
+  }
+  @keyframes es-float {
+    0%,
+    100% {
+      transform: translateY(0);
+    }
+    50% {
+      transform: translateY(-8px);
+    }
+  }
+  @keyframes es-dots {
+    0%,
+    100% {
+      opacity: 0.25;
+    }
+    50% {
+      opacity: 0.85;
+    }
+  }
+  @keyframes es-orbit {
+    to {
+      transform: rotateX(70deg) rotateZ(360deg);
+    }
+  }
 }
 
 @layer base {
@@ -30,23 +106,148 @@
 
   body {
     @apply bg-ivory font-sans text-ink antialiased;
+    /* Grano de papel: ruido SVG multiplicado sobre el arena. */
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)' opacity='.16'/%3E%3C/svg%3E");
+    background-blend-mode: multiply;
   }
 
   :focus-visible {
-    @apply outline-2 outline-offset-2 outline-clay;
+    @apply outline-2 outline-offset-2 outline-moss;
   }
 
   h1,
   h2,
   h3 {
-    @apply font-display tracking-tight;
-    font-optical-sizing: auto;
+    @apply font-display font-medium tracking-tight;
+  }
+
+  h1 {
+    letter-spacing: -0.02em;
   }
 }
 
+/* Etiqueta técnica: Geist Mono, mayúsculas, espaciada. */
 @utility eyebrow {
-  @apply text-[0.7rem] font-medium text-stone uppercase;
+  @apply font-mono text-[0.6875rem] font-medium text-stone uppercase;
   letter-spacing: var(--tracking-eyebrow);
+}
+
+/* Vidrio esmerilado sobre papel. */
+@utility glass {
+  background-color: rgb(250 247 241 / 0.75);
+  border: 1px solid rgb(255 255 255 / 0.9);
+  box-shadow: 0 10px 24px -18px rgb(48 44 30 / 0.45);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+}
+
+/* Vidrio más opaco, para etiquetas encima de fotos. */
+@utility glass-strong {
+  background-color: rgb(250 247 241 / 0.84);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+}
+
+/* Vidrio oscuro (pantallas de noche). */
+@utility glass-night {
+  background-color: rgb(242 236 223 / 0.06);
+  border: 1px solid rgb(242 236 223 / 0.1);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+}
+
+/* Hueco en relieve (zonas de carga, rieles de navegación, barras). */
+@utility well {
+  background-color: var(--color-sand);
+  box-shadow:
+    inset 0 3px 12px rgb(48 44 30 / 0.14),
+    inset 0 -1px 0 rgb(255 255 255 / 0.7);
+}
+
+/* Botón oscuro con brillo superior y sombra de contacto. */
+@utility raised-dark {
+  background-image: linear-gradient(180deg, #2c332b, #1c211b);
+  color: var(--color-paper);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.18),
+    0 14px 28px -12px rgb(28 33 27 / 0.6);
+}
+
+/* Sombra de contacto de las tarjetas con foto. */
+@utility shadow-contact {
+  box-shadow: 0 36px 50px -30px rgb(48 44 30 / 0.55);
+}
+
+/* Orbe: representa al estilista (IA). */
+@utility orb {
+  border-radius: 9999px;
+  background: radial-gradient(
+    circle at 32% 28%,
+    #fff6e6 0%,
+    #f0c9a0 18%,
+    #c7825a 45%,
+    #6f6a45 75%,
+    #3c4630 100%
+  );
+  box-shadow:
+    inset -6px -8px 14px rgb(0 0 0 / 0.35),
+    0 0 30px rgb(240 201 160 / 0.3);
+}
+
+/* Orbe chico del logo. */
+@utility orb-mark {
+  border-radius: 9999px;
+  background: radial-gradient(
+    circle at 32% 28%,
+    #fff6e6 0%,
+    #f0c9a0 20%,
+    #c7825a 50%,
+    #4e5b3c 100%
+  );
+}
+
+/* Curvas de nivel. Cada variante replica un fondo del diseño. */
+@utility bg-topo {
+  background-image: repeating-radial-gradient(
+    ellipse 70% 40% at 50% 100%,
+    transparent 0 26px,
+    rgb(78 91 60 / 0.12) 26px 27px
+  );
+}
+
+@utility bg-topo-corner {
+  background-image: repeating-radial-gradient(
+    ellipse 120% 90% at 92% 8%,
+    transparent 0 30px,
+    rgb(78 91 60 / 0.12) 30px 31px
+  );
+}
+
+@utility bg-topo-night {
+  background-image: repeating-radial-gradient(
+    ellipse 80% 60% at 50% 55%,
+    transparent 0 34px,
+    rgb(181 194 158 / 0.07) 34px 35px
+  );
+}
+
+/* Curvas en la esquina de una tarjeta teñida; el color sale de --topo-line. */
+@utility topo-card {
+  background-image: repeating-radial-gradient(
+    circle at 110% -10%,
+    transparent 0 12px,
+    var(--topo-line, rgb(31 36 32 / 0.12)) 12px 13px
+  );
+}
+
+/* Nube de puntos (lectura de la IA). El color sale de --dot. */
+@utility dot-cloud {
+  background-image: radial-gradient(
+    circle,
+    var(--dot, rgb(250 247 241 / 0.85)) 1.1px,
+    transparent 1.6px
+  );
+  background-size: 8px 8px;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -54,6 +255,7 @@
   *::before,
   *::after {
     animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
 }

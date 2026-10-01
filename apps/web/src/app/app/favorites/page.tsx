@@ -7,7 +7,7 @@ import { EmptyState } from "@/components/ui/states";
 import { requireUser } from "@/lib/auth";
 import { createServerSupabaseClient } from "@asesor/db/server";
 
-export const metadata: Metadata = { title: "Favoritos" };
+export const metadata: Metadata = { title: "Guardados" };
 
 export default async function FavoritesPage() {
   const user = await requireUser("/app/favorites");
@@ -24,8 +24,12 @@ export default async function FavoritesPage() {
     <>
       <PageHeader
         eyebrow="Guardados"
-        title="Favoritos"
-        description="Los looks y productos que guardaste."
+        title={
+          <>
+            Lo que <em>guardaste.</em>
+          </>
+        }
+        description="Los looks y productos que guardaste para volver a verlos."
       />
       {!favorites || favorites.length === 0 ? (
         <EmptyState

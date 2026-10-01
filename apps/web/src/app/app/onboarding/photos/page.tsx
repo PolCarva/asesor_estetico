@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 
-import { PageHeader } from "@/components/ui/page-header";
 import { AutoRefresh } from "@/components/auto-refresh";
 import { LinkButton } from "@/components/ui/button";
 import { requireUser } from "@/lib/auth";
@@ -17,16 +16,27 @@ const SLOTS: Array<Omit<PhotoSlotProps, "photo">> = [
   {
     type: "MAIN_BODY",
     title: "Cuerpo entero",
+    letter: "A",
+    ratio: "3:4",
     description:
       "De pie, de frente, con luz natural y ropa que te quede bien al cuerpo. Sin filtros.",
   },
   {
     type: "FACE_DETAIL",
     title: "Rostro",
+    letter: "B",
+    ratio: "4:5",
     description:
-      "Primer plano con buena luz, sin anteojos de sol ni gorro. Pelo como lo usás siempre.",
+      "Primer plano con buena luz, sin lentes de sol ni gorro. Pelo como lo usás siempre.",
   },
 ];
+
+const TIPS = [
+  ["i.", "Luz natural, de frente"],
+  ["ii.", "Fondo liso"],
+  ["iii.", "Ropa que te quede al cuerpo"],
+  ["iv.", "Sin lentes de sol ni gorro"],
+] as const;
 
 export default async function PhotosPage() {
   const user = await requireUser("/app/onboarding/photos");
@@ -49,28 +59,72 @@ export default async function PhotosPage() {
       });
     }),
   );
+  const [body, face] = SLOTS;
 
   return (
     <>
-      <PageHeader
-        eyebrow="Paso 1 de 4"
-        title="Tus fotos"
-        description="Necesitamos dos fotos para analizar tu imagen. Formatos JPG, PNG o WEBP de hasta 10 MB. Solo vos podés verlas."
-      />
       <AutoRefresh active={pipeline.stage === "VALIDATING"} />
-      <div className="grid gap-6 md:grid-cols-2">
-        {SLOTS.map((slot) => (
-          <PhotoSlot key={slot.type} {...slot} photo={byType.get(slot.type) ?? null} />
-        ))}
-      </div>
-      {byType.size === 2 ? (
-        <div className="mt-10 flex flex-wrap items-center gap-4">
-          <LinkButton href="/app/onboarding" size="lg">
-            Continuar al análisis
-          </LinkButton>
-          <p className="text-sm text-stone">Siguiente paso: tus preferencias de estilo.</p>
+      <div
+        aria-hidden="true"
+        className="pointer-events-none fixed inset-0 -z-10 bg-topo-corner [mask-image:radial-gradient(ellipse_at_85%_5%,#000,transparent_75%)]"
+      />
+      <div>
+        <div className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(0,22rem)_minmax(0,18rem)] lg:gap-7">
+          <div className="lg:pt-4">
+            <p className="eyebrow">Paso 1 / 3 — Tus fotos</p>
+            <h1 className="mt-5 text-5xl leading-[0.95] sm:text-6xl lg:text-[3.75rem] xl:text-[4.25rem]">
+              Mostrate <br className="hidden sm:block" />
+              <em className="text-moss">tal como sos.</em>
+            </h1>
+            <p className="mt-5 max-w-sm text-[0.9375rem] leading-relaxed text-bark">
+              Con dos fotos alcanza. Leemos tu rostro, tu silueta y tu tono de piel para proponerte
+              los 3 looks que mejor te quedan. Formatos JPG, PNG o WEBP de hasta 10 MB.
+            </p>
+            <ul className="mt-7 grid max-w-md grid-cols-2 gap-2.5">
+              {TIPS.map(([mark, tip]) => (
+                <li key={tip} className="rounded-2xl glass p-3.5">
+                  <span aria-hidden="true" className="font-display text-2xl text-clay">
+                    {mark}
+                  </span>
+                  <span className="mt-0.5 block text-[0.8125rem]">{tip}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          {body ? <PhotoSlot {...body} photo={byType.get(body.type) ?? null} /> : null}
+
+          <div className="flex flex-col gap-5">
+            {face ? <PhotoSlot {...face} photo={byType.get(face.type) ?? null} /> : null}
+            <p className="flex gap-2.5 px-1 text-xs leading-relaxed text-stone">
+              <span aria-hidden="true" className="font-display text-lg leading-none text-moss">
+                ◐
+              </span>
+              Tus fotos se guardan privadas: solo vos las ves y las podés borrar cuando quieras.
+              Nunca entrenamos modelos con ellas.
+            </p>
+            <div className="lg:mt-auto">
+              {byType.size === 2 ? (
+                <LinkButton href="/app/onboarding" size="lg" className="w-full">
+                  Analizar mis fotos
+                </LinkButton>
+              ) : (
+                <>
+                  <span
+                    aria-disabled="true"
+                    className="flex h-14 w-full items-center justify-center rounded-full bg-line text-[0.9375rem] font-medium text-stone"
+                  >
+                    Analizar mis fotos
+                  </span>
+                  <p className="mt-2 text-center text-xs text-stone">
+                    Subí las dos fotos para seguir.
+                  </p>
+                </>
+              )}
+            </div>
+          </div>
         </div>
-      ) : null}
+      </div>
     </>
   );
 }

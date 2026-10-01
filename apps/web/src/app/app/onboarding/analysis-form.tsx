@@ -40,18 +40,20 @@ function Choice({
   defaultChecked: boolean;
 }) {
   return (
-    <label className="flex cursor-pointer gap-3 rounded-2xl border border-line p-4 transition-colors has-[:checked]:border-ink has-[:checked]:bg-paper">
+    <label
+      className={`flex cursor-pointer gap-3 ${hint ? "rounded-2xl p-3.5" : "items-center rounded-full px-4 py-2.5 text-sm"} border border-line/80 bg-ivory/60 transition-colors has-[:checked]:border-ink has-[:checked]:bg-cream has-[:checked]:shadow-[0_10px_24px_-18px_rgb(48_44_30/0.45)] has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-moss`}
+    >
       <input
         type="radio"
         name={name}
         value={value}
         defaultChecked={defaultChecked}
-        className="mt-1 accent-ink"
+        className={hint ? "mt-1 accent-ink" : "accent-ink"}
         required
       />
       <span>
         <span className="block font-medium">{label}</span>
-        {hint ? <span className="text-sm text-stone">{hint}</span> : null}
+        {hint ? <span className="text-[0.8125rem] leading-snug text-stone">{hint}</span> : null}
       </span>
     </label>
   );
@@ -70,10 +72,10 @@ export function AnalysisForm({
 }) {
   const [state, action] = useActionState(startAnalysisAction, initial);
   return (
-    <form action={action} className="space-y-8">
+    <form action={action} className="space-y-7">
       <fieldset>
-        <legend className="text-xl">¿Cuánto querés cambiar?</legend>
-        <div className="mt-4 grid gap-3 md:grid-cols-3">
+        <legend className="eyebrow">¿Cuánto querés cambiar?</legend>
+        <div className="mt-3 grid gap-2">
           {RISK.map((o) => (
             <Choice
               key={o.value}
@@ -87,8 +89,8 @@ export function AnalysisForm({
         </div>
       </fieldset>
       <fieldset>
-        <legend className="text-xl">Si tenés tatuajes, en tus looks preferís…</legend>
-        <div className="mt-4 grid gap-3 sm:grid-cols-3">
+        <legend className="eyebrow">Si tenés tatuajes, en tus looks preferís…</legend>
+        <div className="mt-3 flex flex-wrap gap-2">
           {TATTOO.map((o) => (
             <Choice
               key={o.value}
@@ -101,20 +103,22 @@ export function AnalysisForm({
         </div>
       </fieldset>
       {state.error ? <FormMessage>{state.error}</FormMessage> : null}
-      <div className="flex flex-wrap items-center gap-4">
+      <div className="flex flex-col gap-2.5">
         {canSubmit ? (
-          <SubmitButton pendingLabel="Iniciando…">{submitLabel}</SubmitButton>
+          <SubmitButton pendingLabel="Iniciando…" size="lg" className="w-full">
+            {submitLabel}
+          </SubmitButton>
         ) : (
           <button
             type="button"
             disabled
-            className="h-11 rounded-full bg-ink px-6 text-sm text-ivory opacity-50"
+            className="h-14 w-full rounded-full bg-line text-[0.9375rem] font-medium text-stone"
           >
             {submitLabel}
           </button>
         )}
-        <p className="text-sm text-stone">
-          El análisis tarda uno o dos minutos. Podés salir de esta pantalla.
+        <p className="text-center font-mono text-[0.6875rem] tracking-[0.06em] text-stone uppercase">
+          ≈ 1–2 minutos · Podés salir de esta pantalla
         </p>
       </div>
     </form>

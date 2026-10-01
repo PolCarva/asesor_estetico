@@ -35,10 +35,28 @@ fotos
 4. **StyleProfile.** Perfil estructurado y persistente del usuario: paleta de colores recomendada, siluetas y fits, estilos afines, cosas a evitar.
 5. **3 LookSpecs.** Tres propuestas de look concretas y estructuradas: prendas, colores, fit, calzado, accesorios y peinado o grooming, cada una con su justificación.
 6. **Imágenes.** Se genera una imagen del propio usuario con cada look, manteniendo su identidad.
-7. **Asesoría de imagen.** En `/app/looks`, debajo de los looks: te favorece (✓) y mejor evitar (×), colores, pelo (con indicaciones copiables para el peluquero), grooming (barba y cejas), ropa y fit, calzado y accesorios (joyería, anteojos), tatuajes y consejos generales de por dónde empezar. Listas cortas, sin bloques de texto. Cada look tiene su detalle en `/app/looks/[id]`: prendas por slot con color, fit y material, pelo y grooming del look, por qué le queda y qué evitar.
+7. **Asesoría de imagen.** En `/app/looks`, debajo de los looks:
+   - te favorece (+) y mejor evitar (−), colores;
+   - pelo, con indicaciones copiables para el peluquero;
+   - grooming (barba y cejas), ropa y fit;
+   - calzado y accesorios (joyería, anteojos), tatuajes;
+   - consejos generales de por dónde empezar.
+
+   Listas cortas, sin bloques de texto. Cada look tiene su detalle en `/app/looks/[id]`: render con pines por zona, piezas del look (color, fit y material), ficha de pelo y grooming, por qué le queda y qué evitar. `/app/profile` ("Mi perfil") muestra el análisis en un bento: forma de rostro, colorimetría, estilo, silueta (Premium) y claves.
+
 8. **Paywall.** El plan free muestra 1 look. Premium desbloquea el resto.
 9. **Shopping.** Para cada prenda de un look se buscan productos equivalentes en tiendas de Uruguay.
 10. **Chat Premium.** Conversación con el asesor sobre su perfil y sus looks ("¿qué me pongo para un casamiento?", "¿esta camisa me queda?").
+
+## Navegación y diseño
+
+La UI sigue el sistema visual "Espejo" (`docs/DESIGN_SYSTEM.md`):
+
+- **Recorrido:** Paso 1/3 fotos (`/app/onboarding/photos`) → Paso 2/3 análisis (`/app/onboarding`, con la pantalla nocturna mientras corre) → resultados (`/app/looks`).
+- **Navegación:** "Mis looks", "Mi perfil" y "Guardados", más el carrito y el avatar (cuenta en `/app/profile#cuenta`).
+- **Entrada:** `/app/dashboard` redirige al paso que corresponde.
+
+La app nunca muestra puntajes, porcentajes ni medidas que no calculó.
 
 ## MVP
 
@@ -51,7 +69,7 @@ fotos
 | Premium         | USD 4.99 por mes                                   |
 | Looks Premium   | 3 looks con imagen                                 |
 | Shopping        | Solo Premium, tiendas locales                      |
-| Favoritos       | Guardar looks y productos                          |
+| Guardados       | Guardar looks y productos (`/app/favorites`)       |
 | Carrito externo | Lista de productos que deriva a la tienda original |
 | Chat            | Solo Premium                                       |
 
@@ -64,7 +82,7 @@ fotos
 | Asesoría completa          |      |    ✔    |
 | Looks con imagen realista  |  1   |    3    |
 | Shopping local             |      |    ✔    |
-| Favoritos                  |  ✔   |    ✔    |
+| Guardados (favoritos)      |  ✔   |    ✔    |
 | Carrito externo            |      |    ✔    |
 | Chat con el asesor         |      |    ✔    |
 

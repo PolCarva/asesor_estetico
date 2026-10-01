@@ -31,7 +31,7 @@ Plan de trabajo por pasos para cumplir [`SPEC.md`](SPEC.md), el pedido original 
    Si no hay ninguno: no toques nada e informá **PLAN TERMINADO** (todo ✅) o **SIN PASO EJECUTABLE** (cada pendiente y qué lo traba).
 
 4. **Marcar 🟡** en la tabla antes de empezar.
-5. **Leer:** este README completo, el archivo del paso (mostrá su "Hecho cuando" con `sed -n '/^## Hecho cuando/,$p' <archivo>`), `DECISIONES.md`, `TIENDAS_UY.md` si el paso es de shopping, las secciones de `SPEC.md` que cita, y lo que indique de `/docs` y del código. Los datos del relevamiento son del 2026-09-30: verificalos contra el código actual, porque un paso anterior pudo cambiarlos.
+5. **Leer:** este README completo, el archivo del paso (mostrá su "Hecho cuando" con `sed -n '/^## Hecho cuando/,$p' <archivo>`), `DECISIONES.md`, `TIENDAS_UY.md` si el paso es de shopping, `docs/DESIGN_SYSTEM.md` si el paso toca la UI, las secciones de `SPEC.md` que cita, y lo que indique de `/docs` y del código. Los datos del relevamiento son del 2026-09-30: verificalos contra el código actual, porque un paso anterior pudo cambiarlos.
 6. **Implementar solo ese paso**, completo y con integraciones reales (mocks solo en tests). Si descubrís algo que corresponde a otro paso, anotalo en el log ("Para pasos siguientes") y no lo hagas, salvo que sea imprescindible para que este paso funcione. Tocar código de pasos anteriores está bien cuando este paso lo exige (los pasos 11, 12b y 13 existen para eso); lo que no se hace es cambiar el estado de otra fila de la tabla.
 7. **Errores, tests rojos o inestables, tiendas que bloquean o dificultad NO son bloqueo:** investigá, corregí y seguí. El paso queda ⛔ **solo** por algo que únicamente el usuario puede dar:
    - una clave o secret que falta (mostrá el comando que lo prueba, sin el valor);
@@ -110,6 +110,7 @@ source ~/.nvm/nvm.sh && nvm use >/dev/null && pnpm format && pnpm lint && pnpm t
 | --- | -------------------------------------------------------------------------------------------------- | -------------- | ---------- | ------ |
 | 01  | [Asesoría: schema, prompt y persistencia](pasos/01-asesoria-schema-prompt.md)                      | 1–5            | —          | ✅     |
 | 02  | [Asesoría: UI, Free/Premium y detalle de look](pasos/02-asesoria-ui-detalle-look.md)               | 6              | 01         | ✅     |
+| 02b | [Perfil visual: los datos que pide el diseño](pasos/02b-perfil-visual-datos.md)                    | 1–6            | 01, 02     | ⬜     |
 | 03  | [Shopping: queries desde el LookSpec y búsqueda real](pasos/03-shopping-queries-busqueda.md)       | 7–9            | —          | ✅     |
 | 04a | [Shopping: fetcher seguro, extracción y normalización](pasos/04a-fetch-extraccion.md)              | 10–11          | 03         | ✅     |
 | 04b | [Shopping: adaptadores de talles/stock, validación y locales](pasos/04b-adaptadores-validacion.md) | 10–11          | 04a        | ⬜     |
@@ -126,6 +127,7 @@ source ~/.nvm/nvm.sh && nvm use >/dev/null && pnpm format && pnpm lint && pnpm t
 | 13  | [Documentación, auditoría final y resumen](pasos/13-docs-auditoria-final.md)                       | 22–23          | 12b        | ⬜     |
 
 - Los pasos 01–02 (asesoría) y 03–06 (motor de shopping) son independientes entre sí: si uno queda ⛔, se sigue con el otro.
+- **UI base (2026-10-01):** la app sigue el diseño "Espejo", opción 2 (`docs/DESIGN_SYSTEM.md`). Cada paso con UI se construye sobre esas pantallas y respeta "Diferencias con el mockup" (nada de puntajes, porcentajes ni medidas inventadas). El paso 02b agrega los datos cualitativos que el diseño necesita y el análisis todavía no produce.
 - El orden cambia respecto del listado del SPEC, a propósito (ver D21 en `DECISIONES.md`):
   - Premium (SPEC 19) va con los jobs, para que el shopping nunca exista sin chequeo en el servidor.
   - Talles (SPEC 16) va antes de la UI de resultados (SPEC 15), porque el flujo UX del SPEC pide los talles antes de buscar.
@@ -290,3 +292,35 @@ source ~/.nvm/nvm.sh && nvm use >/dev/null && pnpm format && pnpm lint && pnpm t
   - 08: `ShoppingResult.stats` alcanza para los mensajes honestos ("no pudimos verificar algunas tiendas").
   - Al empezar la verificación había un `pnpm --filter @asesor/worker dev` prendido desde las 08:51; se apagó según el protocolo. Volver a levantarlo con `pnpm worker:dev` si hace falta.
 - Commit: `feat(asesoria-shopping): paso 04a — fetcher seguro, extracción y normalización`
+
+### Adaptación visual — diseño "Espejo", opción 2 · 2026-10-01 · ✅ (pedido del usuario, fuera de la secuencia de pasos)
+
+- Hecho:
+  - **Sistema visual** según la opción 2 del proyecto de Claude Design (`docs/DESIGN_SYSTEM.md`):
+    - tokens en `globals.css` (arena con grano, musgo, arcilla, noche/bosque, vidrio, relieve, curvas de nivel, nube de puntos, orbe, animaciones con `prefers-reduced-motion`);
+    - Familjen Grotesk + Geist + Geist Mono con `next/font`;
+    - primitivas reescritas: `Button` con variantes `primary` oscuro, `secondary` vidrio y `light`; `Card`; `PageHeader` con `<em>`; estados.
+  - **Shell:** logo con orbe; navegación "Mis looks · Mi perfil · Guardados" en riel (desktop) y barra flotante (mobile); carrito e iniciales en el header. `/app/dashboard` redirige al paso que corresponde y la cuenta pasó a `/app/profile#cuenta`.
+  - **Pantallas:**
+    - `/app/onboarding/photos` (2a): huecos con guías, arrastrar o elegir archivo;
+    - `/app/onboarding` (2c): fotos flotando con su estado real y preferencias;
+    - `/app/onboarding` en curso (2d): `AnalysisStage` con etapas reales de los jobs, hallazgos reales en `GENERATING` y `PrivateImage` para no re-descargar fotos en cada refresco;
+    - `/app/looks` (2e/2g): `LookStage` 3D o baraja, `PaletteRing`, y asesoría debajo como pide el SPEC;
+    - `/app/looks/[id]` (2h): pines por zona solo en `FULL_BODY`, piezas en filas de vidrio, ficha de pelo, "Por qué te queda bien" teñido;
+    - `/app/profile` (2i/2j): bento de rostro, colorimetría, estilo, silueta y claves, más la cuenta;
+    - paywall, login y guardados con el mismo lenguaje.
+  - **Plan:**
+    - paso nuevo **02b** (datos cualitativos que el diseño pide: silueta, proporciones, rasgos, razones con aspecto; sin medidas ni puntajes);
+    - secciones "Diseño" en los pasos 07, 08, 09, 10b y 12a;
+    - protocolo: leer `DESIGN_SYSTEM.md` en los pasos con UI.
+- Prueba real (navegador, `pnpm dev` + Supabase local, sin worker):
+  - con `demo@asesor.test` (Premium, renders reales) y `free@asesor.test`, en 1280 y 390 px, sin scroll horizontal y sin errores de consola: `/app/looks`, el detalle de los looks 1 y 2, `/app/profile`, `/app/onboarding`, `/app/onboarding/photos`, `/app/favorites` y `/app/cart`;
+  - en el look 1, los pines caen sobre corte, abrigo, remera, jean y calzado; en el look 2 (`framing` no `FULL_BODY`) no hay pines;
+  - pantalla de análisis: se encoló a mano un job para `free@` con `scheduled_at` a un día. En `ANALYZE_STYLE_PROFILE` muestra la etapa 2 de 3 con hallazgos pendientes; en `GENERATE_LOOK`, la etapa 3 de 3 con "Ovalado, contraste alto", "Subtono cálido · Otoño Profundo" y "Smart Casual Elevado". El job se borró al terminar.
+- Verificación: format ✓ · lint ✓ · typecheck ✓ · test ✓ (261 unit, 21 integración ejecutados: db 18, worker 3) · build ✓ · e2e ✓ (10, desktop + mobile, contra `pnpm dev`; smoke actualizado a la navegación nueva)
+- Decisiones: D25 confirmada (sistema visual y choques resueltos a favor del SPEC) y D26 propuesta (paso 02b). Detalle en `DECISIONES.md`.
+- Para pasos siguientes:
+  - **02b** es el próximo ⬜ ejecutable de la tabla. Si preferís seguir con shopping (04b), el orden se puede cambiar.
+  - **Nombre:** el mockup usa la marca "espejo" y la app sigue con `APP_NAME` ("Asesor Estético"). Es una decisión de producto pendiente y un solo string.
+  - **No implementado del diseño:** 2b (cámara guiada), 2f (antes/después), 2k (mapa del cuerpo) y "↻ Generar otras" (milestone 2).
+- Commit: `feat(ui): sistema visual Espejo (opción 2) y plan adaptado al diseño`

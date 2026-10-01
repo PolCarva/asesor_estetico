@@ -28,6 +28,8 @@ Registro vivo. Cada decisión arranca como **propuesta**, salida del relevamient
 | D22 | Lógica de las server actions       | La lógica va en `packages/db` (testeable con integración contra Supabase local). La server action queda como una capa fina: `requireAuth`/`requirePremium`, Zod, rate limit, `revalidatePath` y analytics. `apps/web` no tiene tests de integración.                                                                                                             | 06      | propuesta               |
 | D23 | Tests de integración               | Serializar db → worker en turbo, para que no corran en paralelo contra la misma base. `CI=1 pnpm test` para que un Supabase caído haga fallar la corrida en vez de saltearla.                                                                                                                                                                                    | 01      | confirmada (01)         |
 | D24 | Parser HTML y red de shopping      | Un solo parser, `htmlparser2` (JS puro, SAX, tolerante con HTML roto), por `catalog`. Transporte HTTP propio sobre `node:http(s)` con `lookup` que valida la IP al conectar (anti-SSRF sin DNS rebinding) y redirects manuales revalidados. `Product.id` = id de producto de la plataforma o la URL (nunca el SKU).                                              | 04a     | confirmada (04a)        |
+| D25 | Sistema visual                     | La UI sigue el diseño "Espejo", opción 2 (`docs/DESIGN_SYSTEM.md`): tokens en `globals.css`, Familjen Grotesk + Geist + Geist Mono, vidrio, curvas de nivel y orbe. Ante un choque con el SPEC, manda el SPEC: sin puntajes, porcentajes ni medidas inventadas, y la asesoría sigue en la pantalla de resultados.                                                | diseño  | confirmada (2026-10-01) |
+| D26 | Datos visuales del perfil          | Silueta (enum), proporción torso/piernas (enum) y rasgos del rostro en el StyleProfile; razones de cada look con aspecto. La etiqueta de silueta y la de proporciones van al núcleo (visibles para free) y las notas siguen en Premium. Nada de medidas.                                                                                                         | 02b     | propuesta               |
 
 ## Notas de los pasos
 
@@ -75,3 +77,20 @@ Registro vivo. Cada decisión arranca como **propuesta**, salida del relevamient
 - **Moneda**: un `$` solo no se toma como UYU (sin moneda declarada o escrita → descartado).
 - **`refreshProduct`** devuelve `verified | gone | failed`; solo `verified` renueva `fetched_at`. `gone` (404/410) deja `UNKNOWN`, no `OUT_OF_STOCK`: el SPEC pide `UNKNOWN` para lo que no se pudo verificar.
 - **`ShoppingResult.stats`** (aditivo en `shared`): `candidates`, `products`, `blocked`, `gone`, `failed`, `not_product`, `no_price`, `invalid`.
+
+### Diseño "Espejo" — adaptación de la UI (2026-10-01, fuera de la secuencia de pasos)
+
+- **D25 confirmada.** Opción 2 del proyecto de Claude Design (`Espejo Mockups.dc.html`, pantallas 2a–2k). Se implementaron 2a, 2c, 2d, 2e, 2g, 2h, 2i y 2j; 2b (cámara guiada), 2f (antes/después) y 2k (mapa del cuerpo) quedan como alternativas sin implementar. Mapa de pantallas y diferencias en `docs/DESIGN_SYSTEM.md`.
+- **Navegación.** "Mis looks", "Mi perfil" y "Guardados" + carrito y avatar. Sin "Inicio": `/app/dashboard` redirige al paso que corresponde. La cuenta (datos, fotos, cerrar sesión) pasó a `/app/profile#cuenta`.
+- **Asesoría.** El diseño no la tiene. Se mantuvo en `/app/looks` debajo del escenario, como pide el SPEC ("En la pantalla de resultados, además de los 3 looks…", criterio 5), y no en el perfil. `/app/profile` es el bento del análisis (2i/2j).
+- **Choques con el SPEC resueltos a favor del SPEC:**
+  - el puntaje de match se reemplazó por un anillo con la paleta del look;
+  - "Tu mejor match" pasó a "Para empezar": los looks van de menor a mayor riesgo;
+  - el "62%" pasó a "etapa N de 3";
+  - las medidas en cm, porcentajes de torso/pierna, ratios y "puntos" no se muestran;
+  - la validación muestra el estado real de cada foto;
+  - la copia de privacidad sigue lo que la app hace (no borra a las 24 h);
+  - no hay texto de comisiones.
+- **Pines del render.** Posición aproximada por zona del cuerpo, solo con `framing: FULL_BODY` y con imagen. Revisado sobre renders reales del seed (look 1 de `free@` y `demo@`): caen sobre el corte, el abrigo, la remera, el jean y el calzado.
+- **Contraste.** `stone` se oscureció de `#6A6E63` (4.36:1 sobre el arena) a `#5F6358` (≥ 4.5:1). `clay` solo se usa en texto grande; en texto chico va `clay-dark`.
+- **Nombre.** El mockup usa "espejo"; la app sigue con `APP_NAME` ("Asesor Estético") hasta que se decida. El logo toma el nombre de `APP_NAME`.

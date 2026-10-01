@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Fraunces, Inter } from "next/font/google";
+import { Familjen_Grotesk, Geist, Geist_Mono } from "next/font/google";
 import type { ReactNode } from "react";
 
 import { ServiceWorkerRegistration } from "@/components/service-worker-registration";
@@ -8,12 +8,17 @@ import { APP_NAME } from "@asesor/shared";
 
 import "./globals.css";
 
-const inter = Inter({ subsets: ["latin"], variable: "--font-inter", display: "swap" });
-const fraunces = Fraunces({
+const geist = Geist({ subsets: ["latin"], variable: "--font-geist", display: "swap" });
+const geistMono = Geist_Mono({
   subsets: ["latin"],
-  variable: "--font-fraunces",
+  variable: "--font-geist-mono",
   display: "swap",
-  axes: ["opsz", "SOFT"],
+});
+const familjen = Familjen_Grotesk({
+  subsets: ["latin"],
+  variable: "--font-familjen",
+  style: ["normal", "italic"],
+  display: "swap",
 });
 
 export const metadata: Metadata = {
@@ -34,16 +39,16 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
-  themeColor: "#f6f2ec",
+  themeColor: "#efeae0",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
   return (
-    <html lang="es-UY" className={`${inter.variable} ${fraunces.variable}`}>
+    <html lang="es-UY" className={`${geist.variable} ${geistMono.variable} ${familjen.variable}`}>
       <body className="min-h-dvh">
         <a
           href="#contenido"
-          className="sr-only z-50 rounded-full bg-ink px-4 py-2 text-ivory focus:not-sr-only focus:fixed focus:top-3 focus:left-3"
+          className="sr-only z-50 rounded-full bg-ink px-4 py-2 text-paper focus:not-sr-only focus:fixed focus:top-3 focus:left-3"
         >
           Saltar al contenido
         </a>

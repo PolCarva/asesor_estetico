@@ -12,6 +12,12 @@ El arranque del flujo de shopping desde el detalle de un look:
 - **Free:** CTA "Encontrá las prendas reales para recrear este look" → paywall. El servidor también lo rechaza (paso 06).
 - Repetible con cualquiera de los 3 looks.
 
+## Diseño (`docs/DESIGN_SYSTEM.md`, pantallas 2h y 2d)
+
+- **CTA.** Va en `/app/looks/[id]`, debajo de la lista de piezas (está el comentario "Paso 07"). Es una píldora oscura a lo ancho (`Button` `primary`, `size="lg"`): Premium "Encontrar este look"; free, el texto del SPEC, que lleva al paywall. A su derecha queda el lugar del ♡ guardar (paso 10b).
+- **Talles.** Formulario en línea con filas de vidrio (`glass`) y opciones en píldoras, como las preferencias de `/app/onboarding`. La edición en `/app/profile` va en la sección "Tu cuenta" (`#cuenta`).
+- **Progreso.** Mismo lenguaje que `AnalysisStage` (2d): lista de etapas ✓ / actual / pendiente, barra por etapas sin porcentajes y orbe con una frase. Puede ser un panel `night` compacto dentro del detalle del look.
+
 ## Lo que ya hay (relevamiento 2026-09-30, verificalo)
 
 - **Talles del usuario:** no hay en ninguna tabla.

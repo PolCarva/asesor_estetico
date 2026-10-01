@@ -1,0 +1,85 @@
+import type {
+  ProductCategory,
+  StyleProfile,
+  StyleRiskLevel,
+  TattooPreference,
+} from "@asesor/shared";
+
+/** Textos de la UI para los enums del dominio (español rioplatense). */
+
+type Appearance = StyleProfile["appearance"];
+
+export const FACE_SHAPE_LABEL: Record<Appearance["face_shape"], string> = {
+  OVAL: "Ovalado",
+  ROUND: "Redondo",
+  SQUARE: "Cuadrado",
+  RECTANGLE: "Rectangular",
+  HEART: "Corazón",
+  DIAMOND: "Diamante",
+  TRIANGLE: "Triangular",
+};
+
+export const UNDERTONE_LABEL: Record<Appearance["skin_undertone"], string> = {
+  WARM: "cálido",
+  COOL: "frío",
+  NEUTRAL: "neutro",
+  OLIVE: "oliva",
+};
+
+export const CONTRAST_LABEL: Record<Appearance["contrast_level"], string> = {
+  LOW: "bajo",
+  MEDIUM: "medio",
+  HIGH: "alto",
+};
+
+export const FRAME_LABEL: Record<StyleProfile["body_proportions"]["frame"], string> = {
+  PETITE: "Contextura menuda",
+  AVERAGE: "Contextura media",
+  TALL: "Contextura alta",
+};
+
+export const RISK_LABEL: Record<StyleRiskLevel, string> = {
+  CONSERVATIVE: "Clásico",
+  BALANCED: "Equilibrado",
+  BOLD: "Audaz",
+};
+
+export const TATTOO_LABEL: Record<TattooPreference, string> = {
+  HIGHLIGHT: "Mostrarlos",
+  NEUTRAL: "Indistinto",
+  COVER: "Cubrirlos",
+};
+
+export const CATEGORY_LABEL: Record<ProductCategory, string> = {
+  SHIRT: "Camisa",
+  T_SHIRT: "Remera",
+  KNITWEAR: "Tejido",
+  TOP: "Top",
+  OUTERWEAR: "Abrigo",
+  BLAZER: "Blazer",
+  PANTS: "Pantalón",
+  JEANS: "Jean",
+  SHORTS: "Short",
+  SKIRT: "Pollera",
+  DRESS: "Vestido",
+  SHOES: "Calzado",
+  BAG: "Bolso",
+  BELT: "Cinto",
+  JEWELRY: "Joyería",
+  EYEWEAR: "Anteojos",
+  WATCH: "Reloj",
+  HAT: "Gorro",
+  SCARF: "Bufanda",
+  OTHER: "Accesorio",
+};
+
+/** "01", "02"… como en las etiquetas técnicas del diseño. */
+export function twoDigits(n: number): string {
+  return String(n).padStart(2, "0");
+}
+
+/** Primer nombre para saludar ("Javier, estas son…"). */
+export function firstName(displayName: string | null | undefined): string | null {
+  const first = displayName?.trim().split(/\s+/)[0];
+  return first ? first : null;
+}

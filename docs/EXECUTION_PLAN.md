@@ -26,7 +26,7 @@
 - [x] Cola de jobs en Postgres + worker con concurrencia, reintentos y apagado limpio.
 - [x] Abstracciones de IA, shopping y pagos con mocks.
 - [x] Analytics, registro de uso de IA y logging estructurado.
-- [x] UI shell editorial, responsive y accesible.
+- [x] UI shell responsive y accesible (desde 2026-10-01, sistema visual "Espejo": `DESIGN_SYSTEM.md`).
 - [x] PWA instalable sin cachear datos sensibles.
 - [x] Tests unitarios, de integración y E2E; CI en GitHub Actions.
 - [x] Dockerfile del worker.
@@ -48,7 +48,7 @@ Detalle del estado en `SETUP_STATUS.md`.
 - [x] `generateLookImage` real (Gemini 3.1 Flash Image) con las fotos del usuario como referencia.
 - [x] Imagen en `generated-looks`, servida con URLs firmadas; look 1 para free, 3 para Premium.
 - [ ] Generar looks 2 y 3 al pasar a Premium.
-- [ ] Regenerar un look y reintentar looks fallidos desde la UI.
+- [ ] Regenerar un look y reintentar looks fallidos desde la UI (en el diseño, "↻ Generar otras" en `/app/looks`).
 - [ ] Previews para looks bloqueados (a evaluar).
 
 ## 3 · Paywall y suscripción

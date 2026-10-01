@@ -23,7 +23,7 @@ async function signUp(page: Page, name: string) {
 }
 
 test.describe("smoke", () => {
-  test("landing → signup → dashboard → fotos → logout", async ({ page }) => {
+  test("landing → signup → cuenta → fotos → logout", async ({ page }) => {
     const email = uniqueEmail("smoke");
     const password = strongPassword();
 
@@ -43,14 +43,19 @@ test.describe("smoke", () => {
     await page.getByRole("button", { name: "Crear cuenta" }).click();
     await expect(page).toHaveURL(/\/app\/onboarding$/);
 
-    // Dashboard con el usuario autenticado
+    // Sin fotos, la entrada a la app lleva al primer paso
     await page.goto("/app/dashboard");
-    await expect(page.getByRole("heading", { level: 1 })).toHaveText("Hola, Prueba E2E");
-    await expect(page.getByText(email)).toBeVisible();
+    await expect(page).toHaveURL(/\/app\/onboarding\/photos$/);
+
+    // Cuenta del usuario autenticado (en "Mi perfil")
+    await page.goto("/app/profile");
+    const account = page.getByRole("region", { name: "Tu cuenta" });
+    await expect(account.getByText("Prueba E2E")).toBeVisible();
+    await expect(account.getByText(email)).toBeVisible();
 
     // Fotos: subir, ver preview guardada y eliminar
     await page.goto("/app/onboarding/photos");
-    await expect(page.getByRole("heading", { level: 1 })).toHaveText("Tus fotos");
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText("Mostrate tal como sos.");
     const bodySlot = page.getByRole("region", { name: "Cuerpo entero" });
     await bodySlot.locator('input[type="file"]').setInputFiles(PHOTO);
     await expect(bodySlot.getByText("Vista previa")).toBeVisible();

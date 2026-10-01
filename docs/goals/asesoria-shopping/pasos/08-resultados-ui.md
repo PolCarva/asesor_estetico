@@ -17,6 +17,20 @@ Los locales físicos se muestran como "Disponible en tienda física", con precio
 
 Dejá preparados los lugares para "Agregar al carrito" (paso 10b) y "Buscar más barato" (paso 09).
 
+## Diseño (`docs/DESIGN_SYSTEM.md`, pantalla 2h)
+
+- **Dónde.** Los resultados viven en la lista de piezas de `/app/looks/[id]`: **una fila por prenda**, que ya agrupa por TOP, BOTTOM, CAPAS, CALZADO y ACCESORIOS como pide el SPEC. La fila del pelo queda primera, sin producto.
+- **Fila.** Muestra el RECOMENDADO:
+  - miniatura del producto (reemplaza el guijarro de color);
+  - nombre;
+  - "tienda · talle" (estado del talle en `eyebrow`);
+  - precio en Familjen 20 px con su moneda;
+  - chip oscuro "Comprar ↗".
+- **Alternativas.** Las 2–4 se abren dentro de la misma fila ("Ver N opciones más"), así se cumplen las 3–5 opciones por prenda sin perder la lista del diseño.
+- **Píldora oscura de abajo.** "Comprar el look completo · $ total" solo si todos los recomendados tienen precio y la misma moneda; si no, subtotal por moneda o sin total. Nunca la conversión aproximada del ranker (paso 10b: agregar al carrito).
+- **Pie.** Nada de "tiendas asociadas" ni "comisión": no hay afiliación. Mostrá cuándo se verificaron los precios.
+- **Pines.** Los pines del render siguen siendo por zona del cuerpo. No los muevas según el producto.
+
 ## Lo que ya hay (relevamiento 2026-09-30, verificalo)
 
 - **Datos.**
@@ -55,7 +69,7 @@ Dejá preparados los lugares para "Agregar al carrito" (paso 10b) y "Buscar más
    - mensajes de parcialidad;
    - "Volver a buscar" si los resultados están viejos.
 
-   Mobile first, accesible y con la estética editorial.
+   Mobile first, accesible y con el sistema visual de `docs/DESIGN_SYSTEM.md` (ver "Diseño" arriba).
 
 3. **"Ver en la tienda ↗".**
    - `rel` seguro.

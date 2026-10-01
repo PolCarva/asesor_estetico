@@ -10,11 +10,13 @@ export function SubmitButton({
   pendingLabel,
   variant = "primary",
   className = "",
+  size = "md",
 }: {
   children: ReactNode;
   pendingLabel: string;
-  variant?: "primary" | "accent" | "secondary" | "danger" | "ghost";
+  variant?: "primary" | "accent" | "secondary" | "danger" | "ghost" | "light";
   className?: string;
+  size?: "sm" | "md" | "lg";
 }) {
   const { pending } = useFormStatus();
   return (
@@ -22,7 +24,7 @@ export function SubmitButton({
       type="submit"
       disabled={pending}
       aria-busy={pending}
-      className={buttonClass(variant, "md", className)}
+      className={buttonClass(variant, size, className)}
     >
       {pending ? pendingLabel : children}
     </button>
