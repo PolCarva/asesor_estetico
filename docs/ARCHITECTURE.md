@@ -139,11 +139,14 @@ Cola en PostgreSQL (sin Redis ni servicios externos). Ver `DATA_MODEL.md` y `AI_
 ### Búsqueda de productos (paso 06)
 
 ```
-Server action startLookShoppingAction (requirePremium · Zod · rate limit · shopping_started)
-  → startLookShopping (@asesor/db: Premium, dueño del look, una búsqueda activa por (look, prenda), enqueue)
+Detalle del look: "Encontrar este look" (pide los talles que falten, paso 07)
+  → server action startLookShoppingAction (requirePremium · Zod · guarda talles · rate limit · shopping_started)
+  → startLookShopping (@asesor/db: Premium, dueño del look, talles relevantes, una búsqueda activa
+     por (look, prenda), enqueue)
   → SEARCH_PRODUCTS (worker: dueño y Premium otra vez, prendas en paralelo con cache de pools,
      progreso por etapas, persistencia, resumen, shopping_completed)
-  → la UI sigue el job con getLatestLookSearch (cliente del usuario) hasta COMPLETED/FAILED
+  → el panel de progreso consulta GET /api/looks/[id]/shopping (getLatestLookSearch con el cliente
+     del usuario) hasta COMPLETED/FAILED y refresca la página una vez
 ```
 
 - Premium se verifica en tres lugares: la server action (`requirePremium`), `startLookShopping` y el worker (`isUserPremium`, porque la suscripción pudo vencer entre el encolado y la ejecución).

@@ -2,7 +2,7 @@ import Link from "next/link";
 import type { ComponentProps } from "react";
 
 type Variant = "primary" | "secondary" | "ghost" | "accent" | "danger" | "light";
-type Size = "sm" | "md" | "lg";
+type Size = "sm" | "md" | "lg" | "lg-wrap";
 
 /** Variantes del sistema Espejo: oscuro en relieve, vidrio, arcilla y claro (sobre fondos oscuros). */
 const VARIANTS: Record<Variant, string> = {
@@ -18,6 +18,8 @@ const SIZES: Record<Size, string> = {
   sm: "h-9 px-4 text-[0.8125rem]",
   md: "h-12 px-6 text-sm",
   lg: "h-14 px-8 text-[0.9375rem]",
+  // Como `lg`, pero crece si el texto ocupa dos líneas (textos largos en columnas angostas).
+  "lg-wrap": "min-h-14 px-8 py-3 text-[0.9375rem] leading-snug text-balance",
 };
 
 export function buttonClass(variant: Variant = "primary", size: Size = "md", extra = "") {

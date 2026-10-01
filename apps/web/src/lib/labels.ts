@@ -2,10 +2,13 @@ import type {
   BodyShape,
   LookReasonAspect,
   ProductCategory,
+  ShoppingStage,
+  SizeKind,
   StyleProfile,
   StyleRiskLevel,
   TattooPreference,
   TorsoLegs,
+  UserSizes,
 } from "@asesor/shared";
 
 /** Textos de la UI para los enums del dominio (español rioplatense). */
@@ -124,3 +127,26 @@ export function firstName(displayName: string | null | undefined): string | null
   const first = displayName?.trim().split(/\s+/)[0];
   return first ? first : null;
 }
+
+/** Qué talle se pide (SPEC "TALLES"). */
+export const SIZE_KIND_LABEL: Record<SizeKind, string> = {
+  top: "Remera, camisa o abrigo",
+  bottom: "Pantalón, bermuda o pollera",
+  shoe: "Calzado",
+};
+
+/** "M", "32", "42 EU", "9.5 US"; null si no lo cargó. */
+export function sizeText(sizes: UserSizes, kind: SizeKind): string | null {
+  const size = sizes[kind];
+  if (!size) return null;
+  return kind === "shoe" ? `${size} ${sizes.shoe_size_system}` : size;
+}
+
+/** Etapas de la búsqueda de productos, con los textos del SPEC ("JOBS"). */
+export const SHOPPING_STAGE_LABEL: Record<ShoppingStage, string> = {
+  SEARCHING: "Buscando prendas…",
+  CHECKING_STORES: "Revisando tiendas…",
+  COMPARING: "Comparando opciones…",
+  VERIFYING: "Verificando precios y talles…",
+  RANKING: "Ordenando las mejores coincidencias…",
+};

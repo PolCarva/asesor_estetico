@@ -4,6 +4,7 @@ import {
   getActiveStyleProfile as readActiveStyleProfile,
   getLatestSubscription,
   getUserPhotoSignedUrl,
+  getUserSizes,
   type LookRow,
 } from "@asesor/db";
 import { createServerSupabaseClient } from "@asesor/db/server";
@@ -37,6 +38,12 @@ export const getProfile = cache(async (userId: string) => {
   const client = await createServerSupabaseClient();
   const { data } = await client.from("profiles").select("*").eq("id", userId).maybeSingle();
   return data;
+});
+
+/** Talles guardados en el perfil (paso 07); lo que no cargó viene en null. */
+export const getSizes = cache(async (userId: string) => {
+  const client = await createServerSupabaseClient();
+  return getUserSizes(client, userId);
 });
 
 /** Núcleo del perfil activo (lo ve cualquier plan). Tolera perfiles v1 guardados. */

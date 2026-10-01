@@ -670,38 +670,50 @@ export type Database = {
       profiles: {
         Row: {
           age_confirmed_at: string | null;
+          bottom_size: string | null;
           country_code: string;
           created_at: string;
           display_name: string | null;
           id: string;
           onboarding_completed: boolean;
           role: Database["public"]["Enums"]["user_role"];
+          shoe_size: string | null;
+          shoe_size_system: string;
           style_risk_level: Database["public"]["Enums"]["style_risk_level"];
           tattoo_preference: Database["public"]["Enums"]["tattoo_preference"];
+          top_size: string | null;
           updated_at: string;
         };
         Insert: {
           age_confirmed_at?: string | null;
+          bottom_size?: string | null;
           country_code?: string;
           created_at?: string;
           display_name?: string | null;
           id: string;
           onboarding_completed?: boolean;
           role?: Database["public"]["Enums"]["user_role"];
+          shoe_size?: string | null;
+          shoe_size_system?: string;
           style_risk_level?: Database["public"]["Enums"]["style_risk_level"];
           tattoo_preference?: Database["public"]["Enums"]["tattoo_preference"];
+          top_size?: string | null;
           updated_at?: string;
         };
         Update: {
           age_confirmed_at?: string | null;
+          bottom_size?: string | null;
           country_code?: string;
           created_at?: string;
           display_name?: string | null;
           id?: string;
           onboarding_completed?: boolean;
           role?: Database["public"]["Enums"]["user_role"];
+          shoe_size?: string | null;
+          shoe_size_system?: string;
           style_risk_level?: Database["public"]["Enums"]["style_risk_level"];
           tattoo_preference?: Database["public"]["Enums"]["tattoo_preference"];
+          top_size?: string | null;
           updated_at?: string;
         };
         Relationships: [];

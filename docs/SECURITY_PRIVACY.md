@@ -28,7 +28,9 @@ Helpers en `@asesor/db`:
 | `requireAdmin()`         | `FORBIDDEN` 403        | `/admin` (la página responde 404)                           |
 | `requireResourceOwner()` | `NOT_FOUND` 404        | acceso a un recurso por id (no revela si existe: anti-IDOR) |
 
-La búsqueda de productos verifica Premium tres veces: en la server action (`requirePremium`), en `startLookShopping` y en el worker al ejecutar el job (corre con service role y la suscripción pudo vencer en el medio). Del job, el usuario solo lee estado y progreso (etapa y conteos): nunca `payload`, `result` ni `last_error`.
+La búsqueda de productos verifica Premium tres veces: en la server action (`requirePremium`), en `startLookShopping` y en el worker al ejecutar el job (corre con service role y la suscripción pudo vencer en el medio). Del job, el usuario solo lee estado y progreso (etapa y conteos): nunca `payload`, `result` ni `last_error`. El panel de progreso los consulta por `GET /api/looks/[id]/shopping`, que exige sesión y usa el cliente del usuario (RLS: solo sus jobs).
+
+Los talles del usuario viven en `profiles` y solo los escribe él (grants por columna, validados contra las opciones que se ofrecen); el worker los recibe en el payload del job, nunca en logs ni en analytics.
 
 Y en la base, RLS en todas las tablas (detalle en `DATA_MODEL.md`). Los permisos de columna impiden, por ejemplo, que un usuario se asigne `role = 'admin'` o se active una suscripción.
 

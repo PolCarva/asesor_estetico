@@ -1,6 +1,7 @@
 import type { StyleProfileCore } from "@asesor/shared";
 
 import { PrivateImage } from "@/components/private-image";
+import { StepMark } from "@/components/step-mark";
 import { Pebble } from "@/components/swatches";
 import { LinkButton } from "@/components/ui/button";
 import {
@@ -30,22 +31,6 @@ const MESSAGE: Record<BusyStage, string> = {
   ANALYZING: "Estamos buscando lo que mejor te queda.",
   GENERATING: "Ya casi. Te estamos probando tu primer look.",
 };
-
-function StepMark({ state }: { state: "done" | "current" | "todo" }) {
-  if (state === "done")
-    return (
-      <span className="grid size-[22px] shrink-0 place-items-center rounded-full bg-sage text-[11px] font-bold text-night">
-        ✓
-      </span>
-    );
-  if (state === "current")
-    return (
-      <span className="grid size-[22px] shrink-0 place-items-center rounded-full border-[1.5px] border-peach">
-        <span className="size-2 animate-blink rounded-full bg-peach" />
-      </span>
-    );
-  return <span className="size-[22px] shrink-0 rounded-full border border-stone" />;
-}
 
 /** Hallazgo pendiente: tarjeta punteada que titila mientras la IA trabaja. */
 function PendingFinding({ label }: { label: string }) {

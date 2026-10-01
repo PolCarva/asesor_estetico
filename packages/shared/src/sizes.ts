@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import type { ProductCategory } from "./schemas/common";
+import { type LookSpec, listLookGarments } from "./schemas/look-spec";
 
 /** Tipo de talle que usa cada categoría de prenda. */
 export type SizeKind = "top" | "bottom" | "shoe";
@@ -54,10 +55,77 @@ export function sizeKindForCategory(category: ProductCategory): SizeKind | null 
   return SIZE_KIND_BY_CATEGORY[category];
 }
 
-/** Talle del usuario para una categoría, o null si no aplica o no lo cargó. */
+/**
+ * Talle del usuario para una categoría, o null si no aplica o no lo cargó. El calzado de
+ * EE. UU. va con su sistema (`US 9`): un 9 de EE. UU. no es un 9 europeo.
+ */
 export function sizeForCategory(sizes: UserSizes, category: ProductCategory): string | null {
   const kind = sizeKindForCategory(category);
-  return kind ? sizes[kind] : null;
+  if (!kind) return null;
+  const size = sizes[kind];
+  return kind === "shoe" && size && sizes.shoe_size_system === "US" ? `US ${size}` : size;
+}
+
+/** Orden en el que se piden los talles (de arriba hacia abajo). */
+export const SIZE_KINDS: readonly SizeKind[] = ["top", "bottom", "shoe"];
+
+/**
+ * Opciones que se le ofrecen al usuario (SPEC "TALLES": remera/camisa S/M/L/XL…,
+ * pantalón 30/32/34…, calzado EU/US). Ya están en forma canónica (`normalizeSizeLabel`).
+ * El pantalón es el número de la etiqueta: cintura en pulgadas (28–36) o talle uruguayo
+ * (38–50); las tiendas usan los dos.
+ */
+export const SIZE_OPTIONS = {
+  top: ["XS", "S", "M", "L", "XL", "XXL", "XXXL"],
+  bottom: ["28", "30", "32", "34", "36", "38", "40", "42", "44", "46", "48", "50"],
+  shoe: {
+    EU: ["35", "36", "37", "38", "39", "40", "41", "42", "43", "44", "45", "46", "47"],
+    US: [
+      "5",
+      "5.5",
+      "6",
+      "6.5",
+      "7",
+      "7.5",
+      "8",
+      "8.5",
+      "9",
+      "9.5",
+      "10",
+      "10.5",
+      "11",
+      "11.5",
+      "12",
+      "13",
+      "14",
+    ],
+  },
+} as const satisfies {
+  top: readonly string[];
+  bottom: readonly string[];
+  shoe: Record<ShoeSizeSystem, readonly string[]>;
+};
+
+/** ¿Es una de las opciones que se ofrecen para ese tipo de talle? */
+export function isSizeOption(kind: SizeKind, value: string, system: ShoeSizeSystem = "EU") {
+  const options: readonly string[] =
+    kind === "shoe" ? SIZE_OPTIONS.shoe[system] : SIZE_OPTIONS[kind];
+  return options.includes(value);
+}
+
+/**
+ * Talles que hacen falta para buscar las prendas de un look y el usuario todavía no cargó.
+ * Solo los relevantes: un look sin pantalón no pide pantalón, los accesorios no piden
+ * nada. En orden: arriba, abajo, calzado.
+ */
+export function missingSizesForLook(look: LookSpec, sizes: UserSizes): SizeKind[] {
+  const needed = new Set(
+    listLookGarments(look).flatMap(({ garment }) => {
+      const kind = sizeKindForCategory(garment.category);
+      return kind ? [kind] : [];
+    }),
+  );
+  return SIZE_KINDS.filter((kind) => needed.has(kind) && !sizes[kind]);
 }
 
 /** Talles de letra en orden, y cómo los escriben las tiendas (inglés, español, Brasil). */

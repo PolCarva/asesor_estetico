@@ -264,7 +264,7 @@ Payload `{ user_id, look_id, sizes, slot?, max_price? }` (`SearchProductsPayload
 
 `searchProducts(query, { onStage })` llama a `onStage` en cada frontera real del pipeline:
 
-| Etapa             | Texto en la UI (paso 07)               | Qué pasa                                                                                |
+| Etapa             | Texto en la UI                         | Qué pasa                                                                                |
 | ----------------- | -------------------------------------- | --------------------------------------------------------------------------------------- |
 | `SEARCHING`       | "Buscando prendas…"                    | Buscar la prenda en la cache o URLs candidatas (registro, sitemaps, descubrimiento web) |
 | `CHECKING_STORES` | "Revisando tiendas…"                   | Descargar y leer las páginas de producto                                                |
@@ -276,9 +276,9 @@ Con un pool cacheado: `SEARCHING → VERIFYING → RANKING`. El job (`createStag
 
 ### Inicio y lectura (`packages/db/src/shopping-jobs.ts`, D22)
 
-- `startLookShopping({ userClient, serviceClient, lookId, sizes, slot?, maxPrice?, requestId })`: Premium (`requirePremium` con el cliente del usuario), dueño del look (RLS), prenda existente en el look, una búsqueda activa por (look, prenda) y encolado con prioridad 8 (debajo del análisis y del look gratis, arriba de los looks Premium), `maxAttempts` 2 y clave `search:<look>:<slot|look>:<requestId>`. Si ya hay una activa, la devuelve (`alreadyRunning`). Una carrera entre dos pedidos la frena el índice único de búsquedas activas.
-- `startLookShoppingAction({ lookId, sizes?, requestId? })` (web, `app/app/looks/[id]/actions.ts`): `requirePremium` → estado `paywall` para free, Zod, rate limit `shoppingSearch` (10 por hora por usuario), `startLookShopping`, `shopping_started` y `revalidatePath`. Nunca devuelve errores técnicos.
-- `getLatestLookSearch(client, lookId, { slot? })` / `getLookShoppingState(lookId)` (web): estado y progreso del último job, con el cliente del usuario.
+- `startLookShopping({ userClient, serviceClient, lookId, sizes, slot?, maxPrice?, requestId })`: Premium (`requirePremium` con el cliente del usuario), dueño del look (RLS), prenda existente en el look, **talles relevantes cargados** (si faltan, `VALIDATION_FAILED` con el mensaje `MISSING_SIZES`; paso 07), una búsqueda activa por (look, prenda) y encolado con prioridad 8 (debajo del análisis y del look gratis, arriba de los looks Premium), `maxAttempts` 2 y clave `search:<look>:<slot|look>:<requestId>`. Si ya hay una activa, la devuelve (`alreadyRunning`). Una carrera entre dos pedidos la frena el índice único de búsquedas activas.
+- `startLookShoppingAction(prev, formData)` (web, `app/app/looks/[id]/actions.ts`, paso 07): action de formulario. `requirePremium` → estado `paywall` para free; Zod; si el formulario trae talles (`top`, `bottom`, `shoe`, `shoe_size_system`), los guarda en el perfil (`saveUserSizes`); lee los talles del perfil; rate limit `shoppingSearch` (10 por hora por usuario); `startLookShopping`; `shopping_started` y `revalidatePath`. Estados: `queued`, `already_running`, `paywall`, `needs_sizes` o `error` con texto humano. Nunca devuelve errores técnicos.
+- `getLatestLookSearch(client, lookId, { slot? })` / `getLookShoppingState(lookId)` (web): estado y progreso del último job, con el cliente del usuario. El panel de progreso del detalle del look lo consulta cada 2,5 s por `GET /api/looks/[id]/shopping` (solo el estado del job, sin re-renderizar la página) y, cuando termina, refresca la página una vez.
 
 ### `REFRESH_PRODUCT`
 

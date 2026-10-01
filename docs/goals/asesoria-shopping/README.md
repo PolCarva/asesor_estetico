@@ -116,7 +116,7 @@ source ~/.nvm/nvm.sh && nvm use >/dev/null && pnpm format && pnpm lint && pnpm t
 | 04b | [Shopping: adaptadores de talles/stock, validación y locales](pasos/04b-adaptadores-validacion.md) | 10–11          | 04a        | ✅     |
 | 05  | [Shopping: ranking y cache persistente](pasos/05-shopping-ranking-cache.md)                        | 12–13          | 04b        | ✅     |
 | 06  | [Shopping: jobs reales, progreso y Premium server-side](pasos/06-shopping-jobs-premium.md)         | 14, 19         | 05         | ✅     |
-| 07  | [Talles, CTA "Encontrar este look" y progreso](pasos/07-talles-cta-progreso.md)                    | 16, 15         | 02, 06     | ⬜     |
+| 07  | [Talles, CTA "Encontrar este look" y progreso](pasos/07-talles-cta-progreso.md)                    | 16, 15         | 02, 06     | ✅     |
 | 08  | [UI de resultados de shopping](pasos/08-resultados-ui.md)                                          | 15             | 07         | ⬜     |
 | 09  | ["Buscar más barato"](pasos/09-buscar-mas-barato.md)                                               | 17             | 08         | ⬜     |
 | 10a | [Carrito: datos y acciones](pasos/10a-carrito-backend.md)                                          | 18             | 06         | ⬜     |
@@ -574,3 +574,43 @@ source ~/.nvm/nvm.sh && nvm use >/dev/null && pnpm format && pnpm lint && pnpm t
   - 10a: `REFRESH_PRODUCT` ya es real (`{ product_id }` → `{ status, availability }`); encolarlo o llamar a `refreshProduct` antes de agregar al carrito si `isProductStale`.
   - 11: rate limit en memoria (una instancia), como el resto.
 - Commit: `feat(asesoria-shopping): paso 06 — jobs reales, progreso y Premium server-side`
+
+### Paso 07 — Talles, CTA "Encontrar este look" y progreso · 2026-10-01 · ✅
+
+- Hecho:
+  - **Talles en el perfil** (D15): migración `20261001000400_profile_sizes.sql` con `profiles.top_size`, `bottom_size`, `shoe_size` (text nullable, 1–10) y `shoe_size_system` (`EU`|`US`, default `EU`) + `grant update` por columna. `db:reset` y `db:types`.
+  - **Dominio** (`shared/sizes.ts`): `missingSizesForLook(look, sizes)` sobre `sizeKindForCategory` (sin duplicar el mapeo), `SIZE_KINDS`, `SIZE_OPTIONS` (en forma canónica) e `isSizeOption`. **Corrección:** `sizeForCategory` manda el calzado de EE. UU. como `US 9.5` (antes un 9 US se comparaba como un 9 europeo). `size_requested` en `ANALYTICS_EVENTS` y `CLIENT_ANALYTICS_EVENTS`.
+  - **`packages/db`**: `getUserSizes` / `saveUserSizes` (cliente del usuario; valida contra las opciones; calzado siempre con sistema). `startLookShopping` exige los talles relevantes del look o de la prenda (`VALIDATION_FAILED` + `MISSING_SIZES`).
+  - **Web**:
+    - `startLookShoppingAction` pasó a ser una action de formulario: Premium (`paywall` si no), Zod, guarda los talles que trae el formulario, lee los del perfil, rate limit, `startLookShopping`, `shopping_started`; estados `queued`, `already_running`, `paywall`, `needs_sizes` y `error` con texto humano;
+    - `saveSizesAction` y "Editar mis talles" en `/app/profile#cuenta`, con las filas de talles en "Tu cuenta";
+    - `LookShopping` en `/app/looks/[id]` (debajo de las piezas): CTA Premium "Encontrar este look"; si faltan talles, formulario en línea solo con esos (filas de vidrio, píldoras, EU/US) y "Buscar las prendas", que guarda y encola en un paso; panel `night` con las 5 etapas del SPEC (✓ / actual / pendiente), barra por etapas, orbe y "N de M prendas listas"; resultado honesto con la hora; "Buscar de nuevo" / "Reintentar la búsqueda"; free: "Encontrá las prendas reales para recrear este look" abre el `PaywallCard`;
+    - polling acotado: `GET /api/looks/[id]/shopping` cada 2,5 s solo mientras el job está activo, y un `router.refresh()` al terminar (no `AutoRefresh` de toda la ruta);
+    - `SizeFields`, `StepMark` (extraído de `AnalysisStage`), `Button` `size="lg-wrap"`, etiquetas de talles y etapas en `lib/labels.ts`.
+  - **Tests**:
+    - `shared/test/sizes.test.ts` (+4): talles relevantes y en orden, look sin pantalón, calzado US en la query, opciones canónicas;
+    - `web/src/lib/sizes-form.test.ts` (2);
+    - integración `db/test/integration/profile-sizes.int.test.ts` (3): el dueño guarda de a uno y borra con null; opciones y sistema inválidos (helper y checks `23514`); otro usuario no los cambia (0 filas / `NOT_FOUND`); `role` y `country_code` siguen con `42501`;
+    - `shopping-jobs.int.test.ts` (+1): sin los talles relevantes no se encola (`MISSING_SIZES`); en el modo de una prenda solo cuentan los de esa prenda.
+  - **Script** `apps/worker/scripts/local-test-account.ts --email <x>.test [--premium]`: cuenta local nueva con fotos de fixture y el análisis encolado (el worker con `AI_PROVIDER=mock` genera perfil, looks e imágenes). Contraseña: la del seed.
+  - **Docs**: `DATA_MODEL.md` (talles, grants), `PRODUCT_SPEC.md` (flujo de shopping), `SHOPPING_ENGINE.md` y `ARCHITECTURE.md` (action de formulario, `MISSING_SIZES`, polling), `DESIGN_SYSTEM.md` (componentes, 2h, botón `lg-wrap`), `SECURITY_PRIVACY.md` y `DECISIONES.md` (D15 + notas).
+- Navegador (`pnpm dev` + worker `AI_PROVIDER=mock SHOPPING_PROVIDER=live`, cuentas nuevas `estilo07@asesor.test` Premium y `estilo07-free@asesor.test` free creadas con el script):
+  1. **Sin talles** (look 1 "Smart casual cálido", 1280 px): "Encontrar este look" abrió el formulario con **solo** "Remera, camisa o abrigo", "Pantalón" y "Calzado" (el reloj no pide). Con M / 42 / 42 EU, "Buscar las prendas" guardó (`profiles`: M, 42, 42, EU) y encoló. Panel: "En la fila" → "etapa 1 de 5" → "etapa 2 de 5" con 0→3 de 5 prendas → "Búsqueda terminada · Encontramos opciones para tus 5 prendas. · En algunas opciones no pudimos confirmar si está tu talle." Job `COMPLETED`, 5 prendas con resultados, talles en el payload. Eventos: `size_requested {"kinds":"top,bottom,shoe","count":3}`, `shopping_started {"mode":"LOOK"}`, `shopping_completed` (saved 20, 5 búsquedas web).
+  2. **Segunda vez** (mismo look, "Buscar de nuevo"): no pidió talles; salió de la cache (`cache_hits` 5, 0,32 s en el worker).
+  3. **Otro look** (look 2 "Minimal nocturno"): "Encontrar este look" fue directo a buscar (sin formulario). Panel: "En la fila" → etapa 1 → 2 → 4 → 5 (3 de 3 prendas) → "Encontramos opciones para tus 3 prendas.", 40 s en vivo.
+  4. **Usuario free** (look 1): la píldora "Encontrá las prendas reales para recrear este look" abrió "Desbloqueá tu estilo completo" en línea (`paywall_viewed`); la cuenta tiene **0** jobs `SEARCH_PRODUCTS`.
+
+  También:
+  - **Perfil:** "Editar mis talles" pasó el calzado de 42 EU a 9.5 US, después a 44 EU y a 10 US ("Talles guardados.", fila "Calzado 10 US"). Ahí apareció un bug, corregido: después de guardar, el selector EU/US quedaba en EU con la lista de US (React reinicia el formulario después de la action). El selector pasó a no controlado, lee el sistema después del reinicio y el formulario remonta los campos con los talles nuevos. Reprobado: toggle, lista y número coinciden.
+  - **Mobile (390 px):** free con el CTA en dos líneas (`lg-wrap`) y el paywall; Premium con el look 3 pidiendo **solo** "Pantalón" (borrado a mano para la prueba), y el panel de progreso hasta "Búsqueda terminada · 15:18 · … tus 3 prendas". Sin scroll horizontal (`scrollWidth` 390) ni errores de consola.
+  - **Calzado US real:** con 10 US, los 4 championes del look 3 (talles 39–47) quedaron `UNVERIFIED`, no "no hay tu talle".
+
+- Verificación: format ✓ · lint ✓ · typecheck ✓ · test ✓ (393 unit, 49 integración ejecutados: db 38, worker 11) · build ✓ (`/api/looks/[id]/shopping` dinámica) · e2e ✓ (10, desktop + mobile, contra `pnpm dev`) · db:reset ✓ · db:types ✓ (regenerado sin diferencias)
+- Decisiones: D15 confirmada (columnas en `profiles`, opciones cerradas, calzado con sistema, talles obligatorios para buscar). Detalle en `DECISIONES.md`.
+- Para pasos siguientes:
+  - 08: los resultados van en el lado derecho de cada `PieceRow` y en la tarjeta del resultado (`LookShopping`); leerlos con `getLookProducts` cuando `search.status === "COMPLETED"`. `look_products.size_status` + `progress.summary.failed_slots` para los mensajes por prenda. Imágenes de tiendas: CSP (D16).
+  - 09: `startLookShopping` con `slot` exige solo el talle de esa prenda; el formulario de talles (`SizeFields`) se puede reusar con `kinds` de una prenda.
+  - 12a: E2E del formulario de talles (solo los relevantes, una vez), del paywall free y del panel de progreso (con `SHOPPING_PROVIDER=mock`). El polling usa `GET /api/looks/[id]/shopping`.
+  - Las cuentas `estilo07@asesor.test` (Premium, con búsquedas reales en los 3 looks) y `estilo07-free@asesor.test` quedan en la base local para el paso 08; `pnpm db:reset` las borra.
+  - En desarrollo, `TrackEvent` y `PaywallCard` emiten dos veces por el doble efecto de `StrictMode` (no pasa en producción).
+- Commit: `feat(asesoria-shopping): paso 07 — talles, CTA "Encontrar este look" y progreso`

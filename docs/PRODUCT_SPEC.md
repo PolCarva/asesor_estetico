@@ -45,7 +45,9 @@ fotos
    Listas cortas, sin bloques de texto. Cada look tiene su detalle en `/app/looks/[id]`: render con pines por zona, piezas del look (color, fit y material), ficha de pelo y grooming, por qué le queda (cada razón con su aspecto: color, silueta, rostro, pelo o estilo) y qué evitar. `/app/profile` ("Mi perfil") muestra el análisis en un bento: forma y rasgos del rostro, colorimetría, silueta, proporciones torso/piernas, claves y estilo. Silueta y proporciones son categorías para vestirse, sin medidas.
 
 8. **Paywall.** El plan free muestra 1 look. Premium desbloquea el resto.
-9. **Shopping.** Para cada prenda de un look se buscan productos equivalentes en tiendas de Uruguay.
+9. **Shopping.** Para cada prenda de un look se buscan productos equivalentes en tiendas de Uruguay. Desde el detalle del look:
+   - **Premium:** "Encontrar este look". Si faltan talles, se piden solo los que usa ese look (remera o camisa S/M/L…, pantalón 28–50, calzado EU o US) y se guardan en el perfil, así no se vuelven a pedir; se editan en "Mi perfil". Con los talles, la búsqueda arranca y se ve el progreso real por etapas ("Buscando prendas…", "Revisando tiendas…", "Comparando opciones…", "Verificando precios y talles…", "Ordenando las mejores coincidencias…"), sin porcentajes. Al terminar, un mensaje honesto: para cuántas prendas hubo opciones y si algún stock o talle no se pudo verificar. Se puede repetir con cualquiera de los 3 looks.
+   - **Free:** "Encontrá las prendas reales para recrear este look" abre el paywall; el servidor rechaza la búsqueda igual.
 10. **Chat Premium.** Conversación con el asesor sobre su perfil y sus looks ("¿qué me pongo para un casamiento?", "¿esta camisa me queda?").
 
 ## Navegación y diseño

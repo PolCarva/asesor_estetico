@@ -1,6 +1,18 @@
 import { describe, expect, it } from "vitest";
 
-import { normalizeSizeLabel, sizeMatches } from "../src";
+import {
+  buildShoppingQueries,
+  EMPTY_USER_SIZES,
+  isSizeOption,
+  type LookSpec,
+  missingSizesForLook,
+  normalizeSizeLabel,
+  SIZE_OPTIONS,
+  sizeForCategory,
+  sizeMatches,
+  sizeSystem,
+} from "../src";
+import { FIXTURE_LOOK_SPECS } from "../src/fixtures";
 
 describe("normalizeSizeLabel: talles de tiendas a forma canónica", () => {
   it.each([
@@ -81,5 +93,59 @@ describe("sizeMatches: talle del usuario contra el de la variante", () => {
     [null, "M", false],
   ])("%s en %s → %s", (user, variant, expected) => {
     expect(sizeMatches(user, variant)).toBe(expected);
+  });
+});
+
+describe("talles del usuario (paso 07)", () => {
+  const [look] = FIXTURE_LOOK_SPECS;
+
+  it("pide solo los talles relevantes del look y que falten, en orden", () => {
+    // Look 1: camisa, pantalón, overshirt (arriba), desert boots y un reloj (sin talle).
+    expect(missingSizesForLook(look, EMPTY_USER_SIZES)).toEqual(["top", "bottom", "shoe"]);
+    expect(missingSizesForLook(look, { ...EMPTY_USER_SIZES, bottom: "32" })).toEqual([
+      "top",
+      "shoe",
+    ]);
+    expect(
+      missingSizesForLook(look, { ...EMPTY_USER_SIZES, top: "M", bottom: "32", shoe: "42" }),
+    ).toEqual([]);
+  });
+
+  it("un look sin pantalón no lo pide, y los accesorios no piden nada", () => {
+    const dress: LookSpec = {
+      ...look,
+      top: { ...look.top, category: "DRESS" },
+      bottom: null,
+      layering: [],
+    };
+    expect(missingSizesForLook(dress, EMPTY_USER_SIZES)).toEqual(["top", "shoe"]);
+  });
+
+  it("el calzado de EE. UU. viaja con su sistema: un 9 US no es un 42 ni un 9 europeo", () => {
+    const us = { ...EMPTY_USER_SIZES, shoe: "9", shoe_size_system: "US" as const };
+    expect(sizeForCategory(us, "SHOES")).toBe("US 9");
+    expect(sizeForCategory({ ...us, shoe_size_system: "EU" }, "SHOES")).toBe("9");
+    expect(sizeMatches(sizeForCategory(us, "SHOES"), "US 9")).toBe(true);
+    expect(sizeMatches(sizeForCategory(us, "SHOES"), "9")).toBe(false);
+    const shoes = buildShoppingQueries(look, { sizes: us, audience: "MEN" }).find(
+      (q) => q.slot === "shoes",
+    );
+    expect(shoes?.query.size).toBe("US 9");
+  });
+
+  it("las opciones ya están en forma canónica y del sistema que dicen", () => {
+    for (const size of SIZE_OPTIONS.top) {
+      expect(normalizeSizeLabel(size)).toBe(size);
+      expect(sizeSystem(size)).toBe("ALPHA");
+    }
+    for (const size of [...SIZE_OPTIONS.bottom, ...SIZE_OPTIONS.shoe.EU]) {
+      expect(normalizeSizeLabel(size)).toBe(size);
+      expect(sizeSystem(size)).toBe("NUMBER");
+    }
+    for (const size of SIZE_OPTIONS.shoe.US) expect(sizeSystem(`US ${size}`)).toBe("US");
+    expect(isSizeOption("top", "M")).toBe(true);
+    expect(isSizeOption("top", "42")).toBe(false);
+    expect(isSizeOption("shoe", "9.5", "US")).toBe(true);
+    expect(isSizeOption("shoe", "9.5", "EU")).toBe(false);
   });
 });

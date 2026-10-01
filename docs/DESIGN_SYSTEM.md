@@ -66,28 +66,33 @@ Viven en `apps/web/src/app/globals.css` (`@theme` de Tailwind v4).
 | `PhotoSlot` (hueco con guías, arrastrar o elegir archivo)                                                                         | `app/app/onboarding/photos/photo-slot.tsx`        |
 | `StyleAdvice` (asesoría en resultados), `PaywallCard` (bosque + orbe)                                                             | `components/style-advice.tsx`, `paywall-card.tsx` |
 | Bento del perfil: `SilhouetteTile` (con `ShapeGlyph`, el dibujo de la categoría), `ProportionsTile` (escala de tres tramos)       | `app/app/profile/page.tsx`                        |
-| Etiquetas de los enums (rostro, subtono, contraste, silueta, proporciones, aspectos, categorías…)                                 | `lib/labels.ts`                                   |
+| Etiquetas de los enums (rostro, subtono, contraste, silueta, proporciones, aspectos, categorías, talles, etapas del shopping…)    | `lib/labels.ts`                                   |
+| `StepMark` (✓ / actual que titila / pendiente, en las pantallas nocturnas)                                                        | `components/step-mark.tsx`                        |
+| `SizeFields` (talles en filas de vidrio con píldoras; calzado con selector EU/US)                                                 | `components/size-fields.tsx`                      |
+| `LookShopping` (CTA del look, talles en línea, paywall free, panel nocturno de progreso y resultado honesto)                      | `app/app/looks/[id]/look-shopping.tsx`            |
 
 ## Pantallas
 
-| Diseño                                      | Ruta                                      | Estado                                                                                                                  |
-| ------------------------------------------- | ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| 2a · Subida, dos huecos con guías           | `/app/onboarding/photos`                  | Hecho. "Paso 1 / 3". Arrastrar o elegir archivo; en mobile, el input abre cámara o galería.                             |
-| 2b · Cámara guiada (mobile)                 | —                                         | No implementado: no hay captura con cámara ni chequeos en vivo.                                                         |
-| 2c · Fotos listas, flotando                 | `/app/onboarding` (sin análisis en curso) | Hecho, con las preferencias (nivel de cambio y tatuajes) que el mockup no tiene. "Paso 2 / 3".                          |
-| 2d · Escaneo nocturno                       | `/app/onboarding` (análisis en curso)     | Hecho. Etapas reales de los jobs y hallazgos reales (rostro, color, silueta, estilo) cuando el perfil ya está guardado. |
-| 2e · Escenario con profundidad (desktop)    | `/app/looks`                              | Hecho. Debajo va la asesoría (el SPEC la pide en la pantalla de resultados) y el paywall para free.                     |
-| 2f · Antes / después                        | —                                         | No implementado (variante alternativa de resultados).                                                                   |
-| 2g · Baraja en abanico (mobile)             | `/app/looks`                              | Hecho (`LookStage` con snap y puntos).                                                                                  |
-| 2h · Render con pines + prendas             | `/app/looks/[id]`                         | Hecho sin productos: piezas, ficha de pelo y grooming, "Por qué te queda bien" con aspecto. Productos y compra: 07–10b. |
-| 2i · Bento del perfil / 2j · capas (mobile) | `/app/profile`                            | Hecho con datos reales: rostro y rasgos, colorimetría, silueta, proporciones, claves y estilo. Debajo, la cuenta.       |
-| 2k · Mapa topográfico del cuerpo            | —                                         | No implementado (variante alternativa del perfil).                                                                      |
+| Diseño                                      | Ruta                                      | Estado                                                                                                                                                         |
+| ------------------------------------------- | ----------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2a · Subida, dos huecos con guías           | `/app/onboarding/photos`                  | Hecho. "Paso 1 / 3". Arrastrar o elegir archivo; en mobile, el input abre cámara o galería.                                                                    |
+| 2b · Cámara guiada (mobile)                 | —                                         | No implementado: no hay captura con cámara ni chequeos en vivo.                                                                                                |
+| 2c · Fotos listas, flotando                 | `/app/onboarding` (sin análisis en curso) | Hecho, con las preferencias (nivel de cambio y tatuajes) que el mockup no tiene. "Paso 2 / 3".                                                                 |
+| 2d · Escaneo nocturno                       | `/app/onboarding` (análisis en curso)     | Hecho. Etapas reales de los jobs y hallazgos reales (rostro, color, silueta, estilo) cuando el perfil ya está guardado.                                        |
+| 2e · Escenario con profundidad (desktop)    | `/app/looks`                              | Hecho. Debajo va la asesoría (el SPEC la pide en la pantalla de resultados) y el paywall para free.                                                            |
+| 2f · Antes / después                        | —                                         | No implementado (variante alternativa de resultados).                                                                                                          |
+| 2g · Baraja en abanico (mobile)             | `/app/looks`                              | Hecho (`LookStage` con snap y puntos).                                                                                                                         |
+| 2h · Render con pines + prendas             | `/app/looks/[id]`                         | Hecho: piezas, ficha de pelo y grooming, "Por qué te queda bien" con aspecto y "Encontrar este look" (talles y progreso, paso 07). Productos y compra: 08–10b. |
+| 2i · Bento del perfil / 2j · capas (mobile) | `/app/profile`                            | Hecho con datos reales: rostro y rasgos, colorimetría, silueta, proporciones, claves y estilo. Debajo, la cuenta.                                              |
+| 2k · Mapa topográfico del cuerpo            | —                                         | No implementado (variante alternativa del perfil).                                                                                                             |
 
 **Navegación.** Arriba: "Mis looks", "Mi perfil" y "Guardados" (`/app/favorites`), más el carrito (ícono) y el avatar con iniciales, que lleva a `/app/profile#cuenta`. En mobile, una barra flotante con "Looks", "Perfil" y "Guardados". No hay "Inicio": `/app/dashboard` (entrada de la app, destino del login y de la PWA) redirige a los looks si hay análisis, y si no, a las fotos o al análisis.
 
 **Free/Premium** no está en el mockup y se diseñó con el mismo lenguaje: card de look bloqueada (curvas, candado en relieve, etiqueta "Premium"), secciones de asesoría bloqueadas en huecos y paywall en bosque con orbe. En el perfil, free ve la silueta y las proporciones y la tarjeta de silueta ofrece desbloquear "cómo equilibrarla" (las notas son Premium).
 
 **Perfiles anteriores al paso 02b** (sin silueta ni proporciones): la tarjeta de silueta muestra la contextura y sus notas (Premium) o queda bloqueada (free), no aparece la de proporciones y "Tu estilo" ocupa su lugar en la grilla. Las razones viejas de los looks se muestran como "Estilo".
+
+**Shopping en el detalle del look (paso 07):** debajo de las piezas, la píldora oscura a lo ancho. Premium: "Encontrar este look"; si faltan talles, se abre en línea el formulario solo con los que faltan (filas de vidrio, píldoras, calzado con EU/US) y "Buscar las prendas". Mientras corre, un panel `night` compacto con las cinco etapas del SPEC (✓ / actual / pendiente), barra por etapas, orbe con una frase y "N de M prendas listas" (conteos reales, sin porcentajes). Al terminar, una tarjeta de vidrio con el resultado honesto y la hora, y "Buscar de nuevo" (o "Reintentar la búsqueda" si falló). Free: "Encontrá las prendas reales para recrear este look" abre el `PaywallCard` en línea. La edición de talles está en `/app/profile#cuenta` ("Editar mis talles").
 
 **"Por qué te queda bien":** etiqueta `ASPECTO · CALIFICATIVO` en mono; tarjeta arcilla para color, musgo para silueta y neutra para rostro, pelo y estilo.
 
@@ -105,7 +110,7 @@ Cuando el mockup contradice el SPEC o muestra datos que la app no tiene, manda e
 | "Tus fotos se procesan cifradas y se borran en 24 h"                                            | "Se guardan privadas: solo vos las ves y las podés borrar cuando quieras. Nunca entrenamos…"   | La app no borra las fotos a las 24 h (`SECURITY_PRIVACY.md`)                                    |
 | "Algunos enlaces nos generan una comisión"                                                      | No se muestra                                                                                  | No hay afiliación con tiendas                                                                   |
 | Pines sobre el render                                                                           | Ubicación aproximada por zona del cuerpo, solo con `framing: FULL_BODY`                        | No hay detección de prendas en la imagen                                                        |
-| Precio por prenda, "Comprar ↗", "Comprar el look completo · $ 9.960", "Ver look · ~$ 9.960"     | La fila de cada pieza deja el lado derecho libre                                               | Shopping: pasos 07–10b                                                                          |
+| Precio por prenda, "Comprar ↗", "Comprar el look completo · $ 9.960", "Ver look · ~$ 9.960"     | La fila de cada pieza deja el lado derecho libre                                               | Productos y compra: pasos 08–10b                                                                |
 | "↻ Generar otras"                                                                               | No está                                                                                        | Regenerar looks es del milestone 2 (`EXECUTION_PLAN.md`)                                        |
 | ♡ Guardar                                                                                       | No está                                                                                        | Paso 10b                                                                                        |
 | Marca "espejo"                                                                                  | `APP_NAME` ("Asesor Estético") con el logo del diseño                                          | Cambiar el nombre es una decisión de producto pendiente; es un solo string en `packages/shared` |
@@ -114,7 +119,7 @@ Cuando el mockup contradice el SPEC o muestra datos que la app no tiene, manda e
 
 - Usá los tokens y las utilidades de esta página; nada de colores sueltos salvo gradientes decorativos.
 - Etiquetas y estados en `eyebrow` (mono). Títulos con una palabra en `<em>` de acento: musgo en fondos claros y arcilla solo en texto grande.
-- Acción principal: `Button` `primary` (píldora oscura); secundaria: `secondary` (vidrio). Sobre fondos oscuros, `light`.
+- Acción principal: `Button` `primary` (píldora oscura); secundaria: `secondary` (vidrio). Sobre fondos oscuros, `light`. Para textos largos en columnas angostas, `size="lg-wrap"` (crece a dos líneas).
 - Fotos del usuario: siempre `<img>` con URL firmada (nunca `next/image`) y `PrivateImage` si la pantalla se refresca sola.
 - Nada de números que la app no calculó. Si el diseño los pide, primero va el dato (con su paso en el plan).
 - Verificá en desktop y en mobile (375–390 px) que no haya scroll horizontal.

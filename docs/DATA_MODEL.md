@@ -47,6 +47,10 @@ erDiagram
     tattoo_preference tattoo_preference
     bool onboarding_completed
     timestamptz age_confirmed_at
+    text top_size "talles del usuario (paso 07)"
+    text bottom_size
+    text shoe_size
+    text shoe_size_system "EU | US"
   }
   STYLE_PROFILES {
     uuid id PK
@@ -220,6 +224,14 @@ erDiagram
 | `ai_usage`              | Costo y uso de cada operación de IA                                            | Solo service role                      |
 | `analytics_events`      | Eventos de producto                                                            | Solo service role                      |
 
+## Talles del usuario
+
+Migración `20261001000400_profile_sizes.sql` (paso 07, D15): `profiles.top_size`, `bottom_size` y `shoe_size` (text, null = todavía no lo cargó, 1–10 caracteres) y `shoe_size_system` (`EU` | `US`, default `EU`; el número de calzado siempre va con su sistema). Alineados con `UserSizesSchema` de `@asesor/shared`.
+
+- **Quién los escribe:** el usuario, con su cliente: `grant update (top_size, bottom_size, shoe_size, shoe_size_system)` y la política "profiles: update own". `saveUserSizes` (`@asesor/db`) valida contra las opciones que se ofrecen (`SIZE_OPTIONS`, en forma canónica de `normalizeSizeLabel`) y la base con los checks.
+- **Cuándo se piden:** antes de la primera búsqueda de un look, solo los relevantes (`missingSizesForLook`, sobre `sizeKindForCategory`). Se editan en `/app/profile#cuenta`.
+- **Cómo se usan:** `getUserSizes` los lee y la búsqueda los manda en el payload de `SEARCH_PRODUCTS`. El calzado de EE. UU. viaja como `US 9.5` (`sizeForCategory`): contra talles europeos queda `UNVERIFIED`, sin conversión inventada.
+
 ## StyleProfile guardado
 
 El análisis (`StyleProfile` v3, ver `AI_PIPELINE.md`) se guarda partido para que la parte Premium quede protegida por RLS (D4):
@@ -268,7 +280,7 @@ Migración `20261001000300_shopping_jobs.sql` (paso 06, D13 y D14):
 RLS habilitado en **todas** las tablas. Resumen (ver `20260929000300_rls_policies.sql`):
 
 - `anon`: sin acceso a ninguna tabla.
-- `authenticated`: solo sus filas (`user_id = auth.uid()`), y solo las columnas con `GRANT` explícito. Por ejemplo, en `profiles` puede cambiar `display_name`, `style_risk_level`, `tattoo_preference` y `onboarding_completed`, pero **no** `role` ni `country_code`.
+- `authenticated`: solo sus filas (`user_id = auth.uid()`), y solo las columnas con `GRANT` explícito. Por ejemplo, en `profiles` puede cambiar `display_name`, `style_risk_level`, `tattoo_preference`, `onboarding_completed` y sus talles (`top_size`, `bottom_size`, `shoe_size`, `shoe_size_system`), pero **no** `role` ni `country_code`.
 - Premium reforzado en datos: `looks` con `position > 1`, `style_advice`, `look_products`, `carts`, `cart_items`, `chat_*` y favoritos de productos requieren `current_user_is_premium()`.
 - IDOR: los inserts que referencian otros recursos (favoritos, hilos de chat, ítems del carrito) verifican que el recurso sea del usuario.
 - `jobs`: el usuario puede **leer** el estado y el progreso de sus jobs (columnas no sensibles: también `progress`, `look_id` y `garment_slot`); nunca crear ni modificar, ni leer `payload`, `result` o `last_error`.

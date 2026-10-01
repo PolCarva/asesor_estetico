@@ -5,6 +5,7 @@ import { afterAll, beforeAll, expect, it } from "vitest";
 import { enqueueJob, updateJobProgress } from "../../src/jobs";
 import {
   getLatestLookSearch,
+  MISSING_SIZES,
   SHOPPING_SEARCH_MAX_ATTEMPTS,
   SHOPPING_SEARCH_PRIORITY,
   startLookShopping,
@@ -152,6 +153,29 @@ describeIntegration("shopping: inicio de la búsqueda y progreso", () => {
         userId: premium.id,
       }),
     ).rejects.toMatchObject({ cause: { code: "23505" } });
+  });
+
+  it("sin los talles relevantes del look no busca (paso 07); con una prenda, solo los suyos", async () => {
+    const noShoes = { ...sizes, shoe: null };
+    const without = (slot?: string) =>
+      startLookShopping({
+        userClient: premium.client,
+        serviceClient: admin,
+        lookId: looks[2]!,
+        sizes: noShoes,
+        slot,
+        requestId: crypto.randomUUID(),
+      });
+    await expect(without()).rejects.toMatchObject({
+      code: "VALIDATION_FAILED",
+      message: MISSING_SIZES,
+    });
+    // El reloj no tiene talle, y la camisa ya tiene el suyo.
+    await expect(without("shoes")).rejects.toMatchObject({ message: MISSING_SIZES });
+    expect((await without("top")).mode).toBe("SLOT");
+    expect(
+      (await searchJobs(premium.id)).filter((j) => j.look_id === looks[2] && !j.garment_slot),
+    ).toEqual([]);
   });
 
   it("rechaza looks ajenos o inexistentes, prendas que no están en el look y pedidos inválidos", async () => {

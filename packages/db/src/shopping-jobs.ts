@@ -4,7 +4,9 @@ import {
   type GarmentSlot,
   type JobStatus,
   listLookGarments,
+  missingSizesForLook,
   SearchProductsPayloadSchema,
+  sizeKindForCategory,
   type ShoppingProgress,
   ShoppingProgressSchema,
   StoredLookSpecSchema,
@@ -28,6 +30,9 @@ export const SHOPPING_SEARCH_MAX_ATTEMPTS = 2;
 const ACTIVE: JobStatus[] = ["QUEUED", "RUNNING"];
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Mensaje de `VALIDATION_FAILED` cuando faltan talles relevantes: la UI los pide. */
+export const MISSING_SIZES = "MISSING_SIZES";
 
 export interface StartLookShoppingInput {
   /** Cliente con la sesión del usuario: Premium y dueño del look pasan por su RLS. */
@@ -76,9 +81,10 @@ function isUniqueViolation(error: unknown): boolean {
 
 /**
  * Encola la búsqueda de productos de un look. Verifica sesión, Premium y que el look sea
- * del usuario; permite una sola búsqueda activa por (look, prenda): la del look completo
- * no bloquea la de una prenda. Errores: AUTH_REQUIRED, PREMIUM_REQUIRED, NOT_FOUND (look
- * ajeno o inexistente) y VALIDATION_FAILED.
+ * del usuario y que estén los talles relevantes; permite una sola búsqueda activa por
+ * (look, prenda): la del look completo no bloquea la de una prenda. Errores: AUTH_REQUIRED,
+ * PREMIUM_REQUIRED, NOT_FOUND (look ajeno o inexistente) y VALIDATION_FAILED (con el
+ * mensaje `MISSING_SIZES` si faltan talles).
  */
 export async function startLookShopping(
   input: StartLookShoppingInput,
@@ -104,12 +110,17 @@ export async function startLookShopping(
     .maybeSingle();
   if (error) throw new AppError("INTERNAL", "No se pudo leer el look.", { cause: error });
   if (!look) throw new AppError("NOT_FOUND", "Look inexistente.");
-  if (slot) {
-    const spec = StoredLookSpecSchema.safeParse(look.spec_json);
-    if (!spec.success || !listLookGarments(spec.data).some((g) => g.slot === slot)) {
-      throw new AppError("VALIDATION_FAILED", "Esa prenda no está en el look.");
-    }
-  }
+  const spec = StoredLookSpecSchema.safeParse(look.spec_json);
+  if (!spec.success) throw new AppError("VALIDATION_FAILED", "El look no se puede buscar.");
+  const garment = slot ? listLookGarments(spec.data).find((g) => g.slot === slot) : undefined;
+  if (slot && !garment) throw new AppError("VALIDATION_FAILED", "Esa prenda no está en el look.");
+  // SPEC "TALLES": antes de buscar, los talles relevantes del look (o de esa prenda).
+  const missing = garment
+    ? [sizeKindForCategory(garment.garment.category)].filter(
+        (kind) => kind !== null && !payload.data.sizes[kind],
+      )
+    : missingSizesForLook(spec.data, payload.data.sizes);
+  if (missing.length > 0) throw new AppError("VALIDATION_FAILED", MISSING_SIZES);
 
   const mode = slot ? "SLOT" : "LOOK";
   const scope = { userId: user.id, lookId, slot };

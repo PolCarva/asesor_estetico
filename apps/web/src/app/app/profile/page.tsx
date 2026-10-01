@@ -1,4 +1,9 @@
-import type { AdviceView, StyleAdvice as StyleAdviceData, StyleProfileCore } from "@asesor/shared";
+import {
+  type AdviceView,
+  SIZE_KINDS,
+  type StyleAdvice as StyleAdviceData,
+  type StyleProfileCore,
+} from "@asesor/shared";
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 
@@ -8,7 +13,7 @@ import { LinkButton } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/states";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { requireUser } from "@/lib/auth";
-import { getPhotoUrls, getPlan, getProfile, getStyleData } from "@/lib/data";
+import { getPhotoUrls, getPlan, getProfile, getSizes, getStyleData } from "@/lib/data";
 import {
   BODY_SHAPE_LABEL,
   CONTRAST_LABEL,
@@ -16,10 +21,14 @@ import {
   FRAME_LABEL,
   RISK_LABEL,
   sentenceList,
+  SIZE_KIND_LABEL,
+  sizeText,
   TATTOO_LABEL,
   TORSO_LEGS_LABEL,
   UNDERTONE_LABEL,
 } from "@/lib/labels";
+
+import { SizesForm } from "./sizes-form";
 
 export const metadata: Metadata = { title: "Mi perfil" };
 
@@ -315,11 +324,12 @@ function KeysTile({ view }: { view: AdviceView }) {
 
 export default async function ProfilePage() {
   const user = await requireUser("/app/profile");
-  const [profile, plan, style, photoUrls] = await Promise.all([
+  const [profile, plan, style, photoUrls, sizes] = await Promise.all([
     getProfile(user.id),
     getPlan(user.id),
     getStyleData(user.id),
     getPhotoUrls(user.id),
+    getSizes(user.id),
   ]);
   const torsoLegs = style?.core.appearance.torso_legs ?? "UNKNOWN";
 
@@ -370,6 +380,10 @@ export default async function ProfilePage() {
             ["Plan", plan.isPremium ? "Premium" : "Gratuito"],
             ["Nivel de cambio", profile ? RISK_LABEL[profile.style_risk_level] : "—"],
             ["Tatuajes", profile ? TATTOO_LABEL[profile.tattoo_preference] : "—"],
+            ...SIZE_KINDS.map((kind) => [
+              SIZE_KIND_LABEL[kind],
+              sizeText(sizes, kind) ?? "Sin cargar",
+            ]),
           ].map(([label, value]) => (
             <div key={label} className="flex justify-between gap-4 border-b border-line pb-3">
               <dt className="text-stone">{label}</dt>
@@ -377,6 +391,7 @@ export default async function ProfilePage() {
             </div>
           ))}
         </dl>
+        <SizesForm sizes={sizes} />
         <div className="mt-6 flex flex-wrap gap-3">
           <LinkButton href="/app/onboarding/photos" variant="secondary" size="sm">
             Mis fotos

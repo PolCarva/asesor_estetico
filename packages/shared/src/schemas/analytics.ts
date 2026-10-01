@@ -23,6 +23,7 @@ export const ANALYTICS_EVENTS = [
   "chat_started",
   "look_regenerated",
   "style_advice_viewed",
+  "size_requested",
 ] as const;
 
 export const AnalyticsEventNameSchema = z.enum(ANALYTICS_EVENTS);
@@ -54,6 +55,7 @@ export const CLIENT_ANALYTICS_EVENTS = [
   "product_clicked",
   "cheaper_alternative_requested",
   "style_advice_viewed",
+  "size_requested",
 ] as const satisfies readonly AnalyticsEventName[];
 
 export const ClientAnalyticsEventSchema = z.object({

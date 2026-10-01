@@ -1,4 +1,12 @@
-import type { Garment, GarmentSlot, LookReason, LookReasonAspect, LookSpec } from "@asesor/shared";
+import {
+  EMPTY_USER_SIZES,
+  type Garment,
+  type GarmentSlot,
+  type LookReason,
+  type LookReasonAspect,
+  type LookSpec,
+  missingSizesForLook,
+} from "@asesor/shared";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -9,8 +17,11 @@ import { PaywallCard } from "@/components/paywall-card";
 import { PaletteRing, Pebble } from "@/components/swatches";
 import { TrackEvent } from "@/components/track-event";
 import { requireUser } from "@/lib/auth";
-import { getLook, getLookSummaries, getPlan } from "@/lib/data";
+import { getLook, getLookSummaries, getPlan, getSizes } from "@/lib/data";
 import { CATEGORY_LABEL, REASON_ASPECT_LABEL, twoDigits } from "@/lib/labels";
+import { getLookShoppingState } from "@/lib/shopping";
+
+import { LookShopping } from "./look-shopping";
 
 export const metadata: Metadata = { title: "Look" };
 
@@ -172,6 +183,10 @@ export default async function LookDetailPage({ params }: { params: Promise<{ id:
 
   const { spec } = look;
   const generating = look.status === "PENDING" || look.status === "GENERATING";
+  // Shopping (paso 07): solo Premium tiene búsquedas y usa talles.
+  const [search, sizes] = plan.isPremium
+    ? await Promise.all([getLookShoppingState(look.id), getSizes(user.id)])
+    : [null, EMPTY_USER_SIZES];
   const pieces = lookPieces(spec);
   const showPins = Boolean(look.imageUrl) && spec.image_prompt_data.framing === "FULL_BODY";
   // El pelo es la pieza 1; las prendas siguen en el orden de la lista.
@@ -296,7 +311,16 @@ export default async function LookDetailPage({ params }: { params: Promise<{ id:
                   ))}
                 </ul>
               ) : null}
-              {/* Paso 07: CTA "Encontrar este look" (píldora oscura a lo ancho) + ♡ guardar (paso 10b). */}
+              {/* A la derecha del CTA va el ♡ guardar (paso 10b). */}
+              <div className="mt-7">
+                <LookShopping
+                  lookId={look.id}
+                  isPremium={plan.isPremium}
+                  missing={missingSizesForLook(spec, sizes)}
+                  sizes={sizes}
+                  search={search}
+                />
+              </div>
             </section>
           </div>
 
