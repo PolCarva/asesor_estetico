@@ -8,6 +8,7 @@ import {
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 import {
+  addLookToCart,
   addToCart,
   ALREADY_IN_CART,
   getCartLines,
@@ -737,6 +738,79 @@ describeIntegration("carrito: datos y acciones", () => {
         .select("id", { count: "exact", head: true })
         .eq("payload->>product_id", failedId);
       expect(count).toBe(1);
+    });
+  });
+
+  describe("talle del perfil y look completo (paso 10b)", () => {
+    it("sin talle elegido, manda el talle del perfil sobre el de la búsqueda", async () => {
+      await results(looks[1]!, "layering:0", [oxford]);
+      await admin.from("profiles").update({ top_size: "L" }).eq("id", premium.id);
+      const added = await addToCart({
+        userClient: premium.client,
+        productId: idOf(oxford),
+        lookId: looks[1]!,
+        slot: "layering:0",
+        revalidate: notCalled,
+      });
+      expect(added.variantId).toBe((await variantIds(idOf(oxford))).get("L"));
+      expect(added.price.amount).toBe(2090);
+      // El talle cuesta otra cosa que el precio que se mostraba: la UI lo avisa.
+      expect(added.listedPrice).toEqual({ amount: 1890, currency: "UYU" });
+      expect(added.variant).toMatchObject({ size: "L" });
+      await admin.from("profiles").update({ top_size: null }).eq("id", premium.id);
+
+      const line = (await getCartLines(premium.client)).find((l) => l.id === added.itemId)!;
+      expect(line.variant?.size).toBe("L");
+      expect(line.variants.map((v) => [v.size, v.availability])).toEqual(
+        expect.arrayContaining([
+          ["M", "IN_STOCK"],
+          ["L", "OUT_OF_STOCK"],
+        ]),
+      );
+    });
+
+    it("completa las prendas vacías con el recomendado; la que no tiene precio no frena a las demás", async () => {
+      // `other` ya tiene la camisa de "top" en el carrito (test de concurrencia); el pantalón y
+      // el accesorio (local físico sin precio) están vacíos.
+      await results(otherLooks[0]!, "bottom", [chino], "42");
+      await results(otherLooks[0]!, "accessory:0", [local]);
+      const first = await addLookToCart({
+        userClient: other.client,
+        lookId: otherLooks[0]!,
+        revalidate: notCalled,
+      });
+      expect(first.added.map((a) => [a.slot, a.productId])).toEqual([["bottom", idOf(chino)]]);
+      expect(first.present).toEqual([{ slot: "top", productId: idOf(oxford) }]);
+      expect(first.skipped).toEqual([
+        { slot: "accessory:0", productId: idOf(local), reason: NO_PRICE },
+      ]);
+
+      // Lo que ya tiene algo no se vuelve a agregar, aunque sea otro talle u otra opción.
+      const bottom = first.added[0]!;
+      await selectCartItemVariant({
+        userClient: other.client,
+        itemId: bottom.itemId,
+        variantId: null,
+      });
+      const again = await addLookToCart({
+        userClient: other.client,
+        lookId: otherLooks[0]!,
+        revalidate: notCalled,
+      });
+      expect(again.added).toEqual([]);
+      expect(again.present.map((p) => p.slot).sort()).toEqual(["bottom", "top"]);
+      expect((await itemsOf(other.id)).filter((i) => i.garment_slot === "bottom")).toHaveLength(1);
+
+      await expect(
+        addLookToCart({
+          userClient: premium.client,
+          lookId: otherLooks[0]!,
+          revalidate: notCalled,
+        }),
+      ).rejects.toMatchObject({ code: "NOT_FOUND" });
+      await expect(
+        addLookToCart({ userClient: free.client, lookId: looks[0]!, revalidate: notCalled }),
+      ).rejects.toMatchObject({ code: "PREMIUM_REQUIRED" });
     });
   });
 

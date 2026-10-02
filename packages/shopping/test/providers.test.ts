@@ -11,6 +11,7 @@ import {
   CompositeSearchProvider,
   detectPlatform,
   DiscoverySearchProvider,
+  findRegisteredStore,
   HttpStatusError,
   isAllowedByRobots,
   MalformedResponseError,
@@ -28,6 +29,7 @@ import {
   RobotsDisallowedError,
   type SearchProvider,
   SitemapIndex,
+  storeServesAudience,
   type WebSearchClient,
 } from "../src";
 
@@ -280,6 +282,13 @@ describe("registro de tiendas", () => {
     expect(calls.some((c) => c.url.includes("lolita"))).toBe(false);
     expect(errors).toEqual(["registry:caida.com.uy"]);
   });
+
+  it("Indian es una tienda de mujer: no entra en búsquedas de hombre (regresión 2026-10-01)", () => {
+    const indian = findRegisteredStore("www.indian.com.uy")!;
+    expect(indian.audience).toBe("WOMEN");
+    expect(storeServesAudience(indian, "MEN")).toBe(false);
+    expect(storeServesAudience(indian, "WOMEN")).toBe(true);
+  });
 });
 
 describe("descubrimiento web", () => {
@@ -308,6 +317,8 @@ describe("descubrimiento web", () => {
         "https://legacy.com.uy/",
         "https://otra.uy/productos/camisa-mujer-oxford",
         "https://legacy.com.uy/catalogo/camisa-oxford-lisa-blanco_L207732_BLANCO",
+        // Tienda registrada de mujer: no entra en una búsqueda de hombre.
+        "https://www.indian.com.uy/catalogo/camisa-mustafa-crudo-natural_01352478_103",
       ]),
       onCost: (usd) => costs.push(usd),
     });

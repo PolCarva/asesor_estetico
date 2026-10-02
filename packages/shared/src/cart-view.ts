@@ -29,7 +29,14 @@ export interface CartLine {
   /** Look del ítem; null: producto suelto o de un look que ya no existe. */
   look: { id: string; name: string | null; position: number | null } | null;
   slot: GarmentSlot | null;
-  variant: { id: string; size: string | null } | null;
+  variant: { id: string; size: string | null; color: string | null } | null;
+  /** Talles publicados del producto, para elegir otro (solo los que tienen talle). */
+  variants: Array<{
+    id: string;
+    size: string;
+    color: string | null;
+    availability: ProductAvailability;
+  }>;
   quantity: number;
   /** Precio que fijó la base al agregar (o al cambiar el producto o el talle). */
   snapshot: Money;

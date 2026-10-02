@@ -1,5 +1,6 @@
 import type { LookSpec } from "@asesor/shared";
 import Link from "next/link";
+import type { ReactNode } from "react";
 
 import { RISK_LABEL, twoDigits } from "@/lib/labels";
 
@@ -43,10 +44,13 @@ export function LookCard({
   status = "READY",
   href,
   featured = false,
+  action = null,
 }: {
   look: LookSpec;
   position: number;
   example?: boolean;
+  /** Arriba a la derecha, por encima del link de la card (el ♡ de guardar, paso 10b). */
+  action?: ReactNode;
   /** URL firmada de la imagen generada; sin imagen se muestra la paleta. */
   imageUrl?: string | null;
   status?: ImageStatus;
@@ -97,6 +101,8 @@ export function LookCard({
             NO PUDIMOS GENERAR LA IMAGEN
           </p>
         ) : null}
+
+        {action ? <div className="absolute top-3.5 right-3.5 z-10">{action}</div> : null}
 
         <div
           className={`absolute flex flex-col gap-2.5 glass-strong ${featured ? "inset-x-4 bottom-4 rounded-[22px] p-4" : "inset-x-3.5 bottom-3.5 rounded-[20px] p-3.5"}`}

@@ -1,15 +1,20 @@
 import {
   AppError,
   type CartLine,
+  compareSizes,
   type GarmentSlot,
   GarmentSlotSchema,
   isProductStale,
   type Money,
   pickVariantForSize,
   type ProductAvailability,
+  type ProductCategory,
+  sizeForCategory,
 } from "@asesor/shared";
 
 import { requirePremium } from "./auth";
+import { getUserSizes } from "./profile-sizes";
+import { getLookProducts } from "./shopping";
 import { NO_PRICE, type ProductRefreshOutcome } from "./shopping-jobs";
 import type { TypedSupabaseClient } from "./types";
 
@@ -50,6 +55,14 @@ export interface CartChangeResult {
   price: Money;
   /** El precio cambió con esta operación (revalidación, otro talle o un ítem que ya estaba). */
   priceChange: { from: Money; to: Money } | null;
+  /**
+   * Precio del producto que se mostraba en los resultados (el menor de sus variantes). Si el
+   * talle elegido cuesta otra cosa (otro color, otra variante), la UI lo avisa. null al cambiar
+   * el talle a mano.
+   */
+  listedPrice: Money | null;
+  /** Talle y color de la variante elegida (null: sin talle). */
+  variant: { size: string | null; color: string | null } | null;
   revalidation: CartRevalidation;
   availability: ProductAvailability;
 }
@@ -74,6 +87,7 @@ const change = (from: Money | null, to: Money) =>
 interface CatalogVariant {
   id: string;
   size: string | null;
+  color: string | null;
   availability: ProductAvailability;
   price_amount: number | null;
   currency: Money["currency"] | null;
@@ -82,6 +96,7 @@ interface CatalogVariant {
 interface CatalogProduct {
   id: string;
   store_domain: string;
+  category: ProductCategory;
   price_amount: number | null;
   currency: Money["currency"] | null;
   availability: ProductAvailability;
@@ -96,7 +111,7 @@ async function readProduct(
   const { data, error } = await client
     .from("products")
     .select(
-      "id, store_domain, price_amount, currency, availability, last_fetched_at, product_variants (id, size, availability, price_amount, currency)",
+      "id, store_domain, category, price_amount, currency, availability, last_fetched_at, product_variants (id, size, color, availability, price_amount, currency)",
     )
     .eq("id", productId)
     .maybeSingle();
@@ -110,6 +125,18 @@ function catalogPrice(product: CatalogProduct, variantId: string | null): Money 
   const amount = variant?.price_amount ?? product.price_amount;
   const currency = variant?.currency ?? product.currency;
   return amount === null || currency === null ? null : { amount: Number(amount), currency };
+}
+
+/** Precio del producto (sin variante): lo que se mostraba en los resultados. */
+function listed(product: CatalogProduct): Money | null {
+  return product.price_amount === null || product.currency === null
+    ? null
+    : { amount: Number(product.price_amount), currency: product.currency };
+}
+
+function variantInfo(product: CatalogProduct, variantId: string | null) {
+  const variant = variantId ? product.product_variants.find((v) => v.id === variantId) : null;
+  return variant ? { size: variant.size, color: variant.color } : null;
 }
 
 function availabilityOf(
@@ -209,6 +236,20 @@ async function lookResult(
   return { userSize: data.user_size };
 }
 
+/**
+ * Talle para elegir la variante: el del perfil del usuario para esa categoría (lo que pide el
+ * SPEC) o, si no lo cargó, el talle con el que se buscó la prenda.
+ */
+async function preferredSize(
+  client: TypedSupabaseClient,
+  userId: string,
+  product: CatalogProduct,
+  searched: string | null,
+): Promise<string | null> {
+  const sizes = await getUserSizes(client, userId);
+  return sizeForCategory(sizes, product.category) ?? searched;
+}
+
 type PgError = { code?: string } | null;
 const isCode = (error: PgError, code: string) => error?.code === code;
 
@@ -296,7 +337,11 @@ export async function addToCart(input: AddToCartInput): Promise<AddToCartResult>
   if (variantId !== null && !product.product_variants.some((v) => v.id === variantId)) {
     throw new AppError("VALIDATION_FAILED", VARIANT_GONE);
   }
-  variantId ??= pickVariantForSize(product.product_variants, result.userSize)?.id ?? null;
+  variantId ??=
+    pickVariantForSize(
+      product.product_variants,
+      await preferredSize(client, user.id, product, result.userSize),
+    )?.id ?? null;
   if (!catalogPrice(product, variantId)) throw new AppError("VALIDATION_FAILED", NO_PRICE);
 
   const cartId = await getOrCreateCart(client, user.id);
@@ -360,6 +405,8 @@ export async function addToCart(input: AddToCartInput): Promise<AddToCartResult>
     variantId: item.variant_id,
     price,
     priceChange: change(previous, price),
+    listedPrice: listed(before),
+    variant: variantInfo(product, item.variant_id),
     revalidation,
     availability: availabilityOf(product, item.variant_id, revalidation),
   };
@@ -406,6 +453,8 @@ export async function selectCartItemVariant(input: {
     variantId: data.variant_id,
     price,
     priceChange: change(itemPrice(item), price),
+    listedPrice: null,
+    variant: variantInfo(product, data.variant_id),
     revalidation,
     availability: availabilityOf(product, data.variant_id, revalidation),
   };
@@ -426,7 +475,7 @@ export async function swapCartItem(input: {
 }): Promise<CartChangeResult & { previousProductId: string; merged: boolean }> {
   const now = input.now ?? new Date();
   const client = input.userClient;
-  await requirePremium(client, now);
+  const user = await requirePremium(client, now);
   if (!UUID.test(input.productId)) throw invalid();
   const item = await readItem(client, input.itemId);
   const slot = slotOf(item);
@@ -445,6 +494,8 @@ export async function swapCartItem(input: {
       variantId: item.variant_id,
       price: itemPrice(item),
       priceChange: null,
+      listedPrice: null,
+      variant: variantInfo(current, item.variant_id),
       revalidation: unchanged,
       availability: availabilityOf(current, item.variant_id, unchanged),
       merged: false,
@@ -462,15 +513,15 @@ export async function swapCartItem(input: {
     input.revalidate,
     now,
   );
-  // El talle: el de la búsqueda de la prenda o, si no hay, el que tenía el ítem.
+  // El talle: el del perfil (o el de la búsqueda) y, si no hay, el que tenía el ítem.
   const oldVariant = item.variant_id
     ? (await readProduct(client, item.product_id))?.product_variants.find(
         (v) => v.id === item.variant_id,
       )
     : undefined;
-  const variantId =
-    pickVariantForSize(product.product_variants, result.userSize ?? oldVariant?.size ?? null)?.id ??
-    null;
+  const size =
+    (await preferredSize(client, user.id, product, result.userSize)) ?? oldVariant?.size ?? null;
+  const variantId = pickVariantForSize(product.product_variants, size)?.id ?? null;
   if (!catalogPrice(product, variantId)) throw new AppError("VALIDATION_FAILED", NO_PRICE);
 
   const updated = await client
@@ -517,6 +568,8 @@ export async function swapCartItem(input: {
     variantId: next.variant_id,
     price,
     priceChange: change(catalogPrice(before, variantId), price),
+    listedPrice: listed(before),
+    variant: variantInfo(product, next.variant_id),
     availability: availabilityOf(product, next.variant_id, revalidation),
     merged,
   };
@@ -567,8 +620,9 @@ export async function setCartItemPurchased(input: {
 }
 
 const LINE_COLUMNS = `id, quantity, price_amount_snapshot, currency_snapshot, look_id, garment_slot, purchased_at, created_at,
-  products (id, title, store_name, store_domain, url, image_url, price_amount, currency, availability, last_fetched_at),
-  product_variants (id, size, availability, price_amount, currency),
+  products (id, title, store_name, store_domain, url, image_url, price_amount, currency, availability, last_fetched_at,
+    product_variants (id, size, color, availability)),
+  product_variants (id, size, color, availability, price_amount, currency),
   looks (id, name, position)`;
 
 /**
@@ -605,7 +659,19 @@ export async function getCartLines(client: TypedSupabaseClient): Promise<CartLin
             }
           : null,
         slot: slotOf(row),
-        variant: variant ? { id: variant.id, size: variant.size } : null,
+        variant: variant ? { id: variant.id, size: variant.size, color: variant.color } : null,
+        variants: product.product_variants
+          .filter((v) => v.size)
+          .sort(
+            (a, b) =>
+              compareSizes(a.size!, b.size!) || (a.color ?? "").localeCompare(b.color ?? ""),
+          )
+          .map((v) => ({
+            id: v.id,
+            size: v.size!,
+            color: v.color,
+            availability: v.availability,
+          })),
         quantity: row.quantity,
         snapshot: { amount: Number(row.price_amount_snapshot), currency: row.currency_snapshot },
         current: amount === null || currency === null ? null : { amount: Number(amount), currency },
@@ -616,4 +682,79 @@ export async function getCartLines(client: TypedSupabaseClient): Promise<CartLin
       },
     ];
   });
+}
+
+export interface AddLookToCartResult {
+  /** Prendas agregadas (o que ya estaban), con su resultado. */
+  added: AddToCartResult[];
+  /** Prendas que ya tenían algo en el carrito (el recomendado u otra opción que se eligió). */
+  present: Array<{ slot: GarmentSlot; productId: string }>;
+  /** Prendas que no entraron y por qué (`NO_PRICE`, `PRODUCT_GONE`, …). */
+  skipped: Array<{ slot: GarmentSlot; productId: string; reason: string }>;
+}
+
+/**
+ * "Agregar el look al carrito": el RECOMENDADO de cada prenda con resultados que todavía no
+ * tiene nada en el carrito, en paralelo (las revalidaciones corren juntas en el worker). Una
+ * prenda que no entra (local físico sin precio, producto que la tienda sacó) no frena a las
+ * demás. Errores: AUTH_REQUIRED,
+ * PREMIUM_REQUIRED y NOT_FOUND (look sin resultados o ajeno).
+ */
+export async function addLookToCart(input: {
+  userClient: TypedSupabaseClient;
+  lookId: string;
+  revalidate: RevalidateProduct;
+  now?: Date;
+}): Promise<AddLookToCartResult> {
+  const client = input.userClient;
+  await requirePremium(client, input.now);
+  if (!UUID.test(input.lookId)) throw invalid();
+  const all = (await getLookProducts(client, input.lookId)).filter(
+    (row) => row.list === "MAIN" && row.rank === 1,
+  );
+  if (all.length === 0) throw new AppError("NOT_FOUND", "El look no tiene resultados.");
+  // Completa las prendas vacías: si una prenda ya tiene algo en el carrito (el recomendado en
+  // otro talle u otra opción que el usuario eligió), no se agrega el recomendado encima.
+  const { data: inCart, error } = await client
+    .from("cart_items")
+    .select("garment_slot")
+    .eq("look_id", input.lookId);
+  if (error) fail("No se pudo leer el carrito.", error);
+  const covered = new Set((inCart ?? []).map((i) => i.garment_slot));
+  const recommended = all.filter((row) => !covered.has(row.slot));
+
+  const outcomes = await Promise.allSettled(
+    recommended.map((row) =>
+      addToCart({
+        userClient: client,
+        productId: row.product.id,
+        lookId: input.lookId,
+        slot: row.slot,
+        revalidate: input.revalidate,
+        now: input.now,
+      }),
+    ),
+  );
+  const result: AddLookToCartResult = {
+    added: [],
+    present: all
+      .filter((row) => covered.has(row.slot))
+      .map((row) => ({ slot: row.slot, productId: row.product.id })),
+    skipped: [],
+  };
+  outcomes.forEach((outcome, i) => {
+    const row = recommended[i]!;
+    if (outcome.status === "fulfilled") {
+      result.added.push(outcome.value);
+      return;
+    }
+    const error: unknown = outcome.reason;
+    // Fallas de una prenda (sin precio, sin publicar): se informan; las otras siguen.
+    if (error instanceof AppError && error.code === "VALIDATION_FAILED") {
+      result.skipped.push({ slot: row.slot, productId: row.product.id, reason: error.message });
+      return;
+    }
+    throw error;
+  });
+  return result;
 }

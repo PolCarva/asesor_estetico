@@ -1,6 +1,7 @@
 "use server";
 
 import {
+  addLookToCart,
   addToCart,
   ALREADY_IN_CART,
   type CartChangeResult,
@@ -23,7 +24,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { getAnalytics } from "@/lib/analytics";
-import { cartChangeNotices } from "@/lib/cart-notices";
+import { cartChangeNotices, lookCartSummary } from "@/lib/cart-notices";
 import { getLogger } from "@/lib/logger";
 import { enforceRateLimit, rateLimiters } from "@/lib/rate-limit";
 
@@ -69,6 +70,7 @@ const ItemSchema = z.object({ itemId: z.uuid() });
 const VariantSchema = z.object({ itemId: z.uuid(), variantId: OptionalUuid });
 const SwapSchema = z.object({ itemId: z.uuid(), productId: z.uuid() });
 const PurchasedSchema = z.object({ itemId: z.uuid(), purchased: z.enum(["true", "false"]) });
+const LookSchema = z.object({ lookId: z.uuid() });
 
 /** Revalidación con el worker antes de agregar (la web nunca descarga páginas de tiendas). */
 const revalidate = (productId: string) => waitForProductRefresh(getServiceRoleClient(), productId);
@@ -100,14 +102,15 @@ async function cartAction<T>(
     if (!parsed.success) return { status: "error", error: MESSAGES.VALIDATION_FAILED! };
     await enforceRateLimit(rateLimiters.cart, user.id);
     const state = await run({ supabase, userId: user.id, data: parsed.data });
-    revalidatePath("/app/cart");
+    // Todo lo de /app: el carrito, el look y el contador del header.
+    revalidatePath("/app", "layout");
     return state;
   } catch (error) {
     return failure(error, fallback);
   }
 }
 
-function addedEvent(userId: string, result: CartChangeResult, source: "add" | "swap") {
+function addedEvent(userId: string, result: CartChangeResult, source: "add" | "swap" | "look") {
   return getAnalytics().trackEvent("product_added_to_cart", {
     userId,
     path: "/app/cart",
@@ -143,7 +146,6 @@ export async function addToCartAction(
         revalidate,
       });
       if (!result.alreadyInCart) await addedEvent(userId, result, "add");
-      if (result.lookId) revalidatePath(`/app/looks/${result.lookId}`);
       return {
         status: "done",
         message: result.alreadyInCart ? "Ya estaba en tu carrito." : "Agregado al carrito.",
@@ -174,7 +176,6 @@ export async function removeFromCartAction(
           source: "remove",
         },
       });
-      if (removed.lookId) revalidatePath(`/app/looks/${removed.lookId}`);
       return { status: "done", message: "Lo sacamos del carrito.", itemId: null, notices: [] };
     },
   );
@@ -234,7 +235,6 @@ export async function swapCartItemAction(
         });
         if (!result.merged) await addedEvent(userId, result, "swap");
       }
-      if (result.lookId) revalidatePath(`/app/looks/${result.lookId}`);
       return {
         status: "done",
         message: "Cambiamos el producto.",
@@ -267,6 +267,29 @@ export async function setCartItemPurchasedAction(
         itemId: result.itemId,
         notices: [],
       };
+    },
+  );
+}
+
+/**
+ * "Agregar el look al carrito": el recomendado de cada prenda (las revalidaciones corren en
+ * paralelo). Las que no entran (local físico, producto que la tienda sacó) se informan.
+ */
+export async function addLookToCartAction(
+  _prev: CartActionState,
+  formData: FormData,
+): Promise<CartActionState> {
+  return cartAction(
+    LookSchema,
+    formData,
+    "No pudimos agregar el look al carrito. Probá de nuevo.",
+    async ({ supabase, userId, data }) => {
+      const result = await addLookToCart({ userClient: supabase, lookId: data.lookId, revalidate });
+      await Promise.all(
+        result.added.filter((a) => !a.alreadyInCart).map((a) => addedEvent(userId, a, "look")),
+      );
+      const summary = lookCartSummary(result);
+      return { status: "done", message: summary.message, itemId: null, notices: summary.notices };
     },
   );
 }

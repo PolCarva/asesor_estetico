@@ -5,13 +5,16 @@ import { type ReactNode, useEffect, useState } from "react";
 import { Pebble } from "./swatches";
 import { sendClientEvent } from "./track-event";
 
-/** Qué identifica un producto mostrado en un look, para los eventos. */
+/**
+ * Qué identifica un producto mostrado, para los eventos. En el carrito y en guardados puede no
+ * tener look, prenda ni posición en el ranking.
+ */
 export interface ProductRef {
   productId: string;
   storeDomain: string;
-  lookId: string;
-  slot: string;
-  rank: number;
+  lookId: string | null;
+  slot: string | null;
+  rank: number | null;
 }
 
 const THUMB = { md: "size-11 rounded-[12px]", lg: "size-[3.75rem] rounded-[14px]" } as const;

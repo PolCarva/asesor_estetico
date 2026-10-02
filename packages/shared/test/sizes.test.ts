@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   buildShoppingQueries,
+  compareSizes,
   EMPTY_USER_SIZES,
   isSizeOption,
   type LookSpec,
@@ -180,5 +181,33 @@ describe("pickVariantForSize: talle del usuario al agregar al carrito (paso 10a)
     expect(pickVariantForSize([v("m", "M")], "XL")).toBeNull();
     expect(pickVariantForSize([v("x", null)], "M")).toBeNull();
     expect(pickVariantForSize([], "M")).toBeNull();
+  });
+});
+
+describe("compareSizes: talles en orden para elegir", () => {
+  it("letras de chico a grande, números por cintura y largo, US después y lo raro al final", () => {
+    expect(["L", "XS", "M", "XXL", "S", "XL"].sort(compareSizes)).toEqual([
+      "XS",
+      "S",
+      "M",
+      "L",
+      "XL",
+      "XXL",
+    ]);
+    expect(["40/30", "28/32", "42/30", "28/30", "34/32", "34/30"].sort(compareSizes)).toEqual([
+      "28/30",
+      "28/32",
+      "34/30",
+      "34/32",
+      "40/30",
+      "42/30",
+    ]);
+    expect(["US 9.5", "42", "39", "ÚNICO", "US 8"].sort(compareSizes)).toEqual([
+      "39",
+      "42",
+      "US 8",
+      "US 9.5",
+      "ÚNICO",
+    ]);
   });
 });

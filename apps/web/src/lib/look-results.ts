@@ -124,7 +124,8 @@ export function timeAgo(iso: string, now: Date): string {
   return days === 1 ? "hace 1 día" : `hace ${days} días`;
 }
 
-const STOCK: Record<ProductAvailability, { label: string; tone: Tone }> = {
+/** Stock como lo muestra la UI (resultados, carrito y guardados). */
+export const STOCK: Record<ProductAvailability, { label: string; tone: Tone }> = {
   IN_STOCK: { label: "En stock", tone: "ok" },
   OUT_OF_STOCK: { label: "Sin stock", tone: "warn" },
   UNKNOWN: { label: "Stock sin verificar", tone: "muted" },

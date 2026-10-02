@@ -1,6 +1,8 @@
 import type { LookSearchState } from "@asesor/db";
 import type { Garment } from "@asesor/shared";
 
+import { AddToCartButton } from "@/components/add-to-cart";
+import { FavoriteButton } from "@/components/favorite-button";
 import {
   AlternativesDisclosure,
   ProductThumb,
@@ -96,6 +98,51 @@ function InStore({ option }: { option: ProductOptionView }) {
 const chip =
   "inline-flex shrink-0 items-center gap-1 rounded-full bg-ink px-3.5 py-1.5 text-xs font-medium text-paper transition-[filter] hover:brightness-125";
 
+/** Qué del look ya está en el carrito (`prenda|producto`) y qué productos están guardados. */
+export interface ShopperState {
+  cart: Set<string>;
+  saved: Set<string>;
+}
+
+/**
+ * Acciones de un producto (paso 10b): agregar al carrito y buscar más barato (solo con precio:
+ * un local físico no se compra online) y guardarlo.
+ */
+function ProductActions({
+  option,
+  lookId,
+  slot,
+  state,
+  cheaperBusy,
+}: {
+  option: ProductOptionView;
+  lookId: string;
+  slot: string;
+  state: ShopperState;
+  cheaperBusy: boolean;
+}) {
+  return (
+    <div className="mt-2 flex flex-wrap items-start gap-2">
+      {option.price ? (
+        <>
+          <AddToCartButton
+            productId={option.productId}
+            lookId={lookId}
+            slot={slot}
+            inCart={state.cart.has(`${slot}|${option.productId}`)}
+          />
+          <CheaperButton lookId={lookId} productId={option.productId} disabled={cheaperBusy} />
+        </>
+      ) : null}
+      <FavoriteButton
+        productId={option.productId}
+        saved={state.saved.has(option.productId)}
+        name={option.title}
+      />
+    </div>
+  );
+}
+
 function ref(option: ProductOptionView, lookId: string, slot: string): ProductRef {
   return {
     productId: option.productId,
@@ -116,12 +163,14 @@ function Alternative({
   lookId,
   slot,
   cheaperBusy,
+  state,
 }: {
   option: ProductOptionView | CheaperOptionView;
   garment: Garment;
   lookId: string;
   slot: string;
   cheaperBusy: boolean;
+  state: ShopperState;
 }) {
   const saving = "saving" in option ? option.saving : null;
   return (
@@ -132,11 +181,13 @@ function Alternative({
         <p className="text-[0.6875rem] text-stone">{option.storeName}</p>
         <Facts option={option} />
         <InStore option={option} />
-        {option.price ? (
-          <div className="mt-1.5">
-            <CheaperButton lookId={lookId} productId={option.productId} disabled={cheaperBusy} />
-          </div>
-        ) : null}
+        <ProductActions
+          option={option}
+          lookId={lookId}
+          slot={slot}
+          state={state}
+          cheaperBusy={cheaperBusy}
+        />
       </div>
       <div className="flex flex-col items-end gap-1.5">
         <p className="font-display text-base whitespace-nowrap">
@@ -165,12 +216,14 @@ function CheaperGroup({
   garment,
   lookId,
   slot,
+  state,
 }: {
   cheaper: CheaperView;
   search: LookSearchState | null;
   garment: Garment;
   lookId: string;
   slot: string;
+  state: ShopperState;
 }) {
   if (cheaper.state === "running") {
     return <CheaperProgress key={search?.jobId} lookId={lookId} slot={slot} initial={search} />;
@@ -202,6 +255,7 @@ function CheaperGroup({
             lookId={lookId}
             slot={slot}
             cheaperBusy={false}
+            state={state}
           />
         ))}
       </ul>
@@ -224,11 +278,13 @@ export function PieceResultsRow({
   piece,
   lookId,
   cheaperSearch = null,
+  state,
 }: {
   piece: PieceResultsView;
   lookId: string;
   /** Última búsqueda "más barato" de la prenda (para el progreso compacto). */
   cheaperSearch?: LookSearchState | null;
+  state: ShopperState;
 }) {
   const { garment, recommended, alternatives, slot, cheaper } = piece;
   const busy = cheaper.state === "running";
@@ -278,18 +334,20 @@ export function PieceResultsRow({
       </div>
       <div className="sm:pl-[4.625rem]">
         <InStore option={recommended} />
-        {/* Paso 10b: "Agregar al carrito". */}
-        {recommended.price ? (
-          <div className="mt-2">
-            <CheaperButton lookId={lookId} productId={recommended.productId} disabled={busy} />
-          </div>
-        ) : null}
+        <ProductActions
+          option={recommended}
+          lookId={lookId}
+          slot={slot}
+          state={state}
+          cheaperBusy={busy}
+        />
         <CheaperGroup
           cheaper={cheaper}
           search={cheaperSearch}
           garment={garment}
           lookId={lookId}
           slot={slot}
+          state={state}
         />
         {alternatives.length ? (
           <AlternativesDisclosure
@@ -305,6 +363,7 @@ export function PieceResultsRow({
                   lookId={lookId}
                   slot={slot}
                   cheaperBusy={busy}
+                  state={state}
                 />
               ))}
             </ul>

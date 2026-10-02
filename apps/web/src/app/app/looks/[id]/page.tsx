@@ -12,12 +12,15 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { AddLookToCartButton } from "@/components/add-to-cart";
 import { AutoRefresh } from "@/components/auto-refresh";
+import { FavoriteButton } from "@/components/favorite-button";
 import { LockedLookCard, LookCard } from "@/components/look-card";
 import { PaywallCard } from "@/components/paywall-card";
 import { PaletteRing } from "@/components/swatches";
 import { TrackEvent } from "@/components/track-event";
 import { requireUser } from "@/lib/auth";
+import { getLookCart, getSavedIds } from "@/lib/cart";
 import { getLook, getLookSummaries, getPlan, getSizes } from "@/lib/data";
 import { CATEGORY_LABEL, REASON_ASPECT_LABEL, twoDigits } from "@/lib/labels";
 import { buildLookResults } from "@/lib/look-results";
@@ -163,14 +166,22 @@ export default async function LookDetailPage({ params }: { params: Promise<{ id:
   const { spec } = look;
   const generating = look.status === "PENDING" || look.status === "GENERATING";
   // Shopping (pasos 07–08): solo Premium tiene búsquedas, talles y resultados.
-  const [search, sizes, rows, slotSearches] = plan.isPremium
+  const [search, sizes, rows, slotSearches, lookCart] = plan.isPremium
     ? await Promise.all([
         getLookShoppingState(look.id),
         getSizes(user.id),
         getLookResultRows(look.id),
         getLookSlotSearches(look.id),
+        getLookCart(look.id),
       ])
-    : [null, EMPTY_USER_SIZES, [], new Map<string, LookSearchState>()];
+    : [
+        null,
+        EMPTY_USER_SIZES,
+        [],
+        new Map<string, LookSearchState>(),
+        { products: new Set<string>(), slots: new Set<string>() },
+      ];
+  const saved = await getSavedIds();
   const pieces = lookPieces(spec);
   // Resultados: con una búsqueda hecha y algo guardado (las filas viejas de una prenda que
   // ya no está en el look no aparecen: se arma por las piezas del look).
@@ -186,6 +197,18 @@ export default async function LookDetailPage({ params }: { params: Promise<{ id:
           lookSearchCreatedAt: search.createdAt,
         })
       : null;
+  // "Agregar el look al carrito" (paso 10b): completa con el recomendado las prendas con
+  // precio que todavía no tienen nada en el carrito.
+  const buyable = (results?.pieces ?? []).flatMap((p) => (p.recommended?.price ? [p.slot] : []));
+  const lookTotal = results?.totals.length === 1 ? results.totals[0]!.amount : null;
+  const heart = (
+    <FavoriteButton
+      lookId={look.id}
+      saved={saved.looks.has(look.id)}
+      size="lg"
+      name={`el look ${spec.name}`}
+    />
+  );
   const showPins = Boolean(look.imageUrl) && spec.image_prompt_data.framing === "FULL_BODY";
   // El pelo es la pieza 1; las prendas siguen en el orden de la lista.
   const pins = showPins
@@ -296,6 +319,7 @@ export default async function LookDetailPage({ params }: { params: Promise<{ id:
                         piece={piece}
                         lookId={look.id}
                         cheaperSearch={slotSearches.get(piece.slot) ?? null}
+                        state={{ cart: lookCart.products, saved: saved.products }}
                       />
                     ))
                   : pieces.map(({ slot, garment }) => <PieceRow key={slot} garment={garment} />)}
@@ -317,14 +341,25 @@ export default async function LookDetailPage({ params }: { params: Promise<{ id:
                   ))}
                 </ul>
               ) : null}
-              {/* A la derecha del CTA va el ♡ guardar (paso 10b). */}
-              <div className="mt-7">
+              <div className="mt-7 flex flex-col gap-3">
+                {buyable.length > 0 ? (
+                  <div className="flex items-start gap-3">
+                    <AddLookToCartButton
+                      lookId={look.id}
+                      total={lookTotal}
+                      inCart={buyable.every((slot) => lookCart.slots.has(slot))}
+                    />
+                    {heart}
+                  </div>
+                ) : null}
                 <LookShopping
                   lookId={look.id}
                   isPremium={plan.isPremium}
                   missing={missingSizesForLook(spec, sizes)}
                   sizes={sizes}
                   search={search}
+                  aside={buyable.length > 0 ? null : heart}
+                  secondary={buyable.length > 0}
                 />
               </div>
             </section>

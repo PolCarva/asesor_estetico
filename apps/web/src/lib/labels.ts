@@ -150,3 +150,22 @@ export const SHOPPING_STAGE_LABEL: Record<ShoppingStage, string> = {
   VERIFYING: "Verificando precios y talles…",
   RANKING: "Ordenando las mejores coincidencias…",
 };
+
+/** Prenda de un look por su lugar, cuando no se puede leer el look (carrito, guardados). */
+export function slotLabel(slot: string | null): string {
+  const [kind] = (slot ?? "").split(":");
+  switch (kind) {
+    case "top":
+      return "Prenda de arriba";
+    case "bottom":
+      return "Prenda de abajo";
+    case "layering":
+      return "Capa";
+    case "shoes":
+      return "Calzado";
+    case "accessory":
+      return "Accesorio";
+    default:
+      return "Producto";
+  }
+}

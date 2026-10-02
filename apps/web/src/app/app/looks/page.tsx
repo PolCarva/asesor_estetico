@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 
 import { AutoRefresh } from "@/components/auto-refresh";
+import { FavoriteButton } from "@/components/favorite-button";
 import { LockedLookCard, LookCard } from "@/components/look-card";
 import { LookStage } from "@/components/look-stage";
 import { PaywallCard } from "@/components/paywall-card";
@@ -8,6 +9,7 @@ import { StyleAdvice } from "@/components/style-advice";
 import { LinkButton } from "@/components/ui/button";
 import { FormMessage } from "@/components/ui/states";
 import { requireUser } from "@/lib/auth";
+import { getSavedIds } from "@/lib/cart";
 import { getAdviceView, getLooks, getPlan, getProfile } from "@/lib/data";
 import { firstName, twoDigits } from "@/lib/labels";
 import { FIXTURE_LOOK_SPECS } from "@asesor/shared/fixtures";
@@ -16,11 +18,12 @@ export const metadata: Metadata = { title: "Tus looks" };
 
 export default async function LooksPage() {
   const user = await requireUser("/app/looks");
-  const [looks, plan, profile, advice] = await Promise.all([
+  const [looks, plan, profile, advice, saved] = await Promise.all([
     getLooks(user.id),
     getPlan(user.id),
     getProfile(user.id),
     getAdviceView(user.id),
+    getSavedIds(),
   ]);
   const name = firstName(profile?.display_name);
   const hasLocked = looks.some((look) => look.locked);
@@ -98,6 +101,13 @@ export default async function LooksPage() {
                 status={look.status}
                 href={`/app/looks/${look.id}`}
                 featured={i === 0}
+                action={
+                  <FavoriteButton
+                    lookId={look.id}
+                    saved={saved.looks.has(look.id)}
+                    name={`el look ${look.spec.name}`}
+                  />
+                }
               />
             ),
           )}

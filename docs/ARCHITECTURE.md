@@ -156,7 +156,7 @@ Detalle del look: "Encontrar este look" (pide los talles que falten, paso 07)
 ### Carrito (paso 10a)
 
 ```
-"Agregar al carrito" (paso 10b)
+"+ Agregar al carrito" en los resultados del look o en guardados (paso 10b)
   → server action addToCartAction (requirePremium · Zod · rate limit cart · product_added_to_cart)
   → addToCart (@asesor/db, cliente del usuario: Premium, el producto es un resultado de esa prenda
      del look, talle del usuario)
@@ -166,6 +166,7 @@ Detalle del look: "Encontrar este look" (pide los talles que falten, paso 07)
 ```
 
 - La única espera de la web sobre un job es esta revalidación, acotada a 8 s: la web nunca descarga páginas de tiendas.
+- "Agregar el look al carrito" (`addLookToCartAction` → `addLookToCart`) agrega en paralelo el recomendado de las prendas que no tienen nada en el carrito; las revalidaciones corren juntas en el worker.
 - Las demás acciones (talle, cambiar por otra alternativa, sacar, comprado, guardados) son escrituras directas con RLS. Detalle en `DATA_MODEL.md` ("Carrito y guardados") y `SHOPPING_ENGINE.md`.
 
 ## PWA

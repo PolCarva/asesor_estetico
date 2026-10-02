@@ -21,7 +21,9 @@ export const CACHE_TTL_MS = {
 } as const;
 
 /** Subirla cuando cambie qué entra a un pool (extracción, variantes, Validate). */
-export const POOL_VERSION = 1;
+// 3 (2026-10-01): Indian pasó a tienda de mujer y el descubrimiento web respeta el público de
+// las tiendas registradas; los pools de hombre la incluían.
+export const POOL_VERSION = 3;
 
 /** Lo que identifica al pool de una query: la prenda, sin talle, precio, límite ni slot. */
 export function poolQueryOf(query: ShoppingQuery): PoolQuery {

@@ -11,6 +11,7 @@ const db = vi.hoisted(() => ({
   requirePremium: vi.fn(),
   requireAuth: vi.fn(),
   addToCart: vi.fn(),
+  addLookToCart: vi.fn(),
   removeFromCart: vi.fn(),
   selectCartItemVariant: vi.fn(),
   swapCartItem: vi.fn(),
@@ -32,8 +33,13 @@ vi.mock("@asesor/db/service", () => ({ getServiceRoleClient: () => service }));
 vi.mock("next/cache", () => ({ revalidatePath }));
 vi.mock("@/lib/analytics", () => ({ getAnalytics: () => ({ trackEvent }) }));
 
-const { addToCartAction, removeFromCartAction, setCartItemPurchasedAction, swapCartItemAction } =
-  await import("./actions");
+const {
+  addLookToCartAction,
+  addToCartAction,
+  removeFromCartAction,
+  setCartItemPurchasedAction,
+  swapCartItemAction,
+} = await import("./actions");
 const { removeFavoriteAction, saveFavoriteAction } = await import("../favorites/actions");
 
 const USER = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
@@ -60,6 +66,8 @@ const change = {
   priceChange: null,
   revalidation: "fresh",
   availability: "IN_STOCK",
+  listedPrice: { amount: 1299, currency: "UYU" },
+  variant: { size: "M", color: null },
 };
 
 const premiumRequired = () => new AppError("PREMIUM_REQUIRED", "Esta función es Premium.");
@@ -111,8 +119,8 @@ describe("addToCartAction", () => {
         source: "add",
       },
     });
-    expect(revalidatePath).toHaveBeenCalledWith("/app/cart");
-    expect(revalidatePath).toHaveBeenCalledWith(`/app/looks/${LOOK}`);
+    // Carrito, look y contador del header.
+    expect(revalidatePath).toHaveBeenCalledWith("/app", "layout");
   });
 
   it("revalida con el worker (service role), no desde la web", async () => {
@@ -156,6 +164,35 @@ describe("addToCartAction", () => {
       status: "error",
       error: "No pudimos agregarlo al carrito. Probá de nuevo.",
     });
+  });
+});
+
+describe("addLookToCartAction", () => {
+  it("agrega el look: un evento por prenda nueva y un resumen honesto", async () => {
+    db.addLookToCart.mockResolvedValue({
+      added: [
+        { ...change, cartId: OTHER, alreadyInCart: false },
+        { ...change, slot: "bottom", cartId: OTHER, alreadyInCart: true },
+      ],
+      present: [],
+      skipped: [{ slot: "accessory:0", productId: OTHER, reason: "NO_PRICE" }],
+    });
+    expect(await addLookToCartAction(idle, form({ lookId: LOOK }))).toEqual({
+      status: "done",
+      message: "Agregamos 1 prenda al carrito.",
+      itemId: null,
+      notices: [
+        "1 prenda se consigue en el local y no tiene precio publicado: no se suma al carrito.",
+      ],
+    });
+    expect(trackEvent).toHaveBeenCalledTimes(1);
+    expect(trackEvent.mock.calls[0]![1].properties.source).toBe("look");
+  });
+
+  it("free: paywall", async () => {
+    db.requirePremium.mockRejectedValue(premiumRequired());
+    expect(await addLookToCartAction(idle, form({ lookId: LOOK }))).toEqual({ status: "paywall" });
+    expect(db.addLookToCart).not.toHaveBeenCalled();
   });
 });
 

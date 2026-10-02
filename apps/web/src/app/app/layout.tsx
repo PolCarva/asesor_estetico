@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { DesktopNav, MobileNav } from "@/components/app-nav";
 import { Logo } from "@/components/logo";
 import { requireUser } from "@/lib/auth";
+import { getCartCount } from "@/lib/cart";
 import { getProfile } from "@/lib/data";
 
 /** Iniciales del avatar: nombre (hasta dos palabras) o, si no hay, el email. */
@@ -15,7 +16,7 @@ function initials(name: string | null | undefined, email: string | null | undefi
 
 export default async function AppLayout({ children }: { children: ReactNode }) {
   const user = await requireUser();
-  const profile = await getProfile(user.id);
+  const [profile, cartCount] = await Promise.all([getProfile(user.id), getCartCount()]);
   return (
     <div className="min-h-dvh pb-28 md:pb-0">
       <header className="sticky top-0 z-30 bg-ivory/80 backdrop-blur-md">
@@ -25,8 +26,12 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
           <div className="flex-1" />
           <Link
             href="/app/cart"
-            aria-label="Carrito"
-            className="grid size-9 place-items-center rounded-full text-stone transition-colors hover:bg-sand hover:text-ink"
+            aria-label={
+              cartCount > 0
+                ? `Carrito, ${cartCount} ${cartCount === 1 ? "producto" : "productos"} por comprar`
+                : "Carrito"
+            }
+            className="relative grid size-9 place-items-center rounded-full text-stone transition-colors hover:bg-sand hover:text-ink"
           >
             <svg
               viewBox="0 0 24 24"
@@ -38,6 +43,14 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
             >
               <path d="M5 7h14l-1.5 12h-11zM9 7a3 3 0 0 1 6 0" strokeLinejoin="round" />
             </svg>
+            {cartCount > 0 ? (
+              <span
+                aria-hidden="true"
+                className="absolute -top-0.5 -right-0.5 grid h-[1.125rem] min-w-[1.125rem] place-items-center rounded-full bg-ink px-1 font-mono text-[0.625rem] leading-none text-paper"
+              >
+                {cartCount > 9 ? "9+" : cartCount}
+              </span>
+            ) : null}
           </Link>
           <Link
             href="/app/profile#cuenta"

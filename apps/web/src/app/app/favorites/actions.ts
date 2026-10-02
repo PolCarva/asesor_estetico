@@ -75,9 +75,9 @@ async function authorize(formData: FormData) {
   return { supabase, target, userId: user.id };
 }
 
-function revalidate(target: FavoriteTarget) {
-  revalidatePath("/app/favorites");
-  if (target.lookId) revalidatePath(`/app/looks/${target.lookId}`);
+/** El ♡ está en varias pantallas (looks, detalle, carrito, guardados): se refresca todo /app. */
+function revalidate() {
+  revalidatePath("/app", "layout");
 }
 
 export async function saveFavoriteAction(
@@ -97,7 +97,7 @@ export async function saveFavoriteAction(
           : { product_id: target.productId!, store_domain: saved.storeDomain },
       });
     }
-    revalidate(target);
+    revalidate();
     return { status: "saved", alreadySaved: saved.alreadySaved };
   } catch (error) {
     return failure(error, "No pudimos guardarlo. Probá de nuevo.");
@@ -112,7 +112,7 @@ export async function removeFavoriteAction(
     const { supabase, target } = await authorize(formData);
     if (!target) return { status: "error", error: MESSAGES.VALIDATION_FAILED! };
     await removeFavorite({ userClient: supabase, target });
-    revalidate(target);
+    revalidate();
     return { status: "removed" };
   } catch (error) {
     return failure(error, "No pudimos quitarlo de guardados. Probá de nuevo.");

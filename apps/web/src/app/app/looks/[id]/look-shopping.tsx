@@ -9,7 +9,7 @@ import {
   type UserSizes,
 } from "@asesor/shared";
 import { useRouter } from "next/navigation";
-import { useActionState, useEffect, useState } from "react";
+import { type ReactNode, useActionState, useEffect, useState } from "react";
 
 import { PaywallCard } from "@/components/paywall-card";
 import { SizeFields } from "@/components/size-fields";
@@ -217,12 +217,18 @@ export function LookShopping({
   missing,
   sizes,
   search,
+  aside = null,
+  secondary = false,
 }: {
   lookId: string;
   isPremium: boolean;
   missing: SizeKind[];
   sizes: UserSizes;
   search: LookSearchState | null;
+  /** Va a la derecha de la píldora (el ♡ de guardar el look, paso 10b). */
+  aside?: ReactNode;
+  /** Con resultados, la píldora oscura es "Agregar el look al carrito" y esta pasa a vidrio. */
+  secondary?: boolean;
 }) {
   const [state, action] = useActionState(startLookShoppingAction, initialState);
   const [askSizes, setAskSizes] = useState(false);
@@ -246,21 +252,34 @@ export function LookShopping({
     sendClientEvent("size_requested", { kinds: missing.join(","), count: missing.length });
   };
 
+  const variant = secondary ? "secondary" : "primary";
+  const withAside = (pill: ReactNode) =>
+    aside ? (
+      <div className="flex items-center gap-3">
+        <div className="min-w-0 flex-1">{pill}</div>
+        {aside}
+      </div>
+    ) : (
+      pill
+    );
+
   return (
     <div className="flex flex-col gap-3">
       {search ? <SearchOutcome search={search} /> : null}
 
       {!isPremium ? (
-        <Button
-          variant="primary"
-          size="lg-wrap"
-          className="w-full"
-          aria-expanded={paywall}
-          aria-controls="look-paywall"
-          onClick={() => setShowPaywall(true)}
-        >
-          {FREE_CTA}
-        </Button>
+        withAside(
+          <Button
+            variant="primary"
+            size="lg-wrap"
+            className="w-full"
+            aria-expanded={paywall}
+            aria-controls="look-paywall"
+            onClick={() => setShowPaywall(true)}
+          >
+            {FREE_CTA}
+          </Button>,
+        )
       ) : sizesOpen ? (
         <form action={action} className="flex flex-col gap-3" aria-labelledby="sizes-title">
           <input type="hidden" name="lookId" value={lookId} />
@@ -278,16 +297,25 @@ export function LookShopping({
           </SubmitButton>
         </form>
       ) : missing.length > 0 ? (
-        <Button variant="primary" size="lg" className="w-full" onClick={openSizes}>
-          {label}
-        </Button>
-      ) : (
-        <form action={action}>
-          <input type="hidden" name="lookId" value={lookId} />
-          <SubmitButton pendingLabel="Iniciando la búsqueda…" size="lg" className="w-full">
+        withAside(
+          <Button variant={variant} size="lg" className="w-full" onClick={openSizes}>
             {label}
-          </SubmitButton>
-        </form>
+          </Button>,
+        )
+      ) : (
+        withAside(
+          <form action={action}>
+            <input type="hidden" name="lookId" value={lookId} />
+            <SubmitButton
+              pendingLabel="Iniciando la búsqueda…"
+              size="lg"
+              variant={variant}
+              className="w-full"
+            >
+              {label}
+            </SubmitButton>
+          </form>,
+        )
       )}
 
       {state.status === "error" ? <FormMessage>{state.error}</FormMessage> : null}

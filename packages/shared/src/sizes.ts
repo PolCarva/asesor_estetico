@@ -216,6 +216,24 @@ export function pickVariantForSize<T extends { size: string | null; availability
   return matching.sort((a, b) => rank(a) - rank(b))[0] ?? null;
 }
 
+/**
+ * Orden natural de talles para listarlos (selector del carrito): letras de chico a grande,
+ * números de menor a mayor (`32/30` por cintura y después largo), EE. UU. y Reino Unido
+ * después de los europeos, y lo que no se reconoce al final, alfabético.
+ */
+export function compareSizes(a: string, b: string): number {
+  const key = (size: string): [number, number, number, string] => {
+    const s = normalizeSizeLabel(size) ?? size;
+    const alpha = ALPHA_SIZES.findIndex(([canonical]) => canonical === s);
+    if (alpha >= 0) return [0, alpha, 0, s];
+    const number = /^(?:(US|UK) )?(\d{1,2}(?:\.5)?)(?:\/(\d{2}))?$/.exec(s);
+    if (number) return [number[1] ? 2 : 1, Number(number[2]), Number(number[3] ?? 0), s];
+    return [3, 0, 0, s];
+  };
+  const [x, y] = [key(a), key(b)];
+  return x[0] - y[0] || x[1] - y[1] || x[2] - y[2] || x[3].localeCompare(y[3]);
+}
+
 /** Sistema de un talle canónico, para saber si dos talles se pueden comparar. */
 export type SizeSystem = "ALPHA" | "NUMBER" | "WAIST_LENGTH" | "US" | "UK" | "UNIQUE" | "OTHER";
 

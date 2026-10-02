@@ -170,6 +170,9 @@ export class DiscoverySearchProvider implements SearchProvider {
       if (url.pathname === "/" || url.pathname === "") continue;
       if (isRelevantCandidate(`${hit.title ?? ""} ${url.pathname}`, query) === false) continue;
       const known = findRegisteredStore(url.hostname, registry);
+      // Una tienda registrada de otro público (p. ej., una tienda de mujer en una búsqueda de
+      // hombre) no entra tampoco por el buscador web.
+      if (known && !storeServesAudience(known, query.audience)) continue;
       candidates.push({
         url: url.toString(),
         store: toStore(known ?? { name: bareHost(url.hostname), domain: url.hostname }),

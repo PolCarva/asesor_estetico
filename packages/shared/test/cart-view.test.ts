@@ -29,6 +29,7 @@ function line(overrides: Partial<CartLine> = {}): CartLine {
     look: LOOK_1,
     slot: "top",
     variant: null,
+    variants: [],
     quantity: 1,
     snapshot: { amount: 1000, currency: "UYU" },
     current: { amount: 1000, currency: "UYU" },

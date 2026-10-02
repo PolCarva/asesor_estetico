@@ -21,6 +21,14 @@ Pruebas en vivo del **2026-09-30** con curl y user agent de navegador, desde una
 | Tiendas Montevideo | www.tiendasmontevideo.com.uy | WooCommerce      | —                                                           | Store API `/wp-json/wc/store/v1/products?search=` (precios en unidades menores)            | Permisivo (poca ropa)                                     |
 | Pigalle, Mosca     | pigalle.com.uy, mosca.com.uy | Magento 2        | —                                                           | GraphQL `/graphql`                                                                         | `Disallow: /*?` (poca ropa, baja prioridad)               |
 
+## Público de cada tienda
+
+El registro (`packages/shopping/src/providers/registry.ts`) guarda el público principal de cada tienda (`MEN`, `WOMEN` o `ALL`). Una tienda de otro público no se consulta ni entra por el descubrimiento web.
+
+- **Indian es una tienda de mujer** (corregido el 2026-10-01, paso 10b): su JSON-LD se presenta como "Indian | Tienda de Ropa para Mujer" y "la mejor tienda de ropa para las mujeres uruguayas"; las camisas están en "Vestimenta › Blusas y camisas" y lo único de hombre es "Deportivo HOMBRE" en calzado. Estaba como `ALL` y en la prueba real del paso 10b apareció una camisa de mujer (Camisa Xavro) recomendada a un perfil masculino.
+- Revisadas el mismo día: Hering ("Ropa de Hombre & Ropa de Mujer"), Zooko (multimarca de calle), La Isla (surf y skate) y Tiendas Montevideo venden a los dos públicos; Legacy y Jack & Jones son de hombre; Lolita, de mujer.
+- Señal genérica que dan las tiendas Fenicio en la página de producto: `"carac":{"seccion":"Hombre"}` (Guapa). Sirve para filtrar el público de tiendas descubiertas (anotado para el paso 11).
+
 ## Tiendas bloqueadas o sin datos verificables
 
 - **Zara UY** (`www.zara.com/uy/es/`): vende online, pero Akamai Bot Manager devuelve un intersticial o 403 a requests no-navegador. robots prohíbe query strings y `/itxrest/*/availability`. No se pudo verificar su JSON-LD.

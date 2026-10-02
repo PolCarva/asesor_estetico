@@ -49,8 +49,10 @@ export const STORE_REGISTRY: RegisteredStore[] = [
     name: "Indian",
     domain: "www.indian.com.uy",
     platform: "FENICIO",
-    audience: "ALL",
+    audience: "WOMEN",
     search: "PLATFORM",
+    notes:
+      'Tienda de mujer ("Indian | Tienda de Ropa para Mujer" en su JSON-LD); solo el calzado deportivo tiene sección de hombre. Corregido el 2026-10-01: estaba como ALL y aparecían blusas y camisas de mujer en búsquedas de hombre.',
   },
   {
     name: "Lolita",
