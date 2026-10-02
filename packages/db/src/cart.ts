@@ -2,15 +2,18 @@ import {
   AppError,
   type CartLine,
   compareSizes,
+  type Garment,
   type GarmentSlot,
   GarmentSlotSchema,
   isProductStale,
+  listLookGarments,
   type Money,
   pickVariantForSize,
   priceForSize,
   type ProductAvailability,
   type ProductCategory,
   sizeForCategory,
+  StoredLookSpecSchema,
 } from "@asesor/shared";
 
 import { requirePremium } from "./auth";
@@ -239,18 +242,26 @@ async function readItem(client: TypedSupabaseClient, itemId: string): Promise<It
 async function lookResult(
   client: TypedSupabaseClient,
   input: { lookId: string; slot: GarmentSlot; productId: string },
-): Promise<{ userSize: string | null }> {
-  const { data, error } = await client
-    .from("look_products")
-    .select("user_size")
-    .eq("look_id", input.lookId)
-    .eq("garment_slot", input.slot)
-    .eq("product_id", input.productId)
-    .limit(1)
-    .maybeSingle();
-  if (error) fail("No se pudieron leer los resultados del look.", error);
-  if (!data) throw new AppError("NOT_FOUND", "Ese producto no está en el look.");
-  return { userSize: data.user_size };
+): Promise<{ userSize: string | null; garment: Garment | null }> {
+  const [result, look] = await Promise.all([
+    client
+      .from("look_products")
+      .select("user_size")
+      .eq("look_id", input.lookId)
+      .eq("garment_slot", input.slot)
+      .eq("product_id", input.productId)
+      .limit(1)
+      .maybeSingle(),
+    client.from("looks").select("spec_json").eq("id", input.lookId).maybeSingle(),
+  ]);
+  if (result.error) fail("No se pudieron leer los resultados del look.", result.error);
+  if (!result.data) throw new AppError("NOT_FOUND", "Ese producto no está en el look.");
+  // La prenda del look, para elegir la variante de su color (paso 12b). Sin ella, solo talle.
+  const spec = look.data ? StoredLookSpecSchema.safeParse(look.data.spec_json) : null;
+  const garment = spec?.success
+    ? (listLookGarments(spec.data).find((g) => g.slot === input.slot)?.garment ?? null)
+    : null;
+  return { userSize: result.data.user_size, garment };
 }
 
 /**
@@ -342,7 +353,7 @@ export async function addToCart(input: AddToCartInput): Promise<AddToCartResult>
   const result =
     lookId && slot
       ? await lookResult(client, { lookId, slot, productId: input.productId })
-      : { userSize: null };
+      : { userSize: null, garment: null };
   const { before, product, revalidation } = await loadFresh(
     client,
     input.productId,
@@ -358,6 +369,7 @@ export async function addToCart(input: AddToCartInput): Promise<AddToCartResult>
     pickVariantForSize(
       product.product_variants,
       await preferredSize(client, user.id, product, result.userSize),
+      result.garment,
     )?.id ?? null;
   if (!catalogPrice(product, variantId)) throw new AppError("VALIDATION_FAILED", NO_PRICE);
 
@@ -538,7 +550,7 @@ export async function swapCartItem(input: {
     : undefined;
   const size =
     (await preferredSize(client, user.id, product, result.userSize)) ?? oldVariant?.size ?? null;
-  const variantId = pickVariantForSize(product.product_variants, size)?.id ?? null;
+  const variantId = pickVariantForSize(product.product_variants, size, result.garment)?.id ?? null;
   if (!catalogPrice(product, variantId)) throw new AppError("VALIDATION_FAILED", NO_PRICE);
 
   const updated = await client

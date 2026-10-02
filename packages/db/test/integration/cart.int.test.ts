@@ -769,6 +769,32 @@ describeIntegration("carrito: datos y acciones", () => {
       );
     });
 
+    it("a igualdad de talle, elige la variante del color de la prenda del look (paso 12b)", async () => {
+      // La bermuda del look 3 es "crudo" (#EFE8DA): de las dos variantes 42, la cruda.
+      const variant = (key: string, color: string) => ({
+        id: `ber-${key}-${tag}`,
+        sku: null,
+        size: "42",
+        size_label: "42",
+        color,
+        availability: "IN_STOCK" as const,
+        price: null,
+      });
+      const bermuda = product(CHINO!, "bermuda", {
+        category: "SHORTS",
+        variants: [variant("oscura", "azul oscuro"), variant("cruda", "crudo")],
+      });
+      await results(looks[2]!, "bottom", [bermuda], "42");
+      const added = await addToCart({
+        userClient: premium.client,
+        productId: idOf(bermuda),
+        lookId: looks[2]!,
+        slot: "bottom",
+        revalidate: notCalled,
+      });
+      expect(added.variant).toMatchObject({ size: "42", color: "crudo" });
+    });
+
     it("completa las prendas vacías con el recomendado; la que no tiene precio no frena a las demás", async () => {
       // `other` ya tiene la camisa de "top" en el carrito (test de concurrencia); el pantalón y
       // el accesorio (local físico sin precio) están vacíos.

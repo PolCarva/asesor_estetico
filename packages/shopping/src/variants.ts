@@ -327,6 +327,52 @@ const WooVariationSchema = z.object({
   prices: WooPricesSchema.nullish(),
 });
 
+const WooPageVariationSchema = z.object({
+  variation_id: z.number(),
+  is_in_stock: z.boolean().nullish(),
+  display_price: z.number().nullish(),
+});
+
+/**
+ * Stock y precio de todas las variaciones que WooCommerce imprime en la página del producto
+ * (`form.variations_form[data-product_variations]`), por id de variación. Paso 12b: consultar
+ * la Store API una por una dejaba UNKNOWN las que pasaban del límite (un jean con 21: las de
+ * "azul oscuro" sin stock ni precio). null si la página no las trae (con muchas variaciones
+ * WooCommerce pone `false` y las pide por AJAX) o si el JSON no valida.
+ */
+export function parseWooPageVariations(
+  html: string,
+): Map<number, { availability: string | null; price: number | null }> | null {
+  let raw: string | null = null;
+  const parser = new Parser({
+    onopentag(_name, attribs) {
+      if (raw === null && attribs["data-product_variations"] !== undefined) {
+        raw = attribs["data-product_variations"];
+      }
+    },
+  });
+  parser.write(html);
+  parser.end();
+  if (raw === null) return null;
+  let data: unknown;
+  try {
+    data = JSON.parse(raw);
+  } catch {
+    return null;
+  }
+  const parsed = z.array(WooPageVariationSchema).max(300).safeParse(data);
+  if (!parsed.success) return null;
+  return new Map(
+    parsed.data.map((v) => [
+      v.variation_id,
+      {
+        availability: v.is_in_stock == null ? null : v.is_in_stock ? IN_STOCK : OUT_OF_STOCK,
+        price: v.display_price != null && v.display_price > 0 ? v.display_price : null,
+      },
+    ]),
+  );
+}
+
 /** Precio de la Store API en unidades menores: `"31900"` con 2 decimales → 319. */
 export function wooPrice(prices: z.infer<typeof WooPricesSchema> | null | undefined) {
   if (!prices) return { price: null, currency: null };
@@ -495,9 +541,14 @@ export class PlatformVariantEnricher implements VariantEnricher {
       };
     }
 
+    // Primero lo que trae la página (todas las variaciones, sin pedidos extra); lo que falte,
+    // por la Store API hasta el límite.
+    const fromPage = parseWooPageVariations(page.body);
+    const pageCurrency = found.prices?.currency_code ?? null;
     const limit = this.options.maxWooVariations ?? 12;
+    let asked = 0;
     const variants: RawVariant[] = [];
-    for (const [i, variation] of found.variations.entries()) {
+    for (const variation of found.variations) {
       const value = (key: string | undefined) => {
         const attr = key ? variation.attributes.find((a) => a.name === key) : undefined;
         return attr && key ? labelOf(key, attr.value) : null;
@@ -505,7 +556,11 @@ export class PlatformVariantEnricher implements VariantEnricher {
       let availability: string | null = null;
       let price: number | null = null;
       let currency: string | null = null;
-      if (i < limit) {
+      const listed = fromPage?.get(variation.id);
+      if (listed) {
+        ({ availability, price } = listed);
+        currency = price === null ? null : pageCurrency;
+      } else if (asked++ < limit) {
         // Una variación que no responde queda UNKNOWN; las demás siguen.
         try {
           const detail = await this.http.get(`${api}/${variation.id}`, {

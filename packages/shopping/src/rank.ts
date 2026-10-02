@@ -1,7 +1,9 @@
 import {
   applyTermAliases,
   APPROX_UYU_PER_USD,
+  colorShade,
   type Garment,
+  garmentShade,
   type Money,
   normalizeText,
   type Product,
@@ -41,6 +43,18 @@ export const DEFAULT_RANKING_WEIGHTS: RankingWeights = {
 
 /** Penalización por cada producto de la misma tienda que ya quedó más arriba. */
 export const STORE_DIVERSITY_PENALTY = 0.03;
+
+/** Penalización por cada copia del mismo producto (título y precio) que ya quedó más arriba. */
+export const DUPLICATE_PENALTY = 0.15;
+
+/**
+ * Similitud de estilo por debajo de la cual el producto claramente no es la prenda (un canguro
+ * estampado por un buzo de punto liso, botas de senderismo por unas chelsea; paso 12b): va
+ * después de todo lo que sí se parece, aunque tenga el color y el talle. No se saca: si no hay
+ * nada mejor, sigue siendo una opción.
+ */
+export const LOW_SIMILARITY = 0.2;
+const unlike = (item: RankedProduct) => (item.breakdown.visual_similarity < LOW_SIMILARITY ? 1 : 0);
 
 const round = (n: number) => Math.round(n * 10_000) / 10_000;
 const clamp = (n: number) => Math.min(1, Math.max(0, n));
@@ -101,9 +115,51 @@ const productText = (product: Product) =>
   ` ${normalizeText(`${product.title} ${(product.description ?? "").slice(0, 400)}`).replace(/[^a-z0-9]+/g, " ")} `;
 
 /**
+ * Opciones excluyentes de un mismo rasgo (paso 12b: la prueba real recomendó una remera
+ * cuello V para un look de cuello redondo): pedir una y recibir otra no reproduce la prenda.
+ */
+const EXCLUSIVE_TRAITS: RegExp[][] = [
+  [
+    /\b(cuello redondo|crew ?neck|round ?neck)\b/,
+    /\b(cuello (en )?v|escote (en )?v|v ?neck)\b/,
+    /\b(cuello alto|polera|mock ?neck|turtle ?neck)\b/,
+    /\b(medio cierre|half ?zip|quarter ?zip)\b/,
+  ],
+  [
+    /\b(manga corta|short sleeves?)\b/,
+    /\b(manga larga|long sleeves?)\b/,
+    /\b(sin mangas|musculosa|sleeveless)\b/,
+  ],
+];
+
+/**
+ * Rasgos muy visibles que la prenda no pidió (paso 12b, con resultados reales): ropa de un
+ * deporte o de montaña para una prenda de calle (championes de fútbol 5, botas de senderismo
+ * por unas chelsea), capucha para un buzo o una campera sin capucha, bolsillos cargo para un
+ * chino. Si la prenda los pide, no castigan.
+ */
+const UNASKED_FEATURES: RegExp[] = [
+  /\b(futbol|botin(es)?|running|trail|basquet|basketball|padel|voley|rugby|crossfit|ciclismo|natacion|tf|fg|deportiv[oa]s?)\b/,
+  /\b(senderismo|trekking|montana|nieve|hiking|ski|esqui)\b/,
+  /\b(capucha|hood(ie)?|canguro)\b/,
+  /\bcargo\b/,
+];
+
+/** ¿La prenda pide una opción de un rasgo y el producto dice otra (y no la pedida)? */
+function traitConflict(wanted: string, text: string): boolean {
+  return EXCLUSIVE_TRAITS.some((options) => {
+    const asked = options.findIndex((re) => re.test(wanted));
+    if (asked < 0 || options[asked]!.test(text)) return false;
+    return options.some((re, i) => i !== asked && re.test(text));
+  });
+}
+
+/**
  * Similitud de estilo (reemplaza al Jaccard de texto): qué parte de lo que describe la
  * prenda aparece en el producto (con sinónimos y raíz corta), y si el estampado coincide.
- * Pedir liso y recibir estampado castiga fuerte; liso declarado suma.
+ * Pedir liso y recibir estampado castiga fuerte; liso declarado suma. Otra opción de un
+ * rasgo excluyente (cuello V por redondo, manga larga por corta) y los rasgos visibles que
+ * la prenda no pidió (deporte, montaña, capucha, cargo) también castigan.
  */
 function styleScore(garment: Garment, product: Product) {
   const text = productText(product);
@@ -122,6 +178,10 @@ function styleScore(garment: Garment, product: Product) {
     score += 0.15;
   } else if (saysPlain) {
     score *= 0.5;
+  }
+  if (traitConflict(` ${normalizeText(garment.description)} `, text)) score *= 0.4;
+  for (const feature of UNASKED_FEATURES) {
+    if (feature.test(text) && !feature.test(wanted)) score *= 0.4;
   }
   return clamp(score);
 }
@@ -152,9 +212,22 @@ export function colorDistance(a: string, b: string): number | null {
 }
 
 /**
+ * ¿El producto es del tono contrario? El color canónico pierde el tono ("Azul Claro" y "Azul
+ * noche" son "azul"): se mira lo que dicen el título y los colores declarados (paso 12b).
+ */
+function shadeConflict(garment: Garment, product: Product): boolean {
+  const wanted = garmentShade(garment);
+  const offered = colorShade(
+    [product.title, ...product.colors, ...product.variants.map((v) => v.color ?? "")].join(" "),
+  );
+  return wanted !== null && offered !== null && wanted !== offered;
+}
+
+/**
  * 1 si el producto tiene el color de la prenda (nombre canónico); si no, la cercanía del
- * hex más parecido (hasta 0.85: otro color nunca empata con el pedido). Sin colores
- * reconocibles ("Magical Forest") no se sabe: 0.5.
+ * hex más parecido (hasta 0.85: otro color nunca empata con el pedido). Del tono contrario
+ * (claro por oscuro) baja aunque el nombre coincida. Sin colores reconocibles ("Magical
+ * Forest") no se sabe: 0.5.
  */
 function colorScore(garment: Garment, product: Product) {
   if (product.colors.length === 0) return 0.5;
@@ -162,7 +235,8 @@ function colorScore(garment: Garment, product: Product) {
   const known = product.colors
     .map((c) => (COLOR_HEX[c] ? c : (colorsIn(c)[0] ?? null)))
     .filter((c): c is string => c !== null && Boolean(COLOR_HEX[c]));
-  if (known.includes(wanted)) return 1;
+  const conflict = shadeConflict(garment, product);
+  if (known.includes(wanted)) return conflict ? 0.45 : 1;
   if (known.length === 0) return 0.5;
   const best = Math.max(
     ...known.map((c) => {
@@ -170,7 +244,7 @@ function colorScore(garment: Garment, product: Product) {
       return distance === null ? 0 : clamp(1 - distance / 60);
     }),
   );
-  return 0.85 * best;
+  return 0.85 * best * (conflict ? 0.6 : 1);
 }
 
 // --- Fit y material ------------------------------------------------------------------
@@ -191,8 +265,32 @@ function garmentFit(garment: Garment): string | null {
   return inferFit(garment.fit, null) ?? inferFit(garment.description, null);
 }
 
-/** Mismo fit 1; misma familia 0.75; recto contra otro 0.4; ajustado contra holgado 0. */
+/** Medidas en milímetros de un texto ("caja de 40 mm", "Esfera 28mm"), entre 20 y 60. */
+function millimetersIn(text: string): number[] {
+  return [...normalizeText(text).matchAll(/\b(\d{2})\s?mm\b/g)]
+    .map((m) => Number(m[1]))
+    .filter((n) => n >= 20 && n <= 60);
+}
+
+/**
+ * Tamaño pedido en mm contra el del título (la caja de un reloj, paso 12b: una de 28 mm
+ * para un look que pide 40 mm). Sin medida en alguno de los dos, no aplica.
+ */
+function measureScore(garment: Garment, product: Product): number | null {
+  const [wanted] = millimetersIn(`${garment.fit ?? ""} ${garment.description}`);
+  const offered = millimetersIn(product.title);
+  if (wanted === undefined || offered.length === 0) return null;
+  const diff = Math.min(...offered.map((n) => Math.abs(n - wanted)));
+  return diff <= 3 ? 1 : diff <= 6 ? 0.6 : 0.15;
+}
+
+/**
+ * Mismo fit 1; misma familia 0.75; recto contra otro 0.4; ajustado contra holgado 0. Si la
+ * prenda pide una medida en mm y el producto dice la suya, manda la medida.
+ */
 function fitScore(garment: Garment, product: Product) {
+  const measured = measureScore(garment, product);
+  if (measured !== null) return measured;
   const wanted = garmentFit(garment);
   if (!wanted || !product.fit) return 0.5;
   if (wanted === product.fit) return 1;
@@ -279,23 +377,45 @@ function withinStrictMax(product: Product, query: ShoppingQuery) {
   return product.price !== null && toUyu(product.price) < toUyu(query.max_price);
 }
 
-/** Reordena levemente para que una tienda no acapare el top (el score no cambia). */
-function diversify(items: RankedProduct[], penalty: number): RankedProduct[] {
+/** Clave de "el mismo producto": título y precio (sin precio no se puede saber). */
+const sameProductKey = (product: Product) =>
+  product.price
+    ? `${normalizeText(product.title)}|${product.price.amount}|${product.price.currency}`
+    : product.url;
+
+/**
+ * Reordena para que una tienda no acapare el top y el mismo producto en varias tiendas o URLs
+ * (mismo título y precio; paso 12b: un mismo championes en tres tiendas) no ocupe varios
+ * lugares; lo que no se parece a la prenda queda después de lo que sí. No saca nada (un
+ * título genérico puede repetirse en productos distintos) y el score no cambia.
+ */
+function diversify(
+  items: RankedProduct[],
+  penalties: { store: number; duplicate: number },
+): RankedProduct[] {
   const pending = [...items];
   const perStore = new Map<string, number>();
+  const perProduct = new Map<string, number>();
   const out: RankedProduct[] = [];
   while (pending.length > 0) {
     let best = 0;
     let bestValue = -Infinity;
     pending.forEach((item, i) => {
-      const value = item.score - penalty * (perStore.get(item.product.store.domain) ?? 0);
+      const value =
+        item.score -
+        unlike(item) -
+        penalties.store * (perStore.get(item.product.store.domain) ?? 0) -
+        penalties.duplicate * (perProduct.get(sameProductKey(item.product)) ?? 0);
       if (value > bestValue) {
         bestValue = value;
         best = i;
       }
     });
     const [item] = pending.splice(best, 1);
-    perStore.set(item!.product.store.domain, (perStore.get(item!.product.store.domain) ?? 0) + 1);
+    const { domain } = item!.product.store;
+    const key = sameProductKey(item!.product);
+    perStore.set(domain, (perStore.get(domain) ?? 0) + 1);
+    perProduct.set(key, (perProduct.get(key) ?? 0) + 1);
     out.push(item!);
   }
   return out;
@@ -303,8 +423,10 @@ function diversify(items: RankedProduct[], penalty: number): RankedProduct[] {
 
 export interface RankOptions {
   weights?: RankingWeights;
-  /** Penalización por tienda repetida en el top (0 = orden estricto por score). */
+  /** Penalización por tienda repetida en el top (0 = sin reordenar por tienda). */
   diversity?: number;
+  /** Penalización por cada copia del mismo producto (título y precio) que ya quedó arriba. */
+  duplicates?: number;
 }
 
 /**
@@ -332,8 +454,11 @@ export function rankProducts(
   query: ShoppingQuery,
   options: RankOptions | RankingWeights = {},
 ): RankedProduct[] {
-  const { weights = DEFAULT_RANKING_WEIGHTS, diversity = STORE_DIVERSITY_PENALTY } =
-    "category_match" in options ? { weights: options } : options;
+  const {
+    weights = DEFAULT_RANKING_WEIGHTS,
+    diversity = STORE_DIVERSITY_PENALTY,
+    duplicates = DUPLICATE_PENALTY,
+  } = "category_match" in options ? { weights: options } : options;
   const garment = query.garment;
   const pool = products.filter((p) => withinStrictMax(p, query) && forAudience(p, query));
   const prices = pool.flatMap((p) => (p.price ? [toUyu(p.price)] : []));
@@ -369,6 +494,8 @@ export function rankProducts(
       };
     })
     .filter((item) => item.breakdown.category_match > 0)
-    .sort((a, b) => b.score - a.score);
-  return diversity > 0 ? diversify(ranked, diversity) : ranked;
+    .sort((a, b) => unlike(a) - unlike(b) || b.score - a.score);
+  return diversity > 0 || duplicates > 0
+    ? diversify(ranked, { store: diversity, duplicate: duplicates })
+    : ranked;
 }

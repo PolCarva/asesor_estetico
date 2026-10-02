@@ -24,7 +24,9 @@ export const CACHE_TTL_MS = {
 // 3 (2026-10-01): Indian pasó a tienda de mujer y el descubrimiento web respeta el público de
 // las tiendas registradas; los pools de hombre la incluían.
 // 4 (paso 11): los productos traen el público que declara su página (`Product.audience`).
-export const POOL_VERSION = 4;
+// 5 (paso 12b): el color de las variantes conserva el tono ("azul oscuro") y WooCommerce lee
+// stock y precio de todas las variaciones desde la página.
+export const POOL_VERSION = 5;
 
 /** Lo que identifica al pool de una query: la prenda, sin talle, precio, límite ni slot. */
 export function poolQueryOf(query: ShoppingQuery): PoolQuery {

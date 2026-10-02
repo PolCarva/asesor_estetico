@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
+import { pickVariantForSize } from "@asesor/shared";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -12,6 +13,7 @@ import {
   parsePrice,
   parseShopifyProduct,
   parseVtexCatalog,
+  parseWooPageVariations,
   PlatformVariantEnricher,
   PoliteHttpClient,
   type ProductFetcher,
@@ -335,6 +337,68 @@ describe("WooCommerce: Store API (respuestas reales)", () => {
     expect(new Set(outcome.product.variants.map((v) => v.size))).toEqual(
       new Set(["S", "M", "L", "XL"]),
     );
+  });
+});
+
+describe("WooCommerce: variaciones de la página (prueba real del paso 12b)", () => {
+  const MT_URL = "https://www.mundotrabajo.com.uy/producto/pantalon-jean-clasico-hombre/";
+  const api = "https://www.mundotrabajo.com.uy/wp-json/wc/store/v1/products";
+  const routes = {
+    [`${api}?slug=pantalon-jean-clasico-hombre`]: fixture("woo-mundotrabajo-producto.json"),
+  };
+
+  it("lee stock y precio de las 21 variaciones de la página, sin pedirlas una por una", async () => {
+    const p = page(MT_URL, fixture("woo-mundotrabajo-producto.html"));
+    expect(parseWooPageVariations(p.body)?.size).toBe(21);
+    const { http, calls } = transport(routes);
+    const result = await new PlatformVariantEnricher(http).enrich({
+      page: p,
+      raw: extractProduct(p)!,
+      platform: "WOOCOMMERCE",
+    });
+    if (result.status !== "verified") throw new Error(result.status);
+    expect(calls.filter((c) => /\/products\/\d+$/.test(c))).toHaveLength(0);
+    expect(result.variants).toHaveLength(21);
+    // Antes, con el tope de 12 consultas, las de "Azul Oscuro" quedaban sin stock ni precio.
+    const oscuro42 = result.variants.find((v) => v.color === "Azul Oscuro" && v.size === "42");
+    expect(oscuro42).toMatchObject({ availability: "InStock", price: 1090, currency: "UYU" });
+  });
+
+  it("sin la lista en la página (WooCommerce pone `false`), se consulta la Store API", () => {
+    expect(parseWooPageVariations('<form data-product_variations="false"></form>')).toBeNull();
+    expect(parseWooPageVariations("<form></form>")).toBeNull();
+    expect(
+      parseWooPageVariations('<form data-product_variations="[{&quot;x&quot;:1}]">'),
+    ).toBeNull();
+  });
+
+  it("el color de la variante conserva el tono y el carrito elige el del look", async () => {
+    const p = page(MT_URL, fixture("woo-mundotrabajo-producto.html"));
+    const { http } = transport(routes);
+    const outcome = await loadCandidate(
+      {
+        url: p.url,
+        store: { name: "Mundo Trabajo", domain: "mundotrabajo.com.uy" },
+        platform: "WOOCOMMERCE",
+      },
+      { fetcher: servePage(p), variants: new PlatformVariantEnricher(http) },
+    );
+    if (outcome.status !== "product") throw new Error(outcome.status);
+    const { variants } = outcome.product;
+    expect(new Set(variants.map((v) => v.color))).toEqual(new Set(["azul claro", "azul oscuro"]));
+    expect(variants.every((v) => v.availability === "IN_STOCK")).toBe(true);
+    const jean = {
+      description: "Jean clásico de lavado parejo oscuro",
+      color: { name: "Azul noche", hex: "#0D1829" },
+    };
+    expect(pickVariantForSize(variants, "42", jean)?.color).toBe("azul oscuro");
+    expect(
+      pickVariantForSize(variants, "42", {
+        ...jean,
+        description: "Jean",
+        color: { name: "Celeste", hex: "#8EC5E8" },
+      })?.color,
+    ).toBe("azul claro");
   });
 });
 

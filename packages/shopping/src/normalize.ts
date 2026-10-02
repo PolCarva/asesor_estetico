@@ -1,4 +1,5 @@
 import {
+  colorShade,
   type Currency,
   type InStoreInfo,
   normalizeSizeLabel,
@@ -8,6 +9,7 @@ import {
   ProductCategorySchema,
   ProductSchema,
   type ProductVariant,
+  SHADE_WORD,
   type Store,
 } from "@asesor/shared";
 
@@ -218,6 +220,18 @@ const splitList = (value: string | null) =>
 
 const within = (value: string | null, max: number) => (value && value.length <= max ? value : null);
 
+/**
+ * Color de una variante: el canónico con su tono si lo dice ("Azul oscuro" → "azul oscuro";
+ * paso 12b: una tienda Woo tenía "azul-claro" y "azul-oscuro" y quedaban iguales). Un nombre
+ * de fantasía queda como viene.
+ */
+function variantColor(value: string): string | null {
+  const canonical = colorsIn(value)[0];
+  if (!canonical) return within(value.toLowerCase().replace(/-/g, " ").trim(), 60);
+  const shade = colorShade(value);
+  return shade && !colorShade(canonical) ? `${canonical} ${SHADE_WORD[shade]}` : canonical;
+}
+
 function normalizeVariants(raw: RawProduct, currency: Currency | null): ProductVariant[] {
   const seen = new Set<string>();
   const variants: ProductVariant[] = [];
@@ -236,9 +250,7 @@ function normalizeVariants(raw: RawProduct, currency: Currency | null): ProductV
       sku: within(variant.sku, 80),
       size: normalizeSizeLabel(label),
       size_label: within(label, 40),
-      color: variant.color
-        ? (colorsIn(variant.color)[0] ?? within(variant.color.toLowerCase(), 60))
-        : null,
+      color: variant.color ? variantColor(variant.color) : null,
       availability: normalizeAvailability(variant.availability),
       price:
         price === null || !variantCurrency ? null : { amount: price, currency: variantCurrency },

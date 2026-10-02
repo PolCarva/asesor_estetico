@@ -302,4 +302,233 @@ describe("ranking con productos reales", () => {
       new Set(strictOrder.map((r) => r.product.url)),
     );
   });
+
+  describe("prueba real del paso 12b", () => {
+    const [base] = remeras;
+    const product = (title: string, extra: Partial<Product> = {}): Product => ({
+      ...base!,
+      url: `https://tienda.com.uy/p/${encodeURIComponent(title)}-${extra.store?.domain ?? ""}`,
+      title,
+      ...extra,
+    });
+
+    it("tono: un jean 'Azul Claro' no empata con 'lavado oscuro' en azul noche", () => {
+      const jean: Garment = {
+        category: "JEANS",
+        description: "Jean clásico de lavado parejo oscuro",
+        color: { name: "Azul noche", hex: "#0D1829" },
+        fit: "Straight fit de tiro medio",
+        material: "Denim 100% algodón rígido",
+        pattern: null,
+      };
+      const ranked = rankProducts(
+        [
+          product("Pantalón de Jean Clásico Azul Claro", { category: "JEANS", colors: ["azul"] }),
+          product("PANTALÓN DE JEAN CLÁSICO - Azul", { category: "JEANS", colors: ["azul"] }),
+        ],
+        query(jean),
+        { diversity: 0 },
+      );
+      expect(ranked[0]!.product.title).toBe("PANTALÓN DE JEAN CLÁSICO - Azul");
+      expect(ranked[0]!.breakdown.color_match).toBe(1);
+      expect(ranked[1]!.breakdown.color_match).toBe(0.45);
+      // Sin tono en el pedido (ni en el hex) no hay conflicto.
+      const azul = rankProducts(
+        [product("Pantalón de Jean Clásico Azul Claro", { category: "JEANS", colors: ["azul"] })],
+        query({ ...jean, description: "Jean clásico", color: { name: "Azul", hex: "#2F5DA8" } }),
+      );
+      expect(azul[0]!.breakdown.color_match).toBe(1);
+    });
+
+    it("rasgos excluyentes: cuello V no reproduce una remera de cuello redondo", () => {
+      const remera: Garment = {
+        category: "T_SHIRT",
+        description: "Remera clásica de cuello redondo cerrado",
+        color: { name: "Blanco puro", hex: "#FFFFFF" },
+        fit: "regular",
+        material: "algodón",
+        pattern: null,
+      };
+      const ranked = rankProducts(
+        [
+          product("Remera Algodón Cuello V - Blanco", { category: "T_SHIRT", colors: ["blanco"] }),
+          product("REMERA BÁSICA DE ALGODÓN - Blanco", { category: "T_SHIRT", colors: ["blanco"] }),
+          product("Remera Cuello Redondo - Blanco", { category: "T_SHIRT", colors: ["blanco"] }),
+        ],
+        query(remera),
+        { diversity: 0 },
+      );
+      const v = ranked.find((r) => r.product.title.includes("Cuello V"))!;
+      const basica = ranked.find((r) => r.product.title.includes("BÁSICA"))!;
+      expect(ranked.at(-1)!.product.title).toBe("Remera Algodón Cuello V - Blanco");
+      expect(v.breakdown.visual_similarity).toBeLessThan(basica.breakdown.visual_similarity / 2);
+    });
+
+    it("medida en mm: una caja de 28 mm no reproduce un reloj de 40 mm", () => {
+      const reloj: Garment = {
+        category: "WATCH",
+        description: "Reloj de muñeca con cuadrante sobrio",
+        color: { name: "Gris marengo", hex: "#3A3D40" },
+        fit: "Caja mediana de 40 mm",
+        material: "Acero inoxidable con correa de cuero",
+        pattern: null,
+      };
+      const ranked = rankProducts(
+        [
+          product("Reloj CASIO RETRO LA680WEL-8A2DF Cuero Gris Esfera 28mm", {
+            category: "WATCH",
+            colors: ["gris"],
+          }),
+          product("Reloj Casio MTP-V002 Cuero Gris 40mm", { category: "WATCH", colors: ["gris"] }),
+          product("Reloj Swatch Gris Unisex", { category: "WATCH", colors: ["gris"] }),
+        ],
+        query(reloj),
+        { diversity: 0 },
+      );
+      const fit = (title: string) =>
+        ranked.find((r) => r.product.title.includes(title))!.breakdown.fit_match;
+      expect(fit("40mm")).toBe(1);
+      expect(fit("28mm")).toBe(0.15);
+      expect(fit("Swatch")).toBe(0.5); // sin medida en el título: no se sabe
+      expect(ranked[0]!.product.title).toContain("40mm");
+    });
+
+    it("deporte: unos championes de fútbol 5 no reproducen unos urbanos minimalistas", () => {
+      const urbanos: Garment = {
+        category: "SHOES",
+        description: "Championes urbanos minimalistas",
+        color: { name: "Blanco puro", hex: "#FFFFFF" },
+        fit: null,
+        material: "cuero",
+        pattern: null,
+      };
+      const shoe = (title: string) => product(title, { category: "SHOES", colors: ["blanco"] });
+      const ranked = rankProducts(
+        [
+          shoe("Championes De Fútbol 5 De Cuero Viralto II Matador TF Blancos"),
+          shoe("Championes de Hombre New Balance Life Style - Blanco"),
+        ],
+        query(urbanos),
+        { diversity: 0 },
+      );
+      expect(ranked[0]!.product.title).toContain("New Balance");
+      const futbol = ranked.find((r) => r.product.title.includes("Fútbol"))!;
+      expect(futbol.breakdown.visual_similarity).toBeLessThan(0.3);
+      // Si la prenda es de ese deporte, no castiga.
+      const deFutbol = rankProducts(
+        [shoe("Championes De Fútbol 5 De Cuero Viralto II Matador TF Blancos")],
+        query({ ...urbanos, description: "Championes de fútbol 5" }),
+      );
+      expect(deFutbol[0]!.breakdown.visual_similarity).toBeGreaterThan(0.5);
+    });
+
+    it("rasgos que la prenda no pidió: montaña, capucha, cargo y medio cierre (look 2)", () => {
+      const top = (description: string, category: Garment["category"], color: Garment["color"]) =>
+        ({ category, description, color, fit: null, material: null, pattern: null }) as Garment;
+      const best = (garment: Garment, titles: string[]) =>
+        rankProducts(
+          titles.map((t) => product(t, { category: garment.category, colors: [] })),
+          query(garment),
+          { diversity: 0 },
+        )[0]!.product.title;
+      const negro = { name: "Negro", hex: "#111111" };
+      expect(
+        best(top("Botas chelsea de perfil estilizado", "SHOES", negro), [
+          "Botas invierno de senderismo impermeables hombre, NH100 negro",
+          "Botas Chelsea de cuero - Negro",
+        ]),
+      ).toBe("Botas Chelsea de cuero - Negro");
+      const marino = { name: "Azul marino", hex: "#1A2B4C" };
+      expect(
+        best(top("Buzo liviano de cuello redondo", "KNITWEAR", marino), [
+          "Buzo Felpa Medio Cierre Metal Azul Marino",
+          "CANGURO MLB YANKEES BACK HD - Navy",
+          "Buzo de punto cuello redondo - Azul Marino",
+        ]),
+      ).toBe("Buzo de punto cuello redondo - Azul Marino");
+      const terracota = { name: "Terracota profundo", hex: "#8A3C2A" };
+      expect(
+        best(top("Pantalón chino liso sin pinzas", "PANTS", terracota), [
+          "PANTALÓN CARGO SPANDEX - Terracota",
+          "Pantalón Chino - Terracota",
+        ]),
+      ).toBe("Pantalón Chino - Terracota");
+      const gris = { name: "Gris marengo", hex: "#3A3D40" };
+      expect(
+        best(top("Campera corta estilo Harrington", "OUTERWEAR", gris), [
+          "CAMPERA CAPUCHA DESMONTABLE - Gris Oscuro",
+          "Campera corta Harrington - Gris",
+        ]),
+      ).toBe("Campera corta Harrington - Gris");
+      // Pedido explícito: una campera con capucha no se castiga.
+      expect(
+        best(top("Campera con capucha", "OUTERWEAR", gris), [
+          "CAMPERA CAPUCHA DESMONTABLE - Gris Oscuro",
+          "Campera corta - Gris",
+        ]),
+      ).toBe("CAMPERA CAPUCHA DESMONTABLE - Gris Oscuro");
+    });
+
+    it("lo que claramente no es la prenda va después de lo que sí, aunque tenga el color", () => {
+      const buzo: Garment = {
+        category: "KNITWEAR",
+        description: "Buzo liviano de cuello redondo",
+        color: { name: "Azul marino", hex: "#1A2B4C" },
+        fit: "Slim straight al torso",
+        material: "Lana merino fina peinada",
+        pattern: null,
+      };
+      const knit = (title: string, colors: string[]) =>
+        product(title, { category: "KNITWEAR", colors });
+      const pool = [
+        knit("CANGURO MLB YANKEES BACK HD PRINT WITH EMBROIDERY REGU - Navy", ["azul marino"]),
+        knit("Buzo de punto cuello redondo - Rojo", ["rojo"]),
+      ];
+      for (const diversity of [0, undefined]) {
+        const ranked = rankProducts(pool, query(buzo), { diversity });
+        expect(ranked[0]!.product.title).toContain("cuello redondo");
+        // El canguro tiene más score (color exacto) pero no se parece: va segundo, no se saca.
+        expect(ranked[1]!.score).toBeGreaterThan(ranked[0]!.score);
+        expect(ranked[1]!.breakdown.visual_similarity).toBeLessThan(0.2);
+      }
+    });
+
+    it("duplicados: el mismo producto y precio en tres tiendas no ocupa los primeros lugares", () => {
+      const zapas = (domain: string, amount = 2490) =>
+        product("Championes de Hombre Topper Rocket Urbano - Blanco - Gris - Negro", {
+          category: "SHOES",
+          colors: ["blanco"],
+          store: { name: domain, domain },
+          price: { amount, currency: "UYU" },
+        });
+      const otras = product("Championes urbanos de cuero - Blanco", {
+        category: "SHOES",
+        colors: ["blanco"],
+        store: { name: "otra", domain: "otra.com.uy" },
+        price: { amount: 3990, currency: "UYU" },
+      });
+      const ranked = rankProducts(
+        [
+          zapas("stadium.com.uy"),
+          zapas("peppos.com.uy"),
+          zapas("stadiumsport.uy"),
+          zapas("outlet.com.uy", 1990),
+          otras,
+        ],
+        query({
+          category: "SHOES",
+          description: "Championes urbanos minimalistas",
+          color: { name: "Blanco puro", hex: "#FFFFFF" },
+          fit: null,
+          material: "cuero",
+          pattern: null,
+        }),
+      );
+      // Nada se saca, pero las copias de $ 2.490 quedan después de las opciones distintas.
+      expect(ranked).toHaveLength(5);
+      const top = ranked.slice(0, 3).map((r) => `${r.product.title}|${r.product.price?.amount}`);
+      expect(new Set(top).size).toBe(3);
+      expect(ranked.slice(3).every((r) => r.product.price?.amount === 2490)).toBe(true);
+    });
+  });
 });

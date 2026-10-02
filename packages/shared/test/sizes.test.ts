@@ -177,6 +177,28 @@ describe("pickVariantForSize: talle del usuario al agregar al carrito (paso 10a)
     expect(pickVariantForSize([v("m", "M", "OUT_OF_STOCK")], "M")?.id).toBe("m");
   });
 
+  it("a igualdad de talle y stock, la del color y tono de la prenda del look (paso 12b)", () => {
+    const c = (id: string, color: string, availability = "IN_STOCK") => ({
+      ...v(id, "42", availability),
+      color,
+    });
+    const jean = {
+      description: "Jean clásico de lavado parejo oscuro",
+      color: { name: "Azul noche", hex: "#0D1829" },
+    };
+    const both = [c("claro", "azul claro"), c("oscuro", "azul oscuro")];
+    expect(pickVariantForSize(both, "42", jean)?.id).toBe("oscuro");
+    expect(pickVariantForSize(both, "42")?.id).toBe("claro"); // sin prenda, como antes
+    // Otro color de la familia pedida pierde contra el pedido aunque el orden sea otro.
+    const gris = { description: "Remera", color: { name: "Gris marengo", hex: "#3A3D40" } };
+    expect(pickVariantForSize([c("b", "blanco"), c("g", "gris")], "42", gris)?.id).toBe("g");
+    // El stock manda sobre el color: la del color agotada no gana a otra en stock.
+    expect(
+      pickVariantForSize([c("o", "azul oscuro", "OUT_OF_STOCK"), c("cl", "azul claro")], "42", jean)
+        ?.id,
+    ).toBe("cl");
+  });
+
   it("sin talle o sin variante que sirva: null (el usuario elige)", () => {
     expect(pickVariantForSize([v("m", "M")], null)).toBeNull();
     expect(pickVariantForSize([v("m", "M")], "XL")).toBeNull();

@@ -73,6 +73,12 @@ describe("buildLookResults", () => {
       "Talle sin verificar",
       "Talle M agotado",
     ]);
+    // Con su talle agotado, el stock del producto es el de otros talles (paso 12b).
+    expect(top.recommended?.stock.label).toBe("En stock");
+    expect(top.alternatives.map((a) => a.stock.label)).toEqual([
+      "En stock",
+      "En stock en otros talles",
+    ]);
     expect(view.withResults).toBe(2);
   });
 

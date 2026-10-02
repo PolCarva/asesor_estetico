@@ -135,6 +135,23 @@ export const STOCK: Record<ProductAvailability, { label: string; tone: Tone }> =
   IN_STORE_ONLY: { label: "Disponible en tienda física", tone: "muted" },
 };
 
+/**
+ * Stock del producto junto al talle del usuario: con su talle agotado o sin ofrecer, "En
+ * stock" se leía como que lo había (paso 12b: "Talle 42 agotado · En stock"). Es en otros.
+ */
+export function stockFor(
+  availability: ProductAvailability,
+  sizeStatus: SizeStatus | null,
+): { label: string; tone: Tone } {
+  if (
+    availability === "IN_STOCK" &&
+    (sizeStatus === "OUT_OF_STOCK" || sizeStatus === "NOT_OFFERED")
+  ) {
+    return { label: "En stock en otros talles", tone: "muted" };
+  }
+  return STOCK[availability];
+}
+
 /** Talle del usuario en el producto: "Talle M ✓", "Talle M agotado", "Talle sin verificar"… */
 export function sizeBadge(
   status: SizeStatus | null,
@@ -178,7 +195,7 @@ function option(row: LookProductResult, now: Date) {
     price: price ? formatMoney(price) : null,
     sizePrice: Boolean(price && product.price && price.amount !== product.price.amount),
     availability: product.availability,
-    stock: STOCK[product.availability],
+    stock: stockFor(product.availability, row.sizeStatus),
     // El estado se calculó con el talle de la búsqueda (no con el del perfil de hoy).
     size: sizeBadge(row.sizeStatus, row.userSize),
     verified: timeAgo(product.fetched_at, now),

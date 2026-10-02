@@ -1,0 +1,405 @@
+[
+  {
+    "id": 153502,
+    "name": "Pantalón Jean Clásico Hombre",
+    "slug": "pantalon-jean-clasico-hombre",
+    "permalink": "https://www.mundotrabajo.com.uy/producto/pantalon-jean-clasico-hombre/",
+    "is_in_stock": true,
+    "prices": {
+      "price": "1090",
+      "regular_price": "1090",
+      "sale_price": "1090",
+      "currency_code": "UYU",
+      "currency_minor_unit": 0
+    },
+    "attributes": [
+      {
+        "id": 2,
+        "name": "Color",
+        "taxonomy": "pa_color",
+        "has_variations": true,
+        "terms": [
+          {
+            "id": 1374,
+            "name": "Azul claro",
+            "slug": "azul-claro"
+          },
+          {
+            "id": 999,
+            "name": "Azul Oscuro",
+            "slug": "azul-oscuro"
+          }
+        ]
+      },
+      {
+        "id": 3,
+        "name": "Talle",
+        "taxonomy": "pa_talle",
+        "has_variations": true,
+        "terms": [
+          {
+            "id": 49,
+            "name": "38",
+            "slug": "38"
+          },
+          {
+            "id": 51,
+            "name": "40",
+            "slug": "40"
+          },
+          {
+            "id": 53,
+            "name": "42",
+            "slug": "42"
+          },
+          {
+            "id": 55,
+            "name": "44",
+            "slug": "44"
+          },
+          {
+            "id": 57,
+            "name": "46",
+            "slug": "46"
+          },
+          {
+            "id": 121,
+            "name": "48",
+            "slug": "48"
+          },
+          {
+            "id": 122,
+            "name": "50",
+            "slug": "50"
+          },
+          {
+            "id": 123,
+            "name": "52",
+            "slug": "52"
+          },
+          {
+            "id": 124,
+            "name": "54",
+            "slug": "54"
+          },
+          {
+            "id": 125,
+            "name": "56",
+            "slug": "56"
+          },
+          {
+            "id": 126,
+            "name": "58",
+            "slug": "58"
+          },
+          {
+            "id": 411,
+            "name": "60",
+            "slug": "60"
+          }
+        ]
+      },
+      {
+        "id": 5,
+        "name": "Marca",
+        "taxonomy": "pa_marca",
+        "has_variations": false,
+        "terms": [
+          {
+            "id": 560,
+            "name": "AE",
+            "slug": "ae"
+          }
+        ]
+      },
+      {
+        "id": 151,
+        "name": "Industria",
+        "taxonomy": "pa_industria",
+        "has_variations": false,
+        "terms": [
+          {
+            "id": 1399,
+            "name": "Transporte",
+            "slug": "transporte"
+          }
+        ]
+      }
+    ],
+    "variations": [
+      {
+        "id": 153610,
+        "attributes": [
+          {
+            "name": "Color",
+            "value": "azul-claro"
+          },
+          {
+            "name": "Talle",
+            "value": "38"
+          }
+        ]
+      },
+      {
+        "id": 153611,
+        "attributes": [
+          {
+            "name": "Color",
+            "value": "azul-claro"
+          },
+          {
+            "name": "Talle",
+            "value": "40"
+          }
+        ]
+      },
+      {
+        "id": 153612,
+        "attributes": [
+          {
+            "name": "Color",
+            "value": "azul-claro"
+          },
+          {
+            "name": "Talle",
+            "value": "42"
+          }
+        ]
+      },
+      {
+        "id": 153613,
+        "attributes": [
+          {
+            "name": "Color",
+            "value": "azul-claro"
+          },
+          {
+            "name": "Talle",
+            "value": "44"
+          }
+        ]
+      },
+      {
+        "id": 153614,
+        "attributes": [
+          {
+            "name": "Color",
+            "value": "azul-claro"
+          },
+          {
+            "name": "Talle",
+            "value": "46"
+          }
+        ]
+      },
+      {
+        "id": 153615,
+        "attributes": [
+          {
+            "name": "Color",
+            "value": "azul-claro"
+          },
+          {
+            "name": "Talle",
+            "value": "48"
+          }
+        ]
+      },
+      {
+        "id": 153616,
+        "attributes": [
+          {
+            "name": "Color",
+            "value": "azul-claro"
+          },
+          {
+            "name": "Talle",
+            "value": "50"
+          }
+        ]
+      },
+      {
+        "id": 153617,
+        "attributes": [
+          {
+            "name": "Color",
+            "value": "azul-claro"
+          },
+          {
+            "name": "Talle",
+            "value": "52"
+          }
+        ]
+      },
+      {
+        "id": 153618,
+        "attributes": [
+          {
+            "name": "Color",
+            "value": "azul-claro"
+          },
+          {
+            "name": "Talle",
+            "value": "54"
+          }
+        ]
+      },
+      {
+        "id": 153619,
+        "attributes": [
+          {
+            "name": "Color",
+            "value": "azul-claro"
+          },
+          {
+            "name": "Talle",
+            "value": "56"
+          }
+        ]
+      },
+      {
+        "id": 153621,
+        "attributes": [
+          {
+            "name": "Color",
+            "value": "azul-claro"
+          },
+          {
+            "name": "Talle",
+            "value": "60"
+          }
+        ]
+      },
+      {
+        "id": 153622,
+        "attributes": [
+          {
+            "name": "Color",
+            "value": "azul-oscuro"
+          },
+          {
+            "name": "Talle",
+            "value": "38"
+          }
+        ]
+      },
+      {
+        "id": 153624,
+        "attributes": [
+          {
+            "name": "Color",
+            "value": "azul-oscuro"
+          },
+          {
+            "name": "Talle",
+            "value": "42"
+          }
+        ]
+      },
+      {
+        "id": 153625,
+        "attributes": [
+          {
+            "name": "Color",
+            "value": "azul-oscuro"
+          },
+          {
+            "name": "Talle",
+            "value": "44"
+          }
+        ]
+      },
+      {
+        "id": 153626,
+        "attributes": [
+          {
+            "name": "Color",
+            "value": "azul-oscuro"
+          },
+          {
+            "name": "Talle",
+            "value": "46"
+          }
+        ]
+      },
+      {
+        "id": 153627,
+        "attributes": [
+          {
+            "name": "Color",
+            "value": "azul-oscuro"
+          },
+          {
+            "name": "Talle",
+            "value": "48"
+          }
+        ]
+      },
+      {
+        "id": 153628,
+        "attributes": [
+          {
+            "name": "Color",
+            "value": "azul-oscuro"
+          },
+          {
+            "name": "Talle",
+            "value": "50"
+          }
+        ]
+      },
+      {
+        "id": 153629,
+        "attributes": [
+          {
+            "name": "Color",
+            "value": "azul-oscuro"
+          },
+          {
+            "name": "Talle",
+            "value": "52"
+          }
+        ]
+      },
+      {
+        "id": 153630,
+        "attributes": [
+          {
+            "name": "Color",
+            "value": "azul-oscuro"
+          },
+          {
+            "name": "Talle",
+            "value": "54"
+          }
+        ]
+      },
+      {
+        "id": 153631,
+        "attributes": [
+          {
+            "name": "Color",
+            "value": "azul-oscuro"
+          },
+          {
+            "name": "Talle",
+            "value": "56"
+          }
+        ]
+      },
+      {
+        "id": 153633,
+        "attributes": [
+          {
+            "name": "Color",
+            "value": "azul-oscuro"
+          },
+          {
+            "name": "Talle",
+            "value": "60"
+          }
+        ]
+      }
+    ]
+  }
+]

@@ -2,6 +2,7 @@
 // Sin llamadas de red ni SDKs de proveedores.
 export * from "./advice-view";
 export * from "./cart-view";
+export * from "./colors";
 export * from "./constants";
 export * from "./errors";
 export * from "./files";
