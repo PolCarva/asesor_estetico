@@ -33,3 +33,9 @@ export const STORAGE_BUCKETS = {
 /** Cache de shopping (SPEC "CACHE"): resultados de búsqueda 24 h, datos de producto 8 h. */
 export const SHOPPING_SEARCH_TTL_MS = 24 * 60 * 60 * 1000;
 export const PRODUCT_FRESHNESS_MS = 8 * 60 * 60 * 1000;
+
+/**
+ * Conversión aproximada de dólares a pesos. Solo para comparar precios al rankear y para el
+ * total "aprox." del carrito con monedas mezcladas; nunca se muestra como precio.
+ */
+export const APPROX_UYU_PER_USD = 40;

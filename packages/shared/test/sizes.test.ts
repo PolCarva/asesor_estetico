@@ -7,6 +7,7 @@ import {
   type LookSpec,
   missingSizesForLook,
   normalizeSizeLabel,
+  pickVariantForSize,
   SIZE_OPTIONS,
   sizeForCategory,
   sizeMatches,
@@ -147,5 +148,37 @@ describe("talles del usuario (paso 07)", () => {
     expect(isSizeOption("top", "42")).toBe(false);
     expect(isSizeOption("shoe", "9.5", "US")).toBe(true);
     expect(isSizeOption("shoe", "9.5", "EU")).toBe(false);
+  });
+});
+
+describe("pickVariantForSize: talle del usuario al agregar al carrito (paso 10a)", () => {
+  const v = (id: string, size: string | null, availability = "IN_STOCK") => ({
+    id,
+    size,
+    availability,
+  });
+
+  it("elige la variante del talle, en forma canónica", () => {
+    const variants = [v("s", "S"), v("m", "M"), v("l", "L")];
+    expect(pickVariantForSize(variants, "Medium")?.id).toBe("m");
+    expect(pickVariantForSize([v("42", "42"), v("43", "43")], "42")?.id).toBe("42");
+    expect(pickVariantForSize([v("w", "32/34")], "32")?.id).toBe("w");
+  });
+
+  it("prefiere el talle exacto al combinado y una en stock a una agotada", () => {
+    expect(pickVariantForSize([v("ml", "M/L"), v("m", "M")], "M")?.id).toBe("m");
+    expect(pickVariantForSize([v("m1", "M", "OUT_OF_STOCK"), v("m2", "M")], "M")?.id).toBe("m2");
+    expect(
+      pickVariantForSize([v("m1", "M", "OUT_OF_STOCK"), v("m2", "M", "UNKNOWN")], "M")?.id,
+    ).toBe("m2");
+    // Si el único que sirve está agotado, igual se elige (la UI lo muestra agotado).
+    expect(pickVariantForSize([v("m", "M", "OUT_OF_STOCK")], "M")?.id).toBe("m");
+  });
+
+  it("sin talle o sin variante que sirva: null (el usuario elige)", () => {
+    expect(pickVariantForSize([v("m", "M")], null)).toBeNull();
+    expect(pickVariantForSize([v("m", "M")], "XL")).toBeNull();
+    expect(pickVariantForSize([v("x", null)], "M")).toBeNull();
+    expect(pickVariantForSize([], "M")).toBeNull();
   });
 });

@@ -29,6 +29,7 @@ erDiagram
   CARTS ||--o{ CART_ITEMS : contiene
   PRODUCTS ||--o{ CART_ITEMS : referencia
   PRODUCT_VARIANTS ||--o{ CART_ITEMS : "talle/color"
+  LOOKS ||--o{ CART_ITEMS : agrupa
   PROFILES ||--o{ SUBSCRIPTIONS : paga
   PROFILES ||--o{ CHAT_THREADS : conversa
   LOOKS ||--o{ CHAT_THREADS : "contexto opcional"
@@ -128,8 +129,11 @@ erDiagram
     uuid cart_id FK
     uuid product_id FK
     uuid variant_id FK
+    uuid look_id FK "null: suelto o look borrado"
+    text garment_slot
     smallint quantity
     numeric price_amount_snapshot "lo fija un trigger"
+    timestamptz purchased_at
   }
   SUBSCRIPTIONS {
     uuid id PK
@@ -215,7 +219,7 @@ erDiagram
 | `shopping_search_cache` | Pools de búsqueda (24 h): uuids de productos validados de una prenda           | Solo service role                      |
 | `favorites`             | Looks o productos guardados (exactamente uno)                                  | Usuario                                |
 | `carts`                 | Un carrito externo por usuario                                                 | Usuario (Premium)                      |
-| `cart_items`            | Productos del carrito; el precio lo fija un trigger desde `products`           | Usuario (Premium)                      |
+| `cart_items`            | Productos del carrito por look y prenda; el precio lo fija un trigger          | Usuario (Premium)                      |
 | `subscriptions`         | Estado del plan Premium por proveedor                                          | Servidor (tras validar el pago)        |
 | `payment_events`        | Webhooks recibidos; `unique(provider, event_id)` = idempotencia                | Servidor                               |
 | `chat_threads`          | Conversaciones con el asesor                                                   | Usuario (Premium)                      |
@@ -249,11 +253,24 @@ El análisis (`StyleProfile` v3, ver `AI_PIPELINE.md`) se guarda partido para qu
 - **Precio** (migración `20261001000100_in_store_price.sql`, D10): `price_amount` y `currency` pueden ser `null` solo en un local físico que no publica el precio. El check `products_price_known` exige que vayan juntos y que, si faltan, `availability = 'IN_STORE_ONLY'`.
 - **Local físico**: ubicación y contacto (`in_store`: dirección, localidad, teléfono, link) van en `data_json`, sin columnas nuevas.
 - **Variantes** (`product_variants`): `size` es el talle normalizado (`M`, `42`, `US 9`, `ÚNICO`). La etiqueta de la tienda (`size_label`) queda en `data_json`.
-- **Carrito**: `set_cart_item_price_snapshot()` rechaza un producto sin precio con un error explícito (`22023`): un local físico no se compra online.
+- **Carrito**: un producto sin precio (local físico) no entra al carrito (ver "Carrito y guardados").
 - **Identidad y cache** (migración `20261001000200_shopping_cache.sql`, paso 05): el upsert es por `url` (canónica). El único `(store_domain, external_id)` pasó a ser un índice común, porque un handle renombrado o un id externo que cambia entre corridas chocaba con el único de `url`. `products` y `product_variants` son la cache persistente de productos (frescura de 8 h con `last_fetched_at`, que solo avanza con una verificación exitosa).
 - **Pools de búsqueda** (`shopping_search_cache`): `key` (sha256 de la prenda, sin talle, precio máximo, límite ni datos del usuario), `query_json`, `product_ids uuid[]`, `stats`, `expires_at` (24 h, con índice para purgar). RLS habilitada y sin grants para `anon` ni `authenticated`: solo el worker.
 - **Resultados por look** (`look_products`): `size_status` (`AVAILABLE`, `OUT_OF_STOCK`, `NOT_OFFERED`, `UNVERIFIED`, `NOT_REQUESTED`, `NOT_APPLICABLE`; null en filas anteriores) para mostrar "talle sin verificar" con honestidad, y `user_size` (migración `20261001000500`, paso 08): el talle del usuario con el que se rankeó, al que se refiere `size_status` (si después cambia sus talles, la UI no muestra un estado de otro talle). El ranking de una prenda se reemplaza entero y de forma atómica con `replace_look_products`. Lo lee solo el dueño Premium.
 - **"Más baratas"** (migración `20261001000600_cheaper_alternatives.sql`, paso 09, D17): `look_products.list` (`MAIN` | `CHEAPER`), `reference_product_id` (FK a `products`) y `max_price_amount` / `max_price_currency` (el precio del producto de referencia: tope estricto). Un check exige que las filas `CHEAPER` tengan referencia y tope, y las `MAIN` no. `replace_cheaper_look_products(look, slot, referencia, tope, moneda, items)` (solo service role) reemplaza las más baratas de una prenda sin tocar el ranking principal y sin repetir sus productos. `replace_look_products` borra las dos listas de la prenda. Con dos FKs a `products`, los embeds de PostgREST desde `look_products` usan `products!look_products_product_id_fkey`.
+
+## Carrito y guardados
+
+Migración `20261001000700_cart.sql` (paso 10a, D18). El carrito no procesa la compra: agrupa productos externos por look y prenda.
+
+- **Un carrito por usuario** (`carts.user_id` único). `getOrCreateCart` lo crea con un upsert que ignora el duplicado y después lo lee, así dos pedidos simultáneos no chocan.
+- **`cart_items`** suma `look_id` (FK a `looks`, `on delete set null`), `garment_slot` (mismo formato que `look_products`) y `purchased_at` (comprado en la tienda; null = pendiente). Check `cart_items_look_slot`: con look, la prenda es obligatoria. Sin look hay dos casos: un producto suelto (sin prenda) o un ítem cuyo look se borró (queda en el carrito, con la prenda como referencia).
+- **Únicos** (reemplazan a `unique (cart_id, product_id, variant_id)`, que impedía el mismo producto en dos looks): `cart_items_look_item_key (cart_id, look_id, garment_slot, product_id, variant_id) nulls not distinct where look_id is not null` y `cart_items_loose_item_key (cart_id, product_id, variant_id) nulls not distinct where look_id is null and garment_slot is null`. Los ítems de looks borrados no tienen único: si no, borrar un look con el mismo producto que otro look ya borrado chocaría al poner `look_id` en null.
+- **Precio**: `set_cart_item_price_snapshot()` corre `before insert or update of product_id, variant_id`. Toma el precio de la variante o, si no tiene, el del producto. Un producto sin precio se rechaza al agregarlo con `22023` (la app lo traduce a un mensaje humano). Al cambiar solo el talle de un producto que se quedó sin precio, o cuando la base borra una variante que la tienda dejó de publicar (`variant_id` → null), conserva el último precio conocido: el carrito no se rompe. `price_amount_snapshot` y `currency_snapshot` tienen defaults solo para que el tipo generado no los exija; el trigger siempre los pisa.
+- **Permisos por columna**: insert de `cart_id`, `product_id`, `variant_id`, `quantity`, `look_id` y `garment_slot`; update de `quantity`, `product_id` (cambiar por otra alternativa), `variant_id` y `purchased_at`. Precio y moneda nunca (un insert o update que los mande falla con `42501`).
+- **RLS**: leer y borrar, solo lo propio; agregar y modificar, propio y Premium, y el `look_id` tiene que ser del usuario (IDOR). Un usuario que dejó de ser Premium conserva la lectura: la app le muestra el carrito en solo lectura.
+- **Guardados** (`favorites`, D19): sin cambios de esquema. Looks propios con cualquier plan; productos solo Premium (RLS y `saveFavorite`).
+- **Lógica** (`@asesor/db`, D22): `addToCart`, `selectCartItemVariant`, `swapCartItem`, `removeFromCart`, `setCartItemPurchased`, `getCartLines`, `saveFavorite` y `removeFavorite`, con el cliente del usuario. El view model (`buildCartView`, `@asesor/shared`) agrupa y calcula los subtotales.
 
 ## Jobs de shopping
 
@@ -283,7 +300,7 @@ RLS habilitado en **todas** las tablas. Resumen (ver `20260929000300_rls_policie
 - `anon`: sin acceso a ninguna tabla.
 - `authenticated`: solo sus filas (`user_id = auth.uid()`), y solo las columnas con `GRANT` explícito. Por ejemplo, en `profiles` puede cambiar `display_name`, `style_risk_level`, `tattoo_preference`, `onboarding_completed` y sus talles (`top_size`, `bottom_size`, `shoe_size`, `shoe_size_system`), pero **no** `role` ni `country_code`.
 - Premium reforzado en datos: `looks` con `position > 1`, `style_advice`, `look_products`, `carts`, `cart_items`, `chat_*` y favoritos de productos requieren `current_user_is_premium()`.
-- IDOR: los inserts que referencian otros recursos (favoritos, hilos de chat, ítems del carrito) verifican que el recurso sea del usuario.
+- IDOR: los inserts que referencian otros recursos (favoritos, hilos de chat, ítems del carrito y su look) verifican que el recurso sea del usuario.
 - `jobs`: el usuario puede **leer** el estado y el progreso de sus jobs (columnas no sensibles: también `progress`, `look_id` y `garment_slot`); nunca crear ni modificar, ni leer `payload`, `result` o `last_error`.
 - `ai_usage`, `analytics_events`, `payment_events`: sin acceso desde el cliente.
 - `service_role` tiene acceso completo (lo usan servidor y worker).
@@ -301,20 +318,20 @@ Rutas: `<user_id>/<...>`. Las políticas comparan la primera carpeta con `auth.u
 
 ## Funciones SQL
 
-| Función                                    | Quién la ejecuta | Qué hace                                                                      |
-| ------------------------------------------ | ---------------- | ----------------------------------------------------------------------------- |
-| `handle_new_user()`                        | Trigger          | Crea `profiles` al registrarse                                                |
-| `set_cart_item_price_snapshot()`           | Trigger          | Fija precio y moneda del ítem desde el catálogo; rechaza productos sin precio |
-| `replace_look_products(look, slot, items)` | service_role     | Reemplaza el ranking de una prenda de un look en una transacción              |
-| `current_user_is_premium()`                | RLS              | Regla Premium                                                                 |
-| `current_user_is_admin()`                  | RLS / servidor   | Rol admin                                                                     |
-| `can_read_generated_look(name)`            | Política Storage | Imagen generada visible según look y plan                                     |
-| `enqueue_job(...)`                         | service_role     | Encola (idempotente con `idempotency_key`)                                    |
-| `claim_next_job(...)`                      | service_role     | Toma el próximo job con `FOR UPDATE SKIP LOCKED`                              |
-| `complete_job(...)`                        | service_role     | Marca COMPLETED (solo el worker que lo tomó)                                  |
-| `fail_job(...)`                            | service_role     | Reintenta con delay o marca FAILED                                            |
-| `retry_job(id)`                            | service_role     | Reintento manual de un FAILED                                                 |
-| `update_job_progress(job, worker, prog)`   | service_role     | Guarda el progreso (solo el worker que tiene el job en curso)                 |
-| `replace_cheaper_look_products(...)`       | service_role     | Reemplaza las "más baratas" de una prenda, sin tocar ni repetir el ranking    |
-| `admin_overview_metrics()`                 | service_role     | Métricas del overview de `/admin`                                             |
-| `admin_event_counts(days)`                 | service_role     | Conteo de eventos para `/admin/analytics`                                     |
+| Función                                    | Quién la ejecuta | Qué hace                                                                                                                         |
+| ------------------------------------------ | ---------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `handle_new_user()`                        | Trigger          | Crea `profiles` al registrarse                                                                                                   |
+| `set_cart_item_price_snapshot()`           | Trigger          | Fija el precio del ítem al agregar y al cambiar producto o talle; sin precio, rechaza (o conserva el último al cambiar el talle) |
+| `replace_look_products(look, slot, items)` | service_role     | Reemplaza el ranking de una prenda de un look en una transacción                                                                 |
+| `current_user_is_premium()`                | RLS              | Regla Premium                                                                                                                    |
+| `current_user_is_admin()`                  | RLS / servidor   | Rol admin                                                                                                                        |
+| `can_read_generated_look(name)`            | Política Storage | Imagen generada visible según look y plan                                                                                        |
+| `enqueue_job(...)`                         | service_role     | Encola (idempotente con `idempotency_key`)                                                                                       |
+| `claim_next_job(...)`                      | service_role     | Toma el próximo job con `FOR UPDATE SKIP LOCKED`                                                                                 |
+| `complete_job(...)`                        | service_role     | Marca COMPLETED (solo el worker que lo tomó)                                                                                     |
+| `fail_job(...)`                            | service_role     | Reintenta con delay o marca FAILED                                                                                               |
+| `retry_job(id)`                            | service_role     | Reintento manual de un FAILED                                                                                                    |
+| `update_job_progress(job, worker, prog)`   | service_role     | Guarda el progreso (solo el worker que tiene el job en curso)                                                                    |
+| `replace_cheaper_look_products(...)`       | service_role     | Reemplaza las "más baratas" de una prenda, sin tocar ni repetir el ranking                                                       |
+| `admin_overview_metrics()`                 | service_role     | Métricas del overview de `/admin`                                                                                                |
+| `admin_event_counts(days)`                 | service_role     | Conteo de eventos para `/admin/analytics`                                                                                        |

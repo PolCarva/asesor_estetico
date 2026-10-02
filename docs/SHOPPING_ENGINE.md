@@ -7,6 +7,7 @@
 - **Talles, stock, Validate y locales físicos** (paso 04b): variantes con talle y disponibilidad desde la plataforma de cada tienda (Fenicio, VTEX, Shopify, WooCommerce), talles normalizados, etapa Validate (página descargada, host de la tienda, Uruguay, precio, URL canónica, tiendas bloqueadas) y productos `IN_STORE_ONLY` con precio opcional, ubicación y contacto.
 - **Ranking y cache persistente** (paso 05): ranking estético con talle del usuario y estado del talle, pesos documentados; cache de pools en Postgres (24 h) re-rankeada por pedido, frescura de producto (8 h) y persistencia idempotente de productos, variantes y `look_products`.
 - **Jobs reales** (paso 06): `SEARCH_PRODUCTS` (look completo o una prenda) y `REFRESH_PRODUCT` en el worker, con la cache Postgres, progreso por etapas en `jobs.progress`, fallas parciales por prenda, Premium verificado en el servidor y en el worker, y `startLookShopping` / `startLookShoppingAction` para encolar.
+- **Carrito** (paso 10a): agregar un producto con dato de más de 8 h espera su revalidación en el worker (hasta 8 s) y, si no llega, entra con el último dato y lo dice.
 - **Mocks** (`MockSearchProvider`, `MockProductFetcher`, catálogo ficticio `.test`): solo con `SHOPPING_PROVIDER=mock` (tests y E2E). El default del worker es `live` y en producción `mock` está prohibido por el schema de env.
 
 ## Pipeline
@@ -147,7 +148,7 @@ Un producto es `IN_STORE_ONLY` solo si la página lo declara (`availability: InS
 
 - **Precio opcional**: `Product.price` puede ser `null` solo en `IN_STORE_ONLY` (refine de `ProductSchema` y check `products_price_known` en la base). Online sin precio sigue siendo `no_price`.
 - **Ubicación y contacto** (`Product.in_store`, guardado en `data_json`): `address`, `locality`, `phone` y `contact_url`, de la oferta (`availableAtOrFrom`) o de un `LocalBusiness`/`Store` de la página. Lo que no se publica queda en `null`; el contacto mínimo es la página del producto.
-- **Carrito**: un producto sin precio no se compra online; el trigger del carrito lo rechaza con un error explícito (el paso 10a decide cómo se muestra). El ranking le da un puntaje de precio neutro (0.5) hasta el paso 05.
+- **Carrito** (paso 10a): un producto sin precio no se compra online; no entra al carrito ("Este producto se consigue en el local y no tiene precio publicado…"). El trigger también lo rechaza (`22023`) si se saltea la lógica. En el ranking, sin precio el producto se rankea sin ese factor (paso 05).
 - **Caso real**: no apareció ninguno el 2026-10-01 (ver `TIENDAS_UY.md`). El soporte está probado con fixtures.
 
 ## Tiendas bloqueadas (D7)
@@ -234,7 +235,7 @@ Los precios en USD se convierten con una tasa aproximada (`APPROX_UYU_PER_USD`) 
 - **Miss o vencido**: búsqueda en vivo; se guardan los productos (`upsertProducts`) y el pool (`savePool`), y se borran los pools vencidos.
 - **Inyección**: `searchProducts(query, { cache })` recibe un `SearchCache`. En el worker es `createPostgresSearchCache(db)` (`@asesor/db`), conectada al job desde el paso 06. En tests y desarrollo, `createMemorySearchCache()`. Una cache caída no rompe la búsqueda: va en vivo.
 - **Qué no se guarda** (paso 06): un pool vacío (puede ser una falla pasajera de las tiendas y escondería productos por 24 h) ni una búsqueda cortada por timeout o apagado.
-- **Revalidación antes de comprar**: `isProductStale(fetched_at)` (`@asesor/shared`, 8 h) lo usan el carrito y "Comprar" (pasos 08 y 10a). Si la revalidación falla, la disponibilidad pasa a `UNKNOWN` y la fecha no avanza.
+- **Revalidación antes de comprar**: `isProductStale(fetched_at)` (`@asesor/shared`, 8 h) lo usan el carrito y "Comprar" (pasos 08 y 10a). Si la revalidación falla, la disponibilidad pasa a `UNKNOWN` y la fecha no avanza. Detalle en "Revalidación antes de agregar al carrito".
 
 ## Persistencia (paso 05, `packages/db/src/shopping.ts`)
 
@@ -291,7 +292,7 @@ Con un pool cacheado: `SEARCHING → VERIFYING → RANKING`. El job (`createStag
 
 - **Lectura:** `getLookProducts` (cliente del usuario; RLS: dueño Premium) → `buildLookResults` (`apps/web/src/lib/look-results.ts`, puro y con tests): por prenda del look, el RECOMENDADO (rank 1) y las alternativas (las 3–5 opciones que guardó la búsqueda), con precio en su moneda real (`$ 1.399`, `US$ 79`; sin precio, "Precio a consultar"), talle del usuario según `size_status` y `user_size` ("Talle M ✓", "Talle 42 agotado", "No hay talle 42", "Talle sin verificar"), stock (`En stock`, `Sin stock`, `Stock sin verificar`, `Disponible en tienda física`), "verificado hace X" y el aviso de más de 8 h. Prendas sin opciones o fallidas se dicen, no se esconden.
 - **Total:** suma de los recomendados por moneda, nunca convertida (la conversión aproximada del ranker no se muestra como precio). Si falta algún precio o hay dos monedas, subtotales.
-- **Comprar:** `GET /api/products/[id]/open` redirige a la página real; si el dato tiene más de 8 h, encola `REFRESH_PRODUCT` antes (la revalidación que bloquea, antes de agregar al carrito, es del paso 10a).
+- **Comprar:** `GET /api/products/[id]/open` redirige a la página real; si el dato tiene más de 8 h, encola `REFRESH_PRODUCT` (`enqueueProductRefresh`) y redirige sin esperar: la tienda muestra el precio de hoy y la app se actualiza para la próxima vez.
 - **Eventos:** `product_viewed` (una vez por producto y sesión del navegador; las alternativas, al abrirlas) y `external_product_clicked` (`product_id`, `store_domain`, `look_id`, `slot`, `rank`), desde el cliente. `product_clicked`, que nadie emitía, se reemplazó por `external_product_clicked`.
 
 ### `REFRESH_PRODUCT`
@@ -300,11 +301,32 @@ Payload `{ product_id }` (uuid de `products`). Carga el producto, lo re-extrae c
 
 Prueba real: `apps/worker/scripts/real-shopping-job.ts [--keep]`, con el worker en `AI_PROVIDER=mock SHOPPING_PROVIDER=live`: usuarios locales nuevos, la búsqueda de un look seguida etapa por etapa como la UI, una segunda corrida desde la cache con dos pedidos simultáneos, el modo de una prenda con precio máximo, `REFRESH_PRODUCT` y el rechazo de un usuario free.
 
+### Revalidación antes de agregar al carrito (paso 10a, D18)
+
+SPEC "CACHE": antes de agregar al carrito un producto con dato viejo (más de 8 h), se revalida. La web nunca descarga páginas de tiendas: lo hace el worker con `REFRESH_PRODUCT`, y el carrito espera un tiempo corto.
+
+- **`enqueueProductRefresh(service, productId)`** (`@asesor/db`): prioridad 9 (antes que las búsquedas), 2 intentos y clave de idempotencia `refresh:<producto>:<hora UTC>`. La comparten "Comprar ↗" y el carrito: un pedido repetido, o una tienda que viene fallando, no se vuelve a consultar dentro de la misma hora.
+- **`waitForProductRefresh(service, productId)`**: encola y consulta el job cada 250 ms hasta 8 s (`PRODUCT_REFRESH_WAIT_MS`). Devuelve `verified`, `gone`, `failed` o `pending` (no terminó a tiempo: el job sigue y actualiza el producto después). Si el job de esta hora ya terminó, devuelve ese resultado sin esperar. Prueba real: 1,8–2,1 s con el worker libre (Indian y Jack & Jones).
+- **`addToCart` / `swapCartItem`** (`@asesor/db/src/cart.ts`) la reciben inyectada (`RevalidateProduct`) y la usan solo si `isProductStale`. Según el resultado:
+
+  | Resultado                        | Qué pasa                                                         | Lo que ve el usuario                               |
+  | -------------------------------- | ---------------------------------------------------------------- | -------------------------------------------------- |
+  | dato fresco (< 8 h)              | No se consulta la tienda                                         | —                                                  |
+  | `verified` y el dato quedó nuevo | Precio, stock y talles de hoy; el trigger fija el precio nuevo   | "El precio cambió: antes $ X, ahora $ Y" si cambió |
+  | `failed`, o `verified` viejo     | Entra con el último precio; stock `UNKNOWN` (la fecha no avanza) | "No pudimos verificar el stock con la tienda…"     |
+  | `pending`                        | Entra con el último precio; stock `UNKNOWN`; el job sigue        | "No pudimos verificar el precio y el stock ahora…" |
+  | `gone`                           | No entra (`PRODUCT_GONE`)                                        | "Este producto ya no está publicado en la tienda." |
+
+- **Talle**: sin talle elegido, se toma la variante del talle con que se buscó la prenda (`look_products.user_size`, `pickVariantForSize`: exacto antes que combinado, en stock antes que agotado). Al cambiar por otra alternativa, el mismo criterio (o el talle que tenía el ítem).
+- **Precio del ítem**: lo fija la base desde el catálogo (trigger), al agregar y al cambiar producto o talle. El view model del carrito (`buildCartView`) usa el precio actual del catálogo y avisa si cambió desde que se agregó; subtotal por moneda y total único "aprox." en pesos solo con monedas mezcladas.
+
+Prueba real: `apps/worker/scripts/real-cart.ts [--quick] [--keep]` (sin descubrimiento web, USD 0).
+
 ## Seguridad
 
 - Anti-SSRF en dos capas: `isSafeProductUrl` por nombre y `createSafeTransport` por IP al conectar (sin DNS rebinding), y cada redirect revalidado. Detalle en "Descarga segura".
 - Los links a tiendas se abren con `rel="noopener noreferrer nofollow"`.
-- El precio del carrito lo fija la base (trigger), nunca el cliente.
+- El precio del carrito lo fija la base (trigger), nunca el cliente: no tiene grant sobre esas columnas.
 
 ## Próximos pasos
 

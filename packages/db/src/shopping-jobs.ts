@@ -15,7 +15,7 @@ import {
 
 import { requirePremium } from "./auth";
 import { enqueueJob } from "./jobs";
-import type { TypedSupabaseClient } from "./types";
+import type { JobRow, TypedSupabaseClient } from "./types";
 
 /**
  * Inicio y estado de la búsqueda de productos de un look (paso 06, D13 y D22). La server
@@ -284,4 +284,90 @@ export async function getSlotSearches(
     });
   }
   return bySlot;
+}
+
+// --- Revalidación de productos (REFRESH_PRODUCT) ----------------------------------------
+
+/** Revalidar un producto va antes que las búsquedas (8): el usuario está por comprar. */
+export const PRODUCT_REFRESH_PRIORITY = 9;
+export const PRODUCT_REFRESH_MAX_ATTEMPTS = 2;
+/**
+ * Cuánto espera el carrito una revalidación (paso 10a). El worker toma el job en ≤1 s si tiene
+ * un carril libre y una página de producto tarda 1–3 s; si está ocupado con búsquedas, el
+ * carrito sigue con el dato que hay y lo dice.
+ */
+export const PRODUCT_REFRESH_WAIT_MS = 8_000;
+
+/**
+ * Encola la revalidación de un producto, una por producto y hora (clave de idempotencia): un
+ * pedido repetido, o una tienda que viene fallando, no se vuelve a consultar dentro de la
+ * misma hora. Lo usan "Comprar ↗" (paso 08) y el carrito (paso 10a).
+ */
+export async function enqueueProductRefresh(
+  service: TypedSupabaseClient,
+  productId: string,
+  now: Date = new Date(),
+): Promise<JobRow> {
+  return enqueueJob(service, {
+    type: "REFRESH_PRODUCT",
+    payload: { product_id: productId },
+    priority: PRODUCT_REFRESH_PRIORITY,
+    maxAttempts: PRODUCT_REFRESH_MAX_ATTEMPTS,
+    idempotencyKey: `refresh:${productId}:${now.toISOString().slice(0, 13)}`,
+  });
+}
+
+/**
+ * Resultado de revalidar un producto: `verified` (precio, stock y talles de hoy), `gone` (la
+ * tienda lo sacó), `failed` (la tienda no respondió: el stock quedó `UNKNOWN` y la fecha no
+ * avanzó) o `pending` (no terminó a tiempo: el job sigue y actualiza el producto después).
+ */
+export type ProductRefreshOutcome = "verified" | "gone" | "failed" | "pending";
+
+const REFRESH_STATUSES = ["verified", "gone", "failed"] as const;
+
+function refreshOutcome(job: Pick<JobRow, "status" | "result">): ProductRefreshOutcome | null {
+  if (job.status === "COMPLETED") {
+    // `result` lo escribe el worker: { product_id, status, availability }.
+    const status =
+      job.result && typeof job.result === "object" && !Array.isArray(job.result)
+        ? job.result.status
+        : null;
+    return REFRESH_STATUSES.find((s) => s === status) ?? "failed";
+  }
+  return job.status === "FAILED" ? "failed" : null;
+}
+
+/**
+ * Revalida un producto con el worker (la web nunca descarga páginas de tiendas) y espera el
+ * resultado un tiempo corto. Si el job de esta hora ya terminó, devuelve ese resultado sin
+ * volver a consultar la tienda.
+ */
+export async function waitForProductRefresh(
+  service: TypedSupabaseClient,
+  productId: string,
+  options: { timeoutMs?: number; pollMs?: number; now?: Date } = {},
+): Promise<ProductRefreshOutcome> {
+  const deadline = Date.now() + (options.timeoutMs ?? PRODUCT_REFRESH_WAIT_MS);
+  const pollMs = options.pollMs ?? 250;
+  let job: Pick<JobRow, "id" | "status" | "result"> = await enqueueProductRefresh(
+    service,
+    productId,
+    options.now,
+  );
+  for (;;) {
+    const outcome = refreshOutcome(job);
+    if (outcome) return outcome;
+    const left = deadline - Date.now();
+    if (left <= 0) return "pending";
+    await new Promise((resolve) => setTimeout(resolve, Math.min(pollMs, left)));
+    const { data, error } = await service
+      .from("jobs")
+      .select("id, status, result")
+      .eq("id", job.id)
+      .maybeSingle();
+    if (error) throw new AppError("INTERNAL", "No se pudo leer la revalidación.", { cause: error });
+    if (!data) return "failed";
+    job = data;
+  }
 }

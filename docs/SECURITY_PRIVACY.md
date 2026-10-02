@@ -30,6 +30,8 @@ Helpers en `@asesor/db`:
 
 La búsqueda de productos verifica Premium tres veces: en la server action (`requirePremium`), en `startLookShopping` y en el worker al ejecutar el job (corre con service role y la suscripción pudo vencer en el medio). Del job, el usuario solo lee estado y progreso (etapa y conteos): nunca `payload`, `result` ni `last_error`. El panel de progreso los consulta por `GET /api/looks/[id]/shopping`, que exige sesión y usa el cliente del usuario (RLS: solo sus jobs).
 
+El carrito (paso 10a) es Premium en las server actions (`requirePremium` → `paywall`, sin error técnico), en la lógica de `@asesor/db` y en la RLS de `carts` / `cart_items`. El precio de cada ítem lo fija la base desde el catálogo (trigger): el cliente no tiene grant sobre el precio ni la moneda. El look de un ítem tiene que ser del usuario (política de insert y update). Un usuario que dejó de ser Premium conserva la lectura de su carrito (RLS), pero las actions le devuelven `paywall`: el carrito queda en solo lectura. Los productos guardados exigen Premium igual (RLS y `saveFavorite` / `removeFavorite`); los looks guardados, solo sesión. `product_added_to_cart`, `product_removed_from_cart`, `look_saved` y `product_saved` salen del servidor (no están en `CLIENT_ANALYTICS_EVENTS`).
+
 Los talles del usuario viven en `profiles` y solo los escribe él (grants por columna, validados contra las opciones que se ofrecen); el worker los recibe en el payload del job, nunca en logs ni en analytics.
 
 Y en la base, RLS en todas las tablas (detalle en `DATA_MODEL.md`). Los permisos de columna impiden, por ejemplo, que un usuario se asigne `role = 'admin'` o se active una suscripción.
@@ -83,7 +85,7 @@ De las respuestas solo se usan los datos de producto extraídos (validados con Z
 
 ## Rate limiting
 
-Interfaz `RateLimiter` (`@asesor/shared`) con implementación en memoria. Límites actuales: auth 10/min por IP en producción (200/min en desarrollo, para los E2E), subida de fotos 20/hora por usuario, analytics 60/min por IP, webhooks 120/min por IP, búsqueda de productos 10/hora por usuario (recorre tiendas reales y puede pagar búsquedas web; además, una sola búsqueda activa por look y prenda), "Buscar más barato" 20/hora por usuario (Premium verificado en la action, en `startCheaperSearch` y en el worker). Pendiente: implementación compartida en Postgres para múltiples instancias.
+Interfaz `RateLimiter` (`@asesor/shared`) con implementación en memoria. Límites actuales: auth 10/min por IP en producción (200/min en desarrollo, para los E2E), subida de fotos 20/hora por usuario, analytics 60/min por IP, webhooks 120/min por IP, búsqueda de productos 10/hora por usuario (recorre tiendas reales y puede pagar búsquedas web; además, una sola búsqueda activa por look y prenda), "Buscar más barato" 20/hora por usuario (Premium verificado en la action, en `startCheaperSearch` y en el worker), carrito y guardados 60/min por usuario (agregar puede encolar una revalidación, pero una sola por producto y hora). Pendiente: implementación compartida en Postgres para múltiples instancias.
 
 ## Headers de seguridad
 

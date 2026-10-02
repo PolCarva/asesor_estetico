@@ -1,7 +1,7 @@
 import { FIXTURE_IN_STORE_PRODUCT } from "@asesor/shared/fixtures";
 import { afterAll, beforeAll, expect, it } from "vitest";
 
-import { type Insert, toJson } from "../../src/types";
+import { toJson } from "../../src/types";
 import { adminClient, createTestUser, deleteTestUser, describeIntegration } from "./setup";
 
 /**
@@ -79,12 +79,11 @@ describeIntegration("products: precio opcional solo en locales físicos", () => 
       .insert({ user_id: user.id })
       .select("id")
       .single();
-    // El precio del ítem lo fija el trigger (el cliente solo puede escribir cart_id,
-    // product_id, variant_id y quantity), por eso no va en el insert.
-    const item = { cart_id: cart!.id, product_id: product.data!.id, quantity: 1 };
+    // El precio del ítem lo fija el trigger (el cliente no puede escribirlo), por eso no va
+    // en el insert.
     const { error } = await user.client
       .from("cart_items")
-      .insert(item as unknown as Insert<"cart_items">);
+      .insert({ cart_id: cart!.id, product_id: product.data!.id, quantity: 1 });
     expect(error?.message).toMatch(/has no price/);
   });
 });

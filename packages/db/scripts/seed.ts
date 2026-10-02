@@ -281,20 +281,21 @@ async function main() {
   must(
     await db
       .from("cart_items")
+      // El precio lo fija el trigger desde el catálogo.
       .insert([
         {
           cart_id: cart.id,
           product_id: productId("mock-oxford-crudo"),
+          look_id: look1,
+          garment_slot: "top",
           quantity: 1,
-          price_amount_snapshot: 0,
-          currency_snapshot: "UYU",
         },
         {
           cart_id: cart.id,
           product_id: productId("mock-desert-boots"),
+          look_id: look1,
+          garment_slot: "shoes",
           quantity: 1,
-          price_amount_snapshot: 0,
-          currency_snapshot: "UYU",
         },
       ])
       .select("id"),

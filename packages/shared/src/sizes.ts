@@ -199,6 +199,23 @@ export function sizeMatches(userSize: string | null, variantSize: string | null)
   return parts.length > 1 && parts.includes(user);
 }
 
+/**
+ * Variante del talle del usuario entre las de un producto (carrito, paso 10a). Prefiere el
+ * talle exacto sobre uno combinado (`M` antes que `M/L`) y, dentro de eso, una en stock antes
+ * que una sin dato o agotada. null si no hay talle o ninguna variante sirve.
+ */
+export function pickVariantForSize<T extends { size: string | null; availability: string }>(
+  variants: readonly T[],
+  userSize: string | null,
+): T | null {
+  const user = normalizeSizeLabel(userSize);
+  const stock = (v: T) =>
+    v.availability === "IN_STOCK" ? 0 : v.availability === "OUT_OF_STOCK" ? 2 : 1;
+  const rank = (v: T) => (normalizeSizeLabel(v.size) === user ? 0 : 3) + stock(v);
+  const matching = variants.filter((v) => sizeMatches(userSize, v.size));
+  return matching.sort((a, b) => rank(a) - rank(b))[0] ?? null;
+}
+
 /** Sistema de un talle canónico, para saber si dos talles se pueden comparar. */
 export type SizeSystem = "ALPHA" | "NUMBER" | "WAIST_LENGTH" | "US" | "UK" | "UNIQUE" | "OTHER";
 

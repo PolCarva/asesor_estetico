@@ -19,6 +19,8 @@ export const ANALYTICS_EVENTS = [
   "product_viewed",
   "external_product_clicked",
   "cheaper_alternative_requested",
+  "product_added_to_cart",
+  "product_removed_from_cart",
   "look_saved",
   "product_saved",
   "chat_started",

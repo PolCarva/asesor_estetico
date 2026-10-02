@@ -153,6 +153,21 @@ Detalle del look: "Encontrar este look" (pide los talles que falten, paso 07)
 - La web nunca espera la búsqueda: encola y devuelve el id del job (SPEC "JOBS": sin requests HTTP abiertos).
 - Detalle del pipeline, etapas y fallas parciales en `SHOPPING_ENGINE.md`.
 
+### Carrito (paso 10a)
+
+```
+"Agregar al carrito" (paso 10b)
+  → server action addToCartAction (requirePremium · Zod · rate limit cart · product_added_to_cart)
+  → addToCart (@asesor/db, cliente del usuario: Premium, el producto es un resultado de esa prenda
+     del look, talle del usuario)
+     → si el dato tiene más de 8 h: waitForProductRefresh → REFRESH_PRODUCT en el worker
+        (espera hasta 8 s; si no llega, sigue con el último dato y lo dice)
+  → insert en cart_items: el trigger fija el precio desde el catálogo
+```
+
+- La única espera de la web sobre un job es esta revalidación, acotada a 8 s: la web nunca descarga páginas de tiendas.
+- Las demás acciones (talle, cambiar por otra alternativa, sacar, comprado, guardados) son escrituras directas con RLS. Detalle en `DATA_MODEL.md` ("Carrito y guardados") y `SHOPPING_ENGINE.md`.
+
 ## PWA
 
 - `app/manifest.ts`, íconos placeholder (`scripts/generate-icons.mjs`), `viewport`/`themeColor` en el layout.

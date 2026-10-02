@@ -328,16 +328,30 @@ describe("otros schemas", () => {
     expect(ShoppingQuerySchema.safeParse(base).success).toBe(true);
     expect(ShoppingQuerySchema.safeParse({ ...base, country_code: "AR" }).success).toBe(false);
   });
-  it("Cart limita cantidades", () => {
+  it("Cart coincide con cart_items: cantidades, look con prenda y fechas de la base", () => {
     const item = {
       id: UUID,
+      cart_id: UUID,
       product_id: UUID,
       variant_id: null,
-      quantity: 11,
-      price_snapshot: { amount: 1, currency: "UYU" },
-      added_at: "2026-01-01T00:00:00Z",
+      look_id: UUID,
+      garment_slot: "top",
+      quantity: 1,
+      price_amount_snapshot: 1399,
+      currency_snapshot: "UYU",
+      purchased_at: null,
+      // PostgREST devuelve microsegundos y offset.
+      created_at: "2026-10-01T12:00:00.123456+00:00",
+      updated_at: "2026-10-01T12:00:00.123456+00:00",
     };
-    expect(CartSchema.safeParse({ id: UUID, user_id: UUID, items: [item] }).success).toBe(false);
+    const cart = (items: unknown[]) => CartSchema.safeParse({ id: UUID, user_id: UUID, items });
+    expect(cart([item]).success).toBe(true);
+    expect(cart([{ ...item, quantity: 11 }]).success).toBe(false);
+    expect(cart([{ ...item, garment_slot: null }]).success).toBe(false);
+    expect(cart([{ ...item, look_id: null, garment_slot: null }]).success).toBe(true);
+    expect(cart([{ ...item, look_id: null }]).success).toBe(true);
+    expect(cart([{ ...item, garment_slot: "sombrero" }]).success).toBe(false);
+    expect(cart([{ ...item, currency_snapshot: "ARS" }]).success).toBe(false);
   });
   it("JobTypes tienen schema de payload", () => {
     for (const type of JobTypeSchema.options) expect(JobPayloadSchemas[type]).toBeDefined();
@@ -377,6 +391,17 @@ describe("otros schemas", () => {
     expect(ClientAnalyticsEventSchema.safeParse({ name: "subscription_started" }).success).toBe(
       false,
     );
+  });
+  it("analytics: carrito y guardados salen solo del servidor (D20)", () => {
+    for (const name of [
+      "product_added_to_cart",
+      "product_removed_from_cart",
+      "look_saved",
+      "product_saved",
+    ]) {
+      expect(AnalyticsEventSchema.shape.name.safeParse(name).success).toBe(true);
+      expect(ClientAnalyticsEventSchema.safeParse({ name }).success).toBe(false);
+    }
   });
 });
 

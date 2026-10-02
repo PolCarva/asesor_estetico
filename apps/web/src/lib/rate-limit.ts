@@ -21,6 +21,9 @@ export const rateLimiters = {
   shoppingSearch: createMemoryRateLimiter({ limit: 10, windowMs: 60 * 60_000 }),
   // "Buscar más barato": una prenda por pedido, casi siempre sobre el pool cacheado.
   cheaperSearch: createMemoryRateLimiter({ limit: 20, windowMs: 60 * 60_000 }),
+  // Carrito y guardados: escrituras baratas, pero agregar puede encolar una revalidación
+  // (una por producto y hora, así que la tienda no recibe más que eso).
+  cart: createMemoryRateLimiter({ limit: 60, windowMs: 60_000 }),
 } satisfies Record<string, RateLimiter>;
 
 export async function enforceRateLimit(limiter: RateLimiter, key: string) {

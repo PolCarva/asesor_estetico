@@ -1,4 +1,4 @@
-import { enqueueJob, getLatestSubscription, getProductById } from "@asesor/db";
+import { enqueueProductRefresh, getLatestSubscription, getProductById } from "@asesor/db";
 import { createServerSupabaseClient } from "@asesor/db/server";
 import { getServiceRoleClient } from "@asesor/db/service";
 import { isPremiumSubscription, isProductStale } from "@asesor/shared";
@@ -14,7 +14,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
  * "Comprar ↗" (paso 08): lleva a la página real del producto. Si el dato tiene más de
  * 8 h, encola su revalidación (REFRESH_PRODUCT, una por producto y hora) antes de
  * redirigir: la tienda muestra el precio y el stock de hoy, y la app se actualiza para la
- * próxima vez. La revalidación que bloquea (antes de agregar al carrito) es del paso 10a.
+ * próxima vez. Antes de agregar al carrito, en cambio, se espera la revalidación (paso 10a).
  * El destino es siempre la URL guardada del producto, nunca un parámetro (sin open redirect).
  */
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -34,14 +34,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     if (isProductStale(stored.product.fetched_at)) {
       const premium = isPremiumSubscription(await getLatestSubscription(client, user.id));
       if (premium) {
-        const hour = new Date().toISOString().slice(0, 13);
-        await enqueueJob(getServiceRoleClient(), {
-          type: "REFRESH_PRODUCT",
-          payload: { product_id: id },
-          priority: 9,
-          maxAttempts: 2,
-          idempotencyKey: `refresh:${id}:${hour}`,
-        }).catch((error: unknown) =>
+        await enqueueProductRefresh(getServiceRoleClient(), id).catch((error: unknown) =>
           getLogger().warn("no se pudo encolar la revalidación del producto", { error }),
         );
       }

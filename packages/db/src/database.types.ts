@@ -112,9 +112,12 @@ export type Database = {
           cart_id: string;
           created_at: string;
           currency_snapshot: Database["public"]["Enums"]["currency_code"];
+          garment_slot: string | null;
           id: string;
+          look_id: string | null;
           price_amount_snapshot: number;
           product_id: string;
+          purchased_at: string | null;
           quantity: number;
           updated_at: string;
           variant_id: string | null;
@@ -122,10 +125,13 @@ export type Database = {
         Insert: {
           cart_id: string;
           created_at?: string;
-          currency_snapshot: Database["public"]["Enums"]["currency_code"];
+          currency_snapshot?: Database["public"]["Enums"]["currency_code"];
+          garment_slot?: string | null;
           id?: string;
-          price_amount_snapshot: number;
+          look_id?: string | null;
+          price_amount_snapshot?: number;
           product_id: string;
+          purchased_at?: string | null;
           quantity?: number;
           updated_at?: string;
           variant_id?: string | null;
@@ -134,9 +140,12 @@ export type Database = {
           cart_id?: string;
           created_at?: string;
           currency_snapshot?: Database["public"]["Enums"]["currency_code"];
+          garment_slot?: string | null;
           id?: string;
+          look_id?: string | null;
           price_amount_snapshot?: number;
           product_id?: string;
+          purchased_at?: string | null;
           quantity?: number;
           updated_at?: string;
           variant_id?: string | null;
@@ -147,6 +156,13 @@ export type Database = {
             columns: ["cart_id"];
             isOneToOne: false;
             referencedRelation: "carts";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "cart_items_look_id_fkey";
+            columns: ["look_id"];
+            isOneToOne: false;
+            referencedRelation: "looks";
             referencedColumns: ["id"];
           },
           {

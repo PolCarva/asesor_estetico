@@ -1,5 +1,6 @@
 import {
   applyTermAliases,
+  APPROX_UYU_PER_USD,
   type Garment,
   type Money,
   normalizeText,
@@ -37,9 +38,6 @@ export const DEFAULT_RANKING_WEIGHTS: RankingWeights = {
   stock: 0.08,
   price: 0.05,
 };
-
-/** Conversión aproximada solo para comparar precios al rankear; nunca se muestra. */
-export const APPROX_UYU_PER_USD = 40;
 
 /** Penalización por cada producto de la misma tienda que ya quedó más arriba. */
 export const STORE_DIVERSITY_PENALTY = 0.03;

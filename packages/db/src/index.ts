@@ -2,6 +2,8 @@
 // Los clientes están en subpaths separados (@asesor/db/browser, /server, /service, /worker, /admin, /proxy)
 // para que el código de servidor nunca termine en el bundle del navegador.
 export * from "./auth";
+export * from "./cart";
+export * from "./favorites";
 export * from "./jobs";
 export * from "./pipeline";
 export * from "./profile-sizes";
