@@ -160,6 +160,42 @@ export const FIXTURE_PRODUCTS: Product[] = [
 ];
 
 /**
+ * Camisa de mujer que solo lo dice en los datos de la página (schema.org `suggestedGender`):
+ * el título no nombra el público y es más barata que la cruda. Fuera del catálogo principal:
+ * el worker mock la suma para que el E2E vea que no le aparece a un perfil masculino, ni
+ * entre los resultados ni en "más barato" (paso 12a).
+ */
+export const FIXTURE_OTHER_AUDIENCE_PRODUCT: Product = {
+  id: "mock-oxford-entallada",
+  store: { name: "Boutique Ficticia", domain: "boutique.ficticia.test" },
+  url: "https://boutique.ficticia.test/camisas/oxford-cruda-entallada",
+  title: "Camisa oxford cruda entallada",
+  brand: null,
+  category: "SHIRT",
+  description: "Camisa oxford de algodón, calce entallado.",
+  image_url: null,
+  price: { amount: 1490, currency: "UYU" },
+  colors: ["crudo"],
+  materials: ["algodón"],
+  fit: "slim",
+  availability: "IN_STOCK",
+  variants: [
+    {
+      id: "mock-oxford-entallada-m",
+      sku: "OXE-M",
+      size: "M",
+      size_label: "M",
+      color: "crudo",
+      availability: "IN_STOCK",
+      price: null,
+    },
+  ],
+  in_store: null,
+  audience: "WOMEN",
+  fetched_at: FETCHED_AT,
+};
+
+/**
  * Producto de un local físico ficticio sin venta online (`IN_STORE_ONLY`) y sin precio
  * publicado. Fuera del catálogo principal: lo usan los tests del paso 04b.
  */

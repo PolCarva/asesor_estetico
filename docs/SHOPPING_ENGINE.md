@@ -8,7 +8,7 @@
 - **Ranking y cache persistente** (paso 05): ranking estético con talle del usuario y estado del talle, pesos documentados; cache de pools en Postgres (24 h) re-rankeada por pedido, frescura de producto (8 h) y persistencia idempotente de productos, variantes y `look_products`.
 - **Jobs reales** (paso 06): `SEARCH_PRODUCTS` (look completo o una prenda) y `REFRESH_PRODUCT` en el worker, con la cache Postgres, progreso por etapas en `jobs.progress`, fallas parciales por prenda, Premium verificado en el servidor y en el worker, y `startLookShopping` / `startLookShoppingAction` para encolar.
 - **Carrito** (paso 10a): agregar un producto con dato de más de 8 h espera su revalidación en el worker (hasta 8 s) y, si no llega, entra con el último dato y lo dice.
-- **Mocks** (`MockSearchProvider`, `MockProductFetcher`, catálogo ficticio `.test`): solo con `SHOPPING_PROVIDER=mock` (tests y E2E). El default del worker es `live` y en producción `mock` está prohibido por el schema de env.
+- **Mocks** (`MockSearchProvider`, `MockProductFetcher`, catálogo ficticio `.test`): solo con `SHOPPING_PROVIDER=mock` (tests y E2E). El default del worker es `live` y en producción `mock` está prohibido por el schema de env. El worker en `mock` (el que levanta el E2E, paso 12a) usa una cache de pools en memoria (la de Postgres no distingue mock de live), sella las páginas con la hora real y suma al catálogo una camisa de mujer que solo lo dice en su página (`FIXTURE_OTHER_AUDIENCE_PRODUCT`); los tests unitarios siguen con el reloj fijo y `FIXTURE_PRODUCTS`.
 
 ## Pipeline
 

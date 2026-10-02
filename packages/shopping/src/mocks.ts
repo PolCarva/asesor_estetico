@@ -9,6 +9,9 @@ import type {
   SearchProvider,
 } from "./types";
 
+/** Público como lo publica una tienda en schema.org (`audience.suggestedGender`). */
+const SUGGESTED_GENDER = { MEN: "male", WOMEN: "female", UNISEX: "unisex" } as const;
+
 const AVAILABILITY_URL = {
   IN_STOCK: "https://schema.org/InStock",
   OUT_OF_STOCK: "https://schema.org/OutOfStock",
@@ -30,6 +33,9 @@ export function renderProductPage(product: Product): string {
     category: product.category,
     color: product.colors.join(", "),
     material: product.materials.join(", "),
+    audience: product.audience
+      ? { "@type": "PeopleAudience", suggestedGender: SUGGESTED_GENDER[product.audience] }
+      : undefined,
     offers: {
       "@type": "Offer",
       price: product.price?.amount,

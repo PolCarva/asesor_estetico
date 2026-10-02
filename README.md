@@ -80,7 +80,7 @@ El seed se niega a correr contra un Supabase que no sea local.
 | `pnpm test`                 | Tests unitarios + integración (requiere Supabase local) |
 | `pnpm test:unit`            | Solo unitarios (no necesitan nada corriendo)            |
 | `pnpm test:integration`     | Integración contra Supabase local (RLS, jobs, Storage)  |
-| `pnpm test:e2e`             | Playwright (levanta la web; requiere Supabase local)    |
+| `pnpm test:e2e`             | Playwright (web + worker mock; requiere Supabase local) |
 | `pnpm format`               | Prettier (escribe)                                      |
 | `pnpm check`                | format:check + lint + typecheck + test:unit + build     |
 | `pnpm db:start` / `db:stop` | Levanta / apaga Supabase local                          |
@@ -93,6 +93,7 @@ Primera vez con E2E: `pnpm --filter @asesor/web exec playwright install chromium
 
 - No corras `pnpm test:integration` con el worker prendido: el worker puede tomar los jobs de prueba.
 - `pnpm test:e2e` levanta su propio `next dev` (puerto 3100). Next.js no permite dos `next dev` en el mismo directorio: si ya tenés `pnpm dev` corriendo, usá `PLAYWRIGHT_BASE_URL=http://localhost:3000 pnpm test:e2e`.
+- `pnpm test:e2e` también levanta el worker, siempre con IA y tiendas mock (sin red ni costo, aunque `.env` diga `AI_PROVIDER=openrouter`). Apagá antes cualquier otro worker (`pnpm worker:dev`): dos workers se reparten la cola y uno con IA real cobraría. Los usuarios de cada test se crean y se borran solos.
 - Levantá y reseteá Supabase siempre con los scripts (`pnpm db:*`), que usan la CLI fijada en el proyecto. Mezclar con otra versión instalada globalmente puede dejar Storage con un esquema incompatible.
 
 ## Worker en Docker

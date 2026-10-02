@@ -1,13 +1,20 @@
 import { buildShoppingQueries, EMPTY_USER_SIZES, type Product } from "@asesor/shared";
-import { FIXTURE_LOOK_SPECS, FIXTURE_PRODUCTS } from "@asesor/shared/fixtures";
+import {
+  FIXTURE_LOOK_SPECS,
+  FIXTURE_OTHER_AUDIENCE_PRODUCT,
+  FIXTURE_PRODUCTS,
+} from "@asesor/shared/fixtures";
 import { describe, expect, it } from "vitest";
 
 import {
   extractProduct,
   type FetchedPage,
   forAudience,
+  MockProductFetcher,
+  MockSearchProvider,
   normalizeProduct,
   rankProducts,
+  searchProducts,
 } from "../src";
 
 /**
@@ -139,5 +146,29 @@ describe("el ranking descarta el otro público", () => {
     expect(ids).not.toContain("mujer");
     expect(ids.sort()).toEqual(["hombre", "sin-dato", "unisex"]);
     expect(forAudience(shirt("mujer", "WOMEN"), { ...query!, audience: null })).toBe(true);
+  });
+});
+
+describe("catálogo mock del worker (E2E, paso 12a)", () => {
+  const catalog = [...FIXTURE_PRODUCTS, FIXTURE_OTHER_AUDIENCE_PRODUCT];
+  const deps = {
+    searchProvider: new MockSearchProvider(catalog),
+    fetcher: new MockProductFetcher(catalog),
+  };
+  const shirtQuery = (audience: "MEN" | null) =>
+    buildShoppingQueries(FIXTURE_LOOK_SPECS[0], { sizes: EMPTY_USER_SIZES, audience }).find(
+      (q) => q.slot === "top",
+    )!.query;
+
+  it("la camisa de mujer solo lo dice en la página y queda afuera para un perfil de hombre", async () => {
+    const { url } = FIXTURE_OTHER_AUDIENCE_PRODUCT;
+    expect(FIXTURE_OTHER_AUDIENCE_PRODUCT.title).not.toMatch(/mujer|dama/i);
+    expect(extractProduct(await deps.fetcher.fetch(url))?.audience).toBe("WOMEN");
+
+    const men = await searchProducts(shirtQuery("MEN"), deps);
+    expect(men.items.map((i) => i.product.url)).not.toContain(url);
+    // Sin público en la búsqueda sí entra: lo que la deja afuera es el dato de la página.
+    const any = await searchProducts(shirtQuery(null), deps);
+    expect(any.items.map((i) => i.product.url)).toContain(url);
   });
 });

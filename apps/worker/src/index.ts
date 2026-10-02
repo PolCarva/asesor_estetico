@@ -6,8 +6,10 @@ import { getWorkerEnv } from "@asesor/config/env/worker";
 import { createPostgresSearchCache } from "@asesor/db";
 import { createWorkerSupabaseClient } from "@asesor/db/worker";
 import { createLogger } from "@asesor/shared";
+import { FIXTURE_OTHER_AUDIENCE_PRODUCT, FIXTURE_PRODUCTS } from "@asesor/shared/fixtures";
 import {
   createLiveShopping,
+  createMemorySearchCache,
   MockProductFetcher,
   MockSearchProvider,
   OpenRouterWebSearchClient,
@@ -46,10 +48,18 @@ logger.info("proveedor de IA", {
 });
 
 // Shopping: live por defecto (tiendas reales); mock solo en tests/E2E y nunca en producción.
+// El catálogo mock suma una camisa de mujer que solo lo dice en su página: el E2E verifica
+// que no le aparece a un perfil masculino.
+const MOCK_CATALOG = [...FIXTURE_PRODUCTS, FIXTURE_OTHER_AUDIENCE_PRODUCT];
 const discovery = env.SHOPPING_PROVIDER === "live" && Boolean(env.OPENROUTER_API_KEY);
 const shopping =
   env.SHOPPING_PROVIDER === "mock"
-    ? { searchProvider: new MockSearchProvider(), fetcher: new MockProductFetcher() }
+    ? {
+        searchProvider: new MockSearchProvider(MOCK_CATALOG),
+        // Con la hora real (el reloj fijo es para los tests unitarios): si no, cada producto
+        // tendría meses y agregarlo al carrito esperaría una revalidación (paso 12a).
+        fetcher: new MockProductFetcher(MOCK_CATALOG, () => new Date()),
+      }
     : createLiveShopping({
         botContact: env.SHOPPING_BOT_CONTACT,
         // Sin clave de OpenRouter no hay descubrimiento fuera del registro de tiendas.
@@ -80,7 +90,10 @@ const runner = new WorkerRunner({
     fetcher: shopping.fetcher,
     variants: "variants" in shopping ? shopping.variants : undefined,
     // Pools de búsqueda de 24 h en Postgres (paso 05): una prenda ya buscada no se re-scrapea.
-    searchCache: createPostgresSearchCache(db),
+    // Con el catálogo mock (tests y E2E), en memoria: la cache de Postgres no distingue mock de
+    // live, y un pool ficticio quedaría 24 h para el worker real (o uno real llegaría al E2E).
+    searchCache:
+      env.SHOPPING_PROVIDER === "mock" ? createMemorySearchCache() : createPostgresSearchCache(db),
     // El costo de cada búsqueda web va a ai_usage, por job.
     webSearch: discovery
       ? { provider: "openrouter", model: `${env.OPENROUTER_TEXT_MODEL}+web_search` }

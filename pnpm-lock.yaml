@@ -317,6 +317,9 @@ importers:
       '@playwright/test':
         specifier: 'catalog:'
         version: 1.63.0
+      '@supabase/ssr':
+        specifier: 'catalog:'
+        version: 0.12.7(@supabase/supabase-js@2.117.2)
       '@tailwindcss/postcss':
         specifier: 'catalog:'
         version: 4.3.3

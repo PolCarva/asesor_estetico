@@ -30,6 +30,7 @@
   },
   "devDependencies": {
     "@playwright/test": "catalog:",
+    "@supabase/ssr": "catalog:",
     "@tailwindcss/postcss": "catalog:",
     "@types/node": "catalog:",
     "@types/react": "catalog:",

@@ -67,7 +67,7 @@ source ~/.nvm/nvm.sh && nvm use >/dev/null && pnpm format && pnpm lint && pnpm t
 
 - **Integración:** `pnpm test` corre unit + integración y necesita Supabase local arriba y **ningún worker corriendo**. Un worker vivo toma los jobs de los tests y, con `AI_PROVIDER=openrouter`, gasta IA real. Sin Supabase, la integración se saltea en silencio; con `CI=1` falla, que es lo que queremos. Confirmá en la salida la cantidad de tests de integración ejecutados.
 - **Build:** si tocaste algo que afecta el build (web, worker, config, dependencias o env), corré también `pnpm build`.
-- **UI:** si tocaste la UI, corré además `pnpm test:e2e`. Con `pnpm dev` corriendo, usá `PLAYWRIGHT_BASE_URL=http://localhost:3000 pnpm test:e2e`, porque no pueden correr dos `next dev` en el mismo directorio.
+- **UI:** si tocaste la UI, corré además `pnpm test:e2e`. Con `pnpm dev` corriendo, usá `PLAYWRIGHT_BASE_URL=http://localhost:3000 pnpm test:e2e`, porque no pueden correr dos `next dev` en el mismo directorio. Playwright levanta su propio worker con `AI_PROVIDER=mock SHOPPING_PROVIDER=mock` (paso 12a): apagá antes cualquier otro worker y revisá que no haya jobs en cola.
 - **Migraciones nuevas:** `pnpm db:reset` (aplica todo desde cero + seed) y `pnpm db:types` (CI compara `packages/db/src/database.types.ts`). `db:reset` borra y recrea los usuarios del seed.
 - **UI en el navegador:** verificala con el panel de Claude, en desktop y mobile, con un usuario free y uno Premium. Para `preview_start`, creá `.claude/launch.json` con `"runtimeExecutable": "bash"` y `"runtimeArgs": ["-lc", "source ~/.nvm/nvm.sh && nvm use >/dev/null && pnpm dev"]`, `"port": 3000`. `.claude/` queda excluido de git (punto 2 del protocolo).
 - **Integraciones reales** (IA, tiendas): además de los tests con mocks o fixtures, cada paso que integra algo real incluye una **prueba real** documentada en el log (qué se corrió y qué devolvió).
@@ -75,7 +75,7 @@ source ~/.nvm/nvm.sh && nvm use >/dev/null && pnpm format && pnpm lint && pnpm t
 
 ## Entorno y datos de prueba
 
-- **IA real ya activa:** `.env` tiene `AI_PROVIDER=openrouter`, así que todo worker que levantes usa IA paga. Para pruebas de shopping sin costo de IA, usá `AI_PROVIDER=mock SHOPPING_PROVIDER=live pnpm worker:dev` (las variables exportadas ganan sobre `--env-file`). En E2E, exportá `AI_PROVIDER=mock SHOPPING_PROVIDER=mock`. Costo de referencia: ~USD 0.10 por análisis free, ~0.24 Premium.
+- **IA real ya activa:** `.env` tiene `AI_PROVIDER=openrouter`, así que todo worker que levantes usa IA paga. Para pruebas de shopping sin costo de IA, usá `AI_PROVIDER=mock SHOPPING_PROVIDER=live pnpm worker:dev` (las variables exportadas ganan sobre `--env-file`). En E2E no hace falta: `playwright.config.ts` levanta el worker con `AI_PROVIDER=mock SHOPPING_PROVIDER=mock`. Costo de referencia: ~USD 0.10 por análisis free, ~0.24 Premium.
 - **Usuarios del seed** (`pnpm db:seed`, contraseña en el `README.md` raíz o en `SEED_USER_PASSWORD`): `demo@asesor.test` (Premium, suscripción MOCK de 30 días), `free@asesor.test` y `admin@asesor.test`. Se borran y recrean en cada seed o reset. `demo@asesor.test` trae productos, carrito y favoritos **ficticios** (dominios `.test`): para las pruebas con datos reales usá un usuario nuevo.
 - **Usuario nuevo con looks, sin gastar IA** (pasos 06–10b): registralo en la app y analizá con el worker en `AI_PROVIDER=mock`. El mock acepta cualquier imagen válida, por ejemplo `apps/web/e2e/fixtures/photo.png`; verificalo. Las fotos autorizadas solo hacen falta con IA real (pasos 01 y 12b).
 - **Hacer Premium a otro usuario local** (Mercado Pago sigue mockeado, no hay checkout real), con service role o desde Supabase Studio (http://localhost:54323):
@@ -122,7 +122,7 @@ source ~/.nvm/nvm.sh && nvm use >/dev/null && pnpm format && pnpm lint && pnpm t
 | 10a | [Carrito: datos y acciones](pasos/10a-carrito-backend.md)                                          | 18             | 06         | ✅     |
 | 10b | [Carrito y favoritos: UI y prueba real](pasos/10b-carrito-ui.md)                                   | 18             | 08, 10a    | ✅     |
 | 11  | [Auditoría: analytics, fallas parciales y seguridad](pasos/11-auditoria-analytics-errores.md)      | 20             | 09, 10b    | ✅     |
-| 12a | [Tests E2E de los flujos nuevos](pasos/12a-e2e.md)                                                 | 21             | 11         | ⬜     |
+| 12a | [Tests E2E de los flujos nuevos](pasos/12a-e2e.md)                                                 | 21             | 11         | ✅     |
 | 12b | [Prueba real de punta a punta (15 criterios)](pasos/12b-prueba-real.md)                            | 21             | 12a        | ⬜     |
 | 13  | [Documentación, auditoría final y resumen](pasos/13-docs-auditoria-final.md)                       | 22–23          | 12b        | ⬜     |
 
@@ -847,3 +847,27 @@ source ~/.nvm/nvm.sh && nvm use >/dev/null && pnpm format && pnpm lint && pnpm t
   - **12b:** revisar en la prueba de punta a punta que no haya productos del otro público y que el precio "en tu talle" coincida con la tienda.
   - **13 (limitaciones):** rate limit en memoria (una instancia); el público solo se filtra si la página lo declara; tiendas descubiertas sin señal pueden traer ropa del otro público si el título no lo dice; las fotos de producto se cargan desde la tienda (ve la IP del usuario); el catálogo es legible con sesión.
 - Commit: `feat(asesoria-shopping): paso 11 — auditoría: analytics, fallas parciales y seguridad`
+
+### Paso 12a — Tests E2E de los flujos nuevos · 2026-10-02 · ✅
+
+- Hecho:
+  - **Worker en E2E:** `playwright.config.ts` lo levanta como segundo `webServer` (espera "worker iniciado", se apaga con SIGTERM) con `AI_PROVIDER=mock SHOPPING_PROVIDER=mock WORKER_CONCURRENCY=4`, aunque `.env` diga `openrouter`. Mismo arranque en local y en CI. Documentado en el `README.md` raíz y en "Verificación" (apagar antes cualquier otro worker).
+  - **Datos** (`apps/web/e2e/helpers.ts`): cada test crea su usuario con service role, con perfil, asesoría y los 3 looks del fixture (`create_style_profile_with_looks`), y Premium con una suscripción MOCK; se borran al terminar cada archivo. La sesión se arma con `@supabase/ssr` (mismo formato de cookies que la app), sin pasar por el formulario. Otros helpers: `findLook` (talles → búsqueda → "Búsqueda terminada"), `holdLookSearch` / `setLookSearch` (búsqueda retenida en la cola y avanzada desde el test), `expirePremium`, `searchJobs`, `pieceRow`.
+  - **Specs nuevas** (12 tests, ×2 proyectos):
+    - `advice.spec.ts`: free ve "Te favorece", "Mejor evitar", colores y las 6 secciones solo como títulos bloqueados con "Ver la asesoría completa" (sin el texto del peluquero); el look 1 abre con las etiquetas de aspecto ("Color · cálido", "Silueta · trapecio"); los looks 2 y 3 muestran el paywall; en el perfil, silueta con "Desbloquear con Premium" y sin notas. Premium ve las 6 secciones, "Para decirle al peluquero", las notas de la silueta y el look 2 sin paywall.
+    - `shopping.spec.ts`: Premium: el formulario pide solo los 3 talles del look (el reloj no), busca con el catálogo mock, "Encontramos opciones para 4 de 5 prendas.", una fila por prenda con el recomendado (link por `/api/products/…/open`), alternativas ("Ver 1 opción más"), local físico, la prenda vacía y el total por moneda; la camisa de mujer del catálogo no aparece; "Buscar más barato" da el mensaje honesto; otro look busca sin volver a pedir talles. Progreso: etapas pendientes → "etapa 4 de 5" con 3 completadas, 1 en curso y "3 de 5 prendas listas" → resultado. Free: el CTA abre el paywall y no hay job en la base.
+    - `cart.spec.ts`: agregar una prenda suelta y el resto con "Agregar el look al carrito" (badge 1 → 4), ♡ del look y de un producto, el grupo "Tu look · 01", total "$ 7.670 + US$ 79" con el aproximado aparte, link "Comprar ↗" con `rel="noopener noreferrer nofollow"` y `target="_blank"`, talle M → L, "Ya lo compré", quitar, cambiar por otra opción; todo igual al recargar, guardados en `/app/favorites`; con el Premium vencido, solo lectura (sin quitar ni marcar, con las tiendas a mano). Free: el carrito muestra el paywall.
+  - **Worker mock:** cache de pools en memoria (la de Postgres serviría el catálogo ficticio 24 h a un worker real), páginas con la hora real (con el reloj fijo cada producto tenía 9 meses y agregarlo al carrito esperaba una revalidación) y una camisa de mujer que solo lo dice en su página (`FIXTURE_OTHER_AUDIENCE_PRODUCT`; el render mock publica `audience.suggestedGender`), con test unitario (sin público entra; con perfil de hombre, no).
+  - **CI:** las claves ficticias pasaron al job `check`; en el de integración pisaban al `.env` del Supabase local, así que la integración y el E2E de CI nunca habrían usado las claves reales (el único run, en `main`, cayó antes por el rate limit de Docker Hub).
+  - **Playwright:** 2 navegadores a la vez, 60 s por test, 10 s por espera.
+- Evidencia:
+  - **Carrera encontrada:** con el worker mock la búsqueda a veces terminaba antes de que se pintara el panel de progreso (falló en mobile); por eso el progreso se prueba con una búsqueda retenida (`scheduled_at` a una hora).
+  - **Carga:** con 4 navegadores y `--repeat-each=2`, `next dev` dejó páginas en "Cargando" más de 10 s y fallaron también tests del smoke; con 2 navegadores, 48/48 en 2,5 min.
+  - **Modo CI** (`pnpm build` + `CI=1 pnpm test:e2e`, `next start` en el 3100): primero 4 fallas porque el login por formulario tiene 10 intentos/min por IP en producción; con la sesión por cookies, 24/24 en 44 s.
+  - **Base local después de las corridas:** 0 jobs en cola; los usuarios de las specs nuevas se borran (los 84 `e2e-smoke-*` / `e2e-user-*` que quedan son del `smoke.spec.ts`, que no limpia).
+- Verificación: format ✓ · lint ✓ · typecheck ✓ · test ✓ (499 unit, 83 integración ejecutados: db 71, worker 12) · build ✓ · e2e ✓ (24, desktop + mobile: contra `pnpm dev` con `--repeat-each=2` 48/48, y con `CI=1` contra `next start` 24/24)
+- Decisiones: worker como `webServer`, datos por service role, sesión con `@supabase/ssr`, progreso con búsqueda retenida, worker mock con hora real, cache en memoria y producto de otro público, y claves ficticias solo en `check`, en `DECISIONES.md`.
+- Para pasos siguientes:
+  - **12b:** apagar el worker del E2E antes de la prueba real (Playwright lo apaga solo al terminar) y usar un usuario nuevo, no los `e2e-*`.
+  - **13 (limitaciones):** "Buscar más barato" con resultados no tiene E2E (el catálogo mock no tiene una opción más barata que no esté ya entre las del look; lo cubren integración y unit); "en tu talle" tampoco (el mock no tiene precios por talle); `smoke.spec.ts` deja sus usuarios en la base local; la primera corrida real del job de integración en CI va a ser la del PR.
+- Commit: `feat(asesoria-shopping): paso 12a — tests E2E de los flujos nuevos`

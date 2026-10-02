@@ -12,13 +12,7 @@ concurrency:
 permissions:
   contents: read
 
-# Valores ficticios: el build y los tests unitarios no se conectan a nada real.
 env:
-  NEXT_PUBLIC_APP_URL: http://localhost:3000
-  NEXT_PUBLIC_SUPABASE_URL: http://127.0.0.1:54321
-  NEXT_PUBLIC_SUPABASE_ANON_KEY: ci-placeholder-anon-key
-  NEXT_PUBLIC_ANALYTICS_ENABLED: "false"
-  SUPABASE_SERVICE_ROLE_KEY: ci-placeholder-service-role-key
   TURBO_TELEMETRY_DISABLED: "1"
 
 jobs:
@@ -26,6 +20,15 @@ jobs:
     name: Lint, typecheck, unit tests y build
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    # Valores ficticios: el build y los tests unitarios no se conectan a nada real. Solo en este
+    # job: en el de integración pisarían al `.env` con las claves del Supabase local (las
+    # variables ya exportadas ganan sobre las del archivo).
+    env:
+      NEXT_PUBLIC_APP_URL: http://localhost:3000
+      NEXT_PUBLIC_SUPABASE_URL: http://127.0.0.1:54321
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ci-placeholder-anon-key
+      NEXT_PUBLIC_ANALYTICS_ENABLED: "false"
+      SUPABASE_SERVICE_ROLE_KEY: ci-placeholder-service-role-key
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -65,6 +68,7 @@ jobs:
         run: pnpm --filter @asesor/web exec playwright install --with-deps chromium
       - name: Build de la web
         run: pnpm --filter @asesor/web build
+      # Playwright levanta la web (`next start`) y el worker con IA y tiendas mock (paso 12a).
       - run: pnpm test:e2e
       - uses: actions/upload-artifact@v4
         if: failure()
