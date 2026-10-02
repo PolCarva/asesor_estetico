@@ -233,6 +233,17 @@ export function LookShopping({
   const [state, action] = useActionState(startLookShoppingAction, initialState);
   const [askSizes, setAskSizes] = useState(false);
   const [showPaywall, setShowPaywall] = useState(false);
+  const missingKinds = missing.join(",");
+
+  // El servidor también puede pedir talles (`needs_sizes`): cuenta como pedido (paso 13).
+  useEffect(() => {
+    if (state.status === "needs_sizes" && missingKinds) {
+      sendClientEvent("size_requested", {
+        kinds: missingKinds,
+        count: missingKinds.split(",").length,
+      });
+    }
+  }, [state, missingKinds]);
 
   if (search && isActive(search)) {
     return <ShoppingProgressPanel key={search.jobId} lookId={lookId} initial={search} />;

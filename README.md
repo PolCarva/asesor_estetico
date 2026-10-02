@@ -2,7 +2,7 @@
 
 Asesor de imagen personal con IA: analiza fotos del usuario, decide cómo potenciar su imagen, genera tres versiones visuales realistas y encuentra productos reales para reproducir los looks. Web/PWA para Uruguay.
 
-> Estado: foundation completa y **análisis + imagen del look con IA real** (OpenRouter). Pagos y tiendas siguen mockeados. Ver [`docs/SETUP_STATUS.md`](docs/SETUP_STATUS.md).
+> Estado: foundation completa, **análisis + imagen del look con IA real** (OpenRouter), **asesoría de imagen completa**, **shopping real en tiendas de Uruguay** y **carrito externo** con guardados. Pagos (Mercado Pago) y el chat siguen pendientes: Premium se activa por seed o SQL. Ver [`docs/SETUP_STATUS.md`](docs/SETUP_STATUS.md).
 
 ## Requisitos
 
@@ -37,14 +37,18 @@ pnpm check
 
 ### IA real o mock
 
-Por defecto `AI_PROVIDER=mock`: todo funciona sin red ni costo. Para usar IA real, en `.env`:
+Por defecto `AI_PROVIDER=mock`: el análisis funciona sin red ni costo. Para usar IA real, en `.env`:
 
 ```bash
 AI_PROVIDER=openrouter
 OPENROUTER_API_KEY=<tu clave de https://openrouter.ai/keys>
 ```
 
-Reiniciá `pnpm worker:dev`. Cuesta ~USD 0.10 por análisis de un usuario free (ver [`docs/AI_PIPELINE.md`](docs/AI_PIPELINE.md)). Configurá un límite de gasto en la clave.
+Reiniciá `pnpm worker:dev`. Cuesta ~USD 0.10 por análisis de un usuario free y ~USD 0.25 Premium (3 imágenes; ver [`docs/AI_PIPELINE.md`](docs/AI_PIPELINE.md)). Configurá un límite de gasto en la clave.
+
+### Shopping real o mock
+
+`SHOPPING_PROVIDER=live` (default): el worker busca en tiendas reales de Uruguay, aunque `AI_PROVIDER=mock`. Si hay `OPENROUTER_API_KEY`, además descubre tiendas fuera del registro con búsqueda web (~USD 0.05 por búsqueda de un look; [`docs/SHOPPING_ENGINE.md`](docs/SHOPPING_ENGINE.md)). `SHOPPING_PROVIDER=mock` usa un catálogo ficticio (`.test`): solo para tests y E2E. `SHOPPING_BOT_CONTACT` (opcional) va en el user agent con el que el worker visita las tiendas. Con `NODE_ENV=production`, `AI_PROVIDER=mock` y `SHOPPING_PROVIDER=mock` se rechazan al arrancar.
 
 ### Usuarios de desarrollo (seed)
 
@@ -82,6 +86,7 @@ El seed se niega a correr contra un Supabase que no sea local.
 | `pnpm test:integration`     | Integración contra Supabase local (RLS, jobs, Storage)  |
 | `pnpm test:e2e`             | Playwright (web + worker mock; requiere Supabase local) |
 | `pnpm format`               | Prettier (escribe)                                      |
+| `pnpm format:check`         | Prettier (solo verifica, como CI)                       |
 | `pnpm check`                | format:check + lint + typecheck + test:unit + build     |
 | `pnpm db:start` / `db:stop` | Levanta / apaga Supabase local                          |
 | `pnpm db:reset`             | Migraciones desde cero + seed                           |

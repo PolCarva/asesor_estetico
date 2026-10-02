@@ -21,21 +21,21 @@
 
 Helpers en `@asesor/db`:
 
-| Helper                   | Falla con              | Uso                                                         |
-| ------------------------ | ---------------------- | ----------------------------------------------------------- |
-| `requireAuth()`          | `AUTH_REQUIRED` 401    | toda acción autenticada                                     |
-| `requirePremium()`       | `PREMIUM_REQUIRED` 402 | shopping, carrito, chat, looks 2-3                          |
-| `requireAdmin()`         | `FORBIDDEN` 403        | `/admin` (la página responde 404)                           |
-| `requireResourceOwner()` | `NOT_FOUND` 404        | acceso a un recurso por id (no revela si existe: anti-IDOR) |
+| Helper                   | Falla con              | Uso                                                                                    |
+| ------------------------ | ---------------------- | -------------------------------------------------------------------------------------- |
+| `requireAuth()`          | `AUTH_REQUIRED` 401    | toda acción autenticada                                                                |
+| `requirePremium()`       | `PREMIUM_REQUIRED` 402 | shopping, "más barato", carrito, guardar productos, looks 2-3 (el chat, cuando exista) |
+| `requireAdmin()`         | `FORBIDDEN` 403        | `/admin` (la página responde 404)                                                      |
+| `requireResourceOwner()` | `NOT_FOUND` 404        | acceso a un recurso por id (no revela si existe: anti-IDOR)                            |
 
 La búsqueda de productos verifica Premium tres veces: en la server action (`requirePremium`), en `startLookShopping` y en el worker al ejecutar el job (corre con service role y la suscripción pudo vencer en el medio). Del job, el usuario solo lee estado y progreso (etapa y conteos): nunca `payload`, `result` ni `last_error`. El panel de progreso los consulta por `GET /api/looks/[id]/shopping`, que exige sesión y usa el cliente del usuario (RLS: solo sus jobs).
 
-El carrito (paso 10a) es Premium en las server actions (`requirePremium` → `paywall`, sin error técnico), en la lógica de `@asesor/db` y en la RLS de `carts` / `cart_items`. El precio de cada ítem lo fija la base desde el catálogo (trigger): el cliente no tiene grant sobre el precio ni la moneda. El look de un ítem tiene que ser del usuario (política de insert y update). Un usuario que dejó de ser Premium conserva la lectura de su carrito (RLS), pero las actions le devuelven `paywall`: el carrito queda en solo lectura. Los productos guardados exigen Premium igual (RLS y `saveFavorite` / `removeFavorite`); los looks guardados, solo sesión. `shopping_started`, `shopping_completed`, `cheaper_alternative_requested`, `product_added_to_cart`, `product_removed_from_cart`, `look_saved` y `product_saved` salen del servidor o del worker: `/api/analytics` los rechaza (400) si los manda el navegador (paso 11, test de la ruta).
+El carrito (paso 10a) es Premium en las server actions (`requirePremium` → `paywall`, sin error técnico), en la lógica de `@asesor/db` y en la RLS de `carts` / `cart_items`. El precio de cada ítem lo fija la base desde el catálogo (trigger): el cliente no tiene grant sobre el precio ni la moneda. El look de un ítem tiene que ser del usuario (política de insert y update). Un usuario que dejó de ser Premium conserva la lectura de su carrito (RLS), pero las actions le devuelven `paywall`: el carrito queda en solo lectura. Guardar un producto exige Premium (RLS de insert y `saveFavorite`); quitarlo lo bloquea la app sin Premium (`removeFavorite`), aunque la RLS deja borrar lo propio (ver abajo). Los looks guardados, solo sesión. `shopping_started`, `shopping_completed`, `cheaper_alternative_requested`, `product_added_to_cart`, `product_removed_from_cart`, `look_saved` y `product_saved` salen del servidor o del worker: `/api/analytics` los rechaza (400) si los manda el navegador (paso 11, test de la ruta).
 
 ### Auditoría de Premium (paso 11)
 
 - **Una sola regla en TypeScript y SQL:** `getPremiumSubscription` (usada por `requirePremium`, `isUserPremium` del worker, `getPlan` de la web y "Comprar ↗") considera Premium a cualquier suscripción `ACTIVE` o `CANCELLED` con período vigente, igual que `current_user_is_premium()`. Antes TypeScript miraba solo la más reciente y, con varias filas, podía contradecir a la RLS (test de integración `premium.int.test.ts`).
-- **Escrituras de shopping, carrito y guardados de productos:** Premium en la action (`requirePremium` → `paywall`), en la función de `@asesor/db` y en la RLS de escritura (y en el worker para las búsquedas). Probado con usuarios free y vencidos llamando a las funciones de `@asesor/db` y a las actions, no solo desde la UI.
+- **Escrituras de shopping, carrito y guardados de productos:** Premium en la action (`requirePremium` → `paywall`), en la función de `@asesor/db` y en la RLS de insert y update (y en el worker para las búsquedas). Los deletes de lo propio no lo piden en la RLS (ver la última viñeta). Probado con usuarios free y vencidos llamando a las funciones de `@asesor/db` y a las actions, no solo desde la UI.
 - **Lecturas que no piden Premium, a propósito:**
   - el catálogo (`products`, `product_variants`) lo lee cualquier usuario con sesión: son datos públicos de las tiendas, sin nada del usuario; lo protegido es qué productos corresponden a sus looks (`look_products`, Premium);
   - el progreso de sus propios jobs (`/api/looks/[id]/shopping`): solo etapa y conteos;
@@ -56,7 +56,7 @@ Y en la base, RLS en todas las tablas (detalle en `DATA_MODEL.md`). Los permisos
 ## Service role
 
 - `SUPABASE_SERVICE_ROLE_KEY` saltea RLS. Solo la usan el servidor Next.js (`@asesor/db/service`, marcado `server-only`) y el worker.
-- Se usa después de autorizar en el servidor y solo para lo que RLS no permite: admin, webhooks, analytics, resúmenes de looks bloqueados (solo columnas no sensibles).
+- Se usa después de autorizar en el servidor y solo para lo que RLS no permite: admin, webhooks, analytics, resúmenes de looks bloqueados (solo columnas no sensibles), encolar jobs (`VALIDATE_PHOTOS`, `SEARCH_PRODUCTS`, `REFRESH_PRODUCT`: el usuario no puede crear jobs) y esperar la revalidación de un producto antes de agregarlo al carrito.
 - `getServerEnv()` y `createAdminClient()` lanzan si se ejecutan en el navegador.
 
 ## Storage y uploads
@@ -72,7 +72,7 @@ Y en la base, RLS en todas las tablas (detalle en `DATA_MODEL.md`). Los permisos
 
 ## APIs y webhooks
 
-- Route Handlers validan body con Zod, limitan tamaño y aplican rate limit.
+- Route Handlers validan body con Zod, limitan tamaño y aplican rate limit. Excepciones: el polling del progreso (`GET /api/looks/[id]/shopping`, solo lee el estado de un job propio) y `/auth/confirm` (el link del email).
 - `/api/analytics`: solo eventos de una lista blanca y propiedades planas y cortas.
 - `/api/webhooks/mercadopago`:
   - verifica `x-signature` (HMAC-SHA256 del manifest `id;request-id;ts`) con comparación en tiempo constante y ventana de 5 minutos contra replays;
@@ -103,7 +103,7 @@ De las respuestas solo se usan los datos de producto extraídos (validados con Z
 
 ## Rate limiting
 
-Interfaz `RateLimiter` (`@asesor/shared`) con implementación en memoria. Límites actuales: auth 10/min por IP en producción (200/min en desarrollo, para los E2E), subida de fotos 20/hora por usuario, analytics 60/min por IP, webhooks 120/min por IP, búsqueda de productos 10/hora por usuario (recorre tiendas reales y puede pagar búsquedas web; además, una sola búsqueda activa por look y prenda), "Buscar más barato" 20/hora por usuario (Premium verificado en la action, en `startCheaperSearch` y en el worker), carrito y guardados 60/min por usuario (agregar puede encolar una revalidación, pero una sola por producto y hora), "Comprar ↗" 120/min por usuario (puede encolar una revalidación). Cada action y ruta nueva tiene un test que verifica que, con el límite agotado, no toca la base y responde sin detalles técnicos (paso 11). Pendiente: implementación compartida en Postgres para múltiples instancias.
+Interfaz `RateLimiter` (`@asesor/shared`) con implementación en memoria. Límites actuales: auth 10/min por IP en producción (200/min en desarrollo, para los E2E), subida de fotos 20/hora por usuario, analytics 60/min por IP, webhooks 120/min por IP, búsqueda de productos 10/hora por usuario (recorre tiendas reales y puede pagar búsquedas web; además, una sola búsqueda activa por look y prenda), "Buscar más barato" 20/hora por usuario (Premium verificado en la action, en `startCheaperSearch` y en el worker), carrito y guardados 60/min por usuario, con un contador compartido (agregar puede encolar una revalidación, pero una sola por producto y hora), "Comprar ↗" 120/min por usuario (puede encolar una revalidación). Cada action y ruta nueva tiene un test que verifica que, con el límite agotado, no toca la base y responde sin detalles técnicos (paso 11). Pendiente: implementación compartida en Postgres para múltiples instancias.
 
 ## Headers de seguridad
 

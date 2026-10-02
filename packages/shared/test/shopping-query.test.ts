@@ -134,6 +134,14 @@ describe("buildSearchTerms", () => {
     expect(terms("championes blancos", "SHOES", "blanco")[0]).toBe("championes blanco");
   });
 
+  it("polo y chomba (el ejemplo del SPEC: 'polo tejido taupe') se buscan por su nombre", () => {
+    expect(terms("polo tejido", "T_SHIRT", "taupe")[0]).toBe("polo tejido taupe");
+    expect(terms("polo tejido", "T_SHIRT", "taupe")).toContain("chomba taupe");
+    // Aunque la IA lo clasifique como tejido, no se busca como "buzo".
+    expect(terms("polo tejido", "KNITWEAR", "taupe")[0]).toBe("polo tejido taupe");
+    expect(terms("buzo liviano", "KNITWEAR", "azul")[0]).toBe("buzo liviano azul");
+  });
+
   it("unas botas no se buscan como championes", () => {
     const t = terms("desert boots", "SHOES", "chocolate");
     expect(t[0]).toBe("botas chocolate");
@@ -161,6 +169,24 @@ describe("pertinencia de candidatas", () => {
     expect(isRelevantCandidate("CAMISETA BÁSICA UNISSEX - NEGRO", q)).toBe(true);
     expect(isRelevantCandidate("/productos/remeras-lisas-negro_123", q)).toBe(true);
     expect(isRelevantCandidate("Medias antideslizantes negro", q)).toBe(false);
+  });
+
+  it("una chomba acepta chombas y polos, no remeras", () => {
+    const [polo] = buildShoppingQueries(
+      {
+        ...look1,
+        top: {
+          ...look1.top,
+          category: "T_SHIRT",
+          description: "polo tejido",
+          color: { name: "taupe", hex: "#8B8580" },
+        },
+      },
+      { sizes, audience: "MEN" },
+    );
+    expect(isRelevantCandidate("Chomba piqué manga corta - Beige", polo!.query)).toBe(true);
+    expect(isRelevantCandidate("POLO DE PUNTO - Topo", polo!.query)).toBe(true);
+    expect(isRelevantCandidate("Remera básica - Beige", polo!.query)).toBe(false);
   });
 
   it("descarta el otro público y niños", () => {

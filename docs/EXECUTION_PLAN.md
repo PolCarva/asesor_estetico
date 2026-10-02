@@ -2,15 +2,15 @@
 
 ## Milestones
 
-| #   | Milestone                                        | Estado                          |
-| --- | ------------------------------------------------ | ------------------------------- |
-| 0   | **FOUNDATION / PROJECT SETUP**                   | ✅ Completado (2026-09-29)      |
-| 1   | Onboarding real y análisis con IA                | ✅ Completado (2026-09-30)      |
-| 2   | Looks con imagen realista                        | En curso: imagen del look lista |
-| 3   | Paywall y suscripción (Mercado Pago)             | Pendiente                       |
-| 4   | Shopping real en tiendas de Uruguay              | Pendiente                       |
-| 5   | Favoritos, carrito y chat Premium                | Pendiente                       |
-| 6   | Lanzamiento (legal, observabilidad, performance) | Pendiente                       |
+| #   | Milestone                                        | Estado                                 |
+| --- | ------------------------------------------------ | -------------------------------------- |
+| 0   | **FOUNDATION / PROJECT SETUP**                   | ✅ Completado (2026-09-29)             |
+| 1   | Onboarding real y análisis con IA                | ✅ Completado (2026-09-30)             |
+| 2   | Looks con imagen realista                        | En curso: imagen del look lista        |
+| 3   | Paywall y suscripción (Mercado Pago)             | Pendiente                              |
+| 4   | Shopping real en tiendas de Uruguay              | ✅ Completado (2026-10-02)             |
+| 5   | Favoritos, carrito y chat Premium                | Favoritos y carrito ✅; chat pendiente |
+| 6   | Lanzamiento (legal, observabilidad, performance) | Pendiente                              |
 
 ## 0 · FOUNDATION / PROJECT SETUP — ✅ Completado
 
@@ -42,6 +42,7 @@ Detalle del estado en `SETUP_STATUS.md`.
 - [x] Handlers que escriben `user_photos.status`, `style_profiles` y `looks` (función SQL atómica).
 - [x] UI de progreso con auto-refresco; motivos concretos si una foto no sirve.
 - [x] Fotos reducidas en el navegador (≤2048 px, sin EXIF).
+- [x] **Asesoría de imagen completa** (rama `feat/asesoria-shopping`, pasos 01, 02 y 02b): StyleProfile v3 con pelo, grooming, colores, ropa y fit, calzado, accesorios, joyería, anteojos, tatuajes y consejos; UI de consultoría con teaser free y detalle Premium (RLS), bento del perfil y detalle de cada look. Detalle en `PRODUCT_SPEC.md` y `AI_PIPELINE.md`.
 
 ## 2 · Looks con imagen realista — En curso
 
@@ -57,16 +58,23 @@ Detalle del estado en `SETUP_STATUS.md`.
 - Webhook: confirmar estado con `getSubscription` antes de activar; tests con eventos grabados.
 - Checkout, página de retorno, gestión de suscripción en el perfil.
 
-## 4 · Shopping real
+## 4 · Shopping real — ✅ Completado (2026-10-02)
 
-- `SearchProvider` y `ProductFetcher` reales, respetando términos de cada tienda.
-- Cache en Postgres (24 h búsquedas / 8 h productos) y `REFRESH_PRODUCT`.
-- `look_products` por prenda, "alternativa más barata".
+Rama `feat/asesoria-shopping`, pasos 03 a 09, 11, 12a y 12b; auditoría en `docs/goals/asesoria-shopping/AUDITORIA.md`.
+
+- [x] Queries estructuradas desde el LookSpec, búsqueda por plataforma (Fenicio, VTEX, Shopify, WooCommerce) sobre un registro de tiendas, sitemaps y descubrimiento web, respetando robots.txt y sin evadir anti-bot.
+- [x] Descarga segura, extracción en cascada (JSON-LD → microdata → OpenGraph → endpoints de plataforma), talles y stock, normalización y validación (Zod).
+- [x] Ranking documentado (estética ≫ disponibilidad > precio), cache de pools en Postgres (24 h) y productos (8 h), `SEARCH_PRODUCTS` y `REFRESH_PRODUCT` con progreso por etapas.
+- [x] Talles del usuario en el perfil, resultados por prenda (`look_products`), "Buscar más barato" y locales físicos (`IN_STORE_ONLY`).
+- [x] Premium verificado en actions, `@asesor/db`, worker y RLS. Probado de punta a punta con tiendas reales (paso 12b).
+- [ ] Zara, Nike y Mercado Libre: fuera de alcance mientras bloqueen bots o exijan OAuth (D7).
+- [ ] Mejoras de calidad (limitaciones en `RESUMEN.md`): el ranking no ve las fotos; los términos de búsqueda son léxicos (faltan sinónimos para algunas prendas); el público solo se filtra si la página lo declara; sin fallback de navegador para tiendas que renderizan en el cliente; rate limit compartido (Postgres) antes de escalar; E2E de "más barato" con resultados.
 
 ## 5 · Favoritos, carrito y chat
 
-- Guardar looks/productos, carrito con revalidación al agregar, derivación a la tienda.
-- Chat Premium con `chatWithStyleAdvisor`, límites de uso y moderación.
+- [x] Guardar looks (cualquier plan) y productos (Premium) en `/app/favorites` (pasos 10a y 10b).
+- [x] Carrito externo agrupado por look: talle, comprado, quitar, cambiar por otra opción, total aproximado por moneda, revalidación al agregar y "Comprar ↗" a la tienda (pasos 10a y 10b).
+- [ ] Chat Premium con `chatWithStyleAdvisor`, límites de uso y moderación.
 
 ## 6 · Lanzamiento
 

@@ -495,7 +495,11 @@ export function rankProducts(
     })
     .filter((item) => item.breakdown.category_match > 0)
     .sort((a, b) => unlike(a) - unlike(b) || b.score - a.score);
+  // "Más barato" mantiene la categoría lo más posible (SPEC): con opciones de la misma
+  // categoría, las relacionadas (una bermuda por un jean) quedan afuera (paso 13).
+  const sameCategory = ranked.filter((item) => item.breakdown.category_match === 1);
+  const candidates = query.strict_max_price && sameCategory.length > 0 ? sameCategory : ranked;
   return diversity > 0 || duplicates > 0
-    ? diversify(ranked, { store: diversity, duplicate: duplicates })
-    : ranked;
+    ? diversify(candidates, { store: diversity, duplicate: duplicates })
+    : candidates;
 }

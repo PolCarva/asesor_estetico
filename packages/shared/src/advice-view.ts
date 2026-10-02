@@ -129,13 +129,41 @@ export function buildAdviceSections(advice: StyleAdvice): AdviceSection[] {
   return sections.filter((s): s is AdviceSection => s !== null);
 }
 
-/** La asesoría nueva (v2) tiene contenido: v1 subido la deja vacía. */
-function hasV2Advice(advice: StyleAdvice): boolean {
-  return (
-    advice.general_advice.length > 0 ||
-    advice.hair.barber_instructions.trim() !== "" ||
-    advice.hair.recommended_cut.trim() !== ""
-  );
+/**
+ * La asesoría nueva (v2 en adelante) tiene contenido: un perfil v1 subido deja vacíos todos
+ * los campos que v2 agregó. Se mira cualquiera de ellos (paso 13: mirar solo el corte, el
+ * texto para el peluquero y los consejos marcaba "pendiente" a alguien rapado sin consejos).
+ */
+export function hasV2Advice(advice: StyleAdvice): boolean {
+  const { hair, grooming, clothing, shoes, accessories, tattoos } = advice;
+  const texts = [
+    hair.recommended_cut,
+    hair.recommended_length,
+    hair.sides,
+    hair.barber_instructions,
+  ];
+  const lists = [
+    hair.texture_tips,
+    hair.styling,
+    hair.avoid,
+    grooming.facial_hair.recommended,
+    grooming.facial_hair.avoid,
+    grooming.eyebrows,
+    grooming.avoid,
+    clothing.recommended_silhouettes,
+    clothing.pant_cuts,
+    clothing.lengths,
+    clothing.layering,
+    clothing.avoid,
+    shoes.avoid,
+    accessories.jewelry,
+    accessories.eyewear,
+    accessories.avoid,
+    tattoos.suggestions,
+    tattoos.placements,
+    advice.general_advice,
+  ];
+  return texts.some((t) => t.trim() !== "") || lists.some((l) => l.length > 0);
 }
 
 /**

@@ -21,6 +21,7 @@ erDiagram
   STYLE_PROFILES ||--o{ LOOKS : genera
   LOOKS ||--o{ LOOK_PRODUCTS : sugiere
   PRODUCTS ||--o{ LOOK_PRODUCTS : aparece
+  PRODUCTS ||--o{ LOOK_PRODUCTS : "referencia de más barato"
   PRODUCTS ||--o{ PRODUCT_VARIANTS : tiene
   PROFILES ||--o{ FAVORITES : guarda
   LOOKS ||--o{ FAVORITES : "favorito (look)"
@@ -113,6 +114,19 @@ erDiagram
     smallint rank
     numeric score
     jsonb score_breakdown
+    text size_status
+    text user_size
+    text list "MAIN | CHEAPER"
+    uuid reference_product_id FK "más barato"
+    numeric max_price_amount
+    currency_code max_price_currency
+  }
+  SHOPPING_SEARCH_CACHE {
+    text key PK "hash de la prenda, sin datos del usuario"
+    jsonb query_json
+    uuid_array product_ids
+    jsonb stats
+    timestamptz expires_at
   }
   FAVORITES {
     uuid id PK
@@ -133,6 +147,7 @@ erDiagram
     text garment_slot
     smallint quantity
     numeric price_amount_snapshot "lo fija un trigger"
+    currency_code currency_snapshot
     timestamptz purchased_at
   }
   SUBSCRIPTIONS {
@@ -194,6 +209,8 @@ erDiagram
     int image_count
     numeric estimated_cost_usd
     int duration_ms
+    boolean success
+    jsonb metadata
   }
   ANALYTICS_EVENTS {
     uuid id PK
@@ -206,27 +223,27 @@ erDiagram
 
 ## Tablas
 
-| Tabla                   | Propósito                                                                      | Escribe                                |
-| ----------------------- | ------------------------------------------------------------------------------ | -------------------------------------- |
-| `profiles`              | Perfil de la app, 1:1 con `auth.users`                                         | Trigger + usuario (columnas limitadas) |
-| `style_profiles`        | Versiones del StyleProfile (jsonb); una activa por usuario                     | Worker                                 |
-| `style_advice`          | Asesoría detallada (Premium) de cada StyleProfile, 1:1                         | Worker                                 |
-| `user_photos`           | Metadata de fotos; el archivo está en Storage. Una por tipo                    | Usuario (insert/delete)                |
-| `looks`                 | 3 looks por StyleProfile (`position` 1..3) con `spec_json`                     | Worker                                 |
-| `products`              | Catálogo global normalizado de tiendas externas                                | Worker / servidor                      |
-| `product_variants`      | Talles/colores con stock propio                                                | Worker / servidor                      |
-| `look_products`         | Ranking de productos por prenda (`garment_slot`) de un look, con `size_status` | Worker (`replace_look_products`)       |
-| `shopping_search_cache` | Pools de búsqueda (24 h): uuids de productos validados de una prenda           | Solo service role                      |
-| `favorites`             | Looks o productos guardados (exactamente uno)                                  | Usuario                                |
-| `carts`                 | Un carrito externo por usuario                                                 | Usuario (Premium)                      |
-| `cart_items`            | Productos del carrito por look y prenda; el precio lo fija un trigger          | Usuario (Premium)                      |
-| `subscriptions`         | Estado del plan Premium por proveedor                                          | Servidor (tras validar el pago)        |
-| `payment_events`        | Webhooks recibidos; `unique(provider, event_id)` = idempotencia                | Servidor                               |
-| `chat_threads`          | Conversaciones con el asesor                                                   | Usuario (Premium)                      |
-| `chat_messages`         | Mensajes; el usuario solo puede escribir `role = 'user'`                       | Usuario / servidor                     |
-| `jobs`                  | Cola de trabajos, con progreso por etapas (`progress`)                         | Solo service role                      |
-| `ai_usage`              | Costo y uso de cada operación de IA                                            | Solo service role                      |
-| `analytics_events`      | Eventos de producto                                                            | Solo service role                      |
+| Tabla                   | Propósito                                                                                                    | Escribe                                                           |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------- |
+| `profiles`              | Perfil de la app, 1:1 con `auth.users`                                                                       | Trigger + usuario (columnas limitadas)                            |
+| `style_profiles`        | Versiones del StyleProfile (jsonb); una activa por usuario                                                   | Worker                                                            |
+| `style_advice`          | Asesoría detallada (Premium) de cada StyleProfile, 1:1                                                       | Worker                                                            |
+| `user_photos`           | Metadata de fotos; el archivo está en Storage. Una por tipo                                                  | Usuario (insert/delete)                                           |
+| `looks`                 | 3 looks por StyleProfile (`position` 1..3) con `spec_json`                                                   | Worker                                                            |
+| `products`              | Catálogo global normalizado de tiendas externas                                                              | Worker / servidor                                                 |
+| `product_variants`      | Talles/colores con stock propio                                                                              | Worker / servidor                                                 |
+| `look_products`         | Ranking de productos por prenda (`garment_slot`) de un look, con `size_status`, y las "más baratas" (`list`) | Worker (`replace_look_products`, `replace_cheaper_look_products`) |
+| `shopping_search_cache` | Pools de búsqueda (24 h): uuids de productos validados de una prenda                                         | Solo service role                                                 |
+| `favorites`             | Looks o productos guardados (exactamente uno)                                                                | Usuario                                                           |
+| `carts`                 | Un carrito externo por usuario                                                                               | Usuario (Premium)                                                 |
+| `cart_items`            | Productos del carrito por look y prenda; el precio lo fija un trigger                                        | Usuario (Premium)                                                 |
+| `subscriptions`         | Estado del plan Premium por proveedor                                                                        | Servidor (tras validar el pago)                                   |
+| `payment_events`        | Webhooks recibidos; `unique(provider, event_id)` = idempotencia                                              | Servidor                                                          |
+| `chat_threads`          | Conversaciones con el asesor                                                                                 | Usuario (Premium)                                                 |
+| `chat_messages`         | Mensajes; el usuario solo puede escribir `role = 'user'`                                                     | Usuario / servidor                                                |
+| `jobs`                  | Cola de trabajos, con progreso por etapas (`progress`)                                                       | Solo service role                                                 |
+| `ai_usage`              | Costo y uso de cada operación de IA                                                                          | Solo service role                                                 |
+| `analytics_events`      | Eventos de producto                                                                                          | Solo service role                                                 |
 
 ## Talles del usuario
 
@@ -282,7 +299,7 @@ Migración `20261001000300_shopping_jobs.sql` (paso 06, D13 y D14):
 - **Una búsqueda activa por (look, prenda)**: índice único parcial `jobs_one_active_search_idx (look_id, coalesce(garment_slot, '*')) where type = 'SEARCH_PRODUCTS' and status in ('QUEUED', 'RUNNING')`. La del look completo (`garment_slot` null) no bloquea la de una prenda; dos pedidos simultáneos no encolan dos (el segundo falla con `23505` y `startLookShopping` devuelve el activo).
 - **Lectura del dueño**: `grant select (progress, look_id, garment_slot)` a `authenticated`, con la política "jobs: select own". `payload`, `result` y `last_error` siguen ocultos.
 - **`result`** de `SEARCH_PRODUCTS`: `ShoppingSearchSummary` (prendas con resultados, fallidas, candidatos, productos, guardados, stock y talle sin verificar, parcial, hits de cache). El mismo resumen va en el último `progress.summary`, que es lo que lee la UI.
-- **Payload de `SEARCH_PRODUCTS`**: `{ user_id, look_id, sizes (UserSizes), slot?, max_price? }`. Sin `slot` busca el look completo y reemplaza todas sus prendas; `max_price` es estricto y solo va con `slot`.
+- **Payload de `SEARCH_PRODUCTS`**: `{ user_id, look_id, sizes (UserSizes), slot?, max_price?, reference_product_id? }`. Sin `slot` busca el look completo y reemplaza todas sus prendas; `max_price` es estricto y solo va con `slot`; `reference_product_id` marca "Buscar más barato" (exige `max_price`) y el resultado va a la lista `CHEAPER`.
 - **`ai_operation`** suma `WEB_SEARCH`: el costo de las búsquedas web del descubrimiento de tiendas, una fila de `ai_usage` por job.
 
 ## Índices principales
@@ -299,8 +316,8 @@ Migración `20261001000300_shopping_jobs.sql` (paso 06, D13 y D14):
 RLS habilitado en **todas** las tablas. Resumen (ver `20260929000300_rls_policies.sql`):
 
 - `anon`: sin acceso a ninguna tabla.
-- `authenticated`: solo sus filas (`user_id = auth.uid()`), y solo las columnas con `GRANT` explícito. Por ejemplo, en `profiles` puede cambiar `display_name`, `style_risk_level`, `tattoo_preference`, `onboarding_completed` y sus talles (`top_size`, `bottom_size`, `shoe_size`, `shoe_size_system`), pero **no** `role` ni `country_code`.
-- Premium reforzado en datos: `looks` con `position > 1`, `style_advice`, `look_products`, `carts`, `cart_items`, `chat_*` y favoritos de productos requieren `current_user_is_premium()`.
+- `authenticated`: solo sus filas (`user_id = auth.uid()`), y solo las columnas con `GRANT` explícito. Excepción: el catálogo (`products`, `product_variants`) lo puede leer cualquier usuario con sesión (datos públicos de tiendas). Por ejemplo, en `profiles` puede cambiar `display_name`, `style_risk_level`, `tattoo_preference`, `onboarding_completed` y sus talles (`top_size`, `bottom_size`, `shoe_size`, `shoe_size_system`), pero **no** `role` ni `country_code`.
+- Premium reforzado en datos: leer `looks` con `position > 1`, `style_advice` y `look_products`, y **crear o modificar** carritos, ítems, `chat_*` y favoritos de productos requieren `current_user_is_premium()`. Leer el carrito propio y borrar ítems o guardados propios no lo piden (un Premium vencido conserva su carrito en solo lectura; la app igual bloquea el borrado sin Premium, decisión del paso 11).
 - IDOR: los inserts que referencian otros recursos (favoritos, hilos de chat, ítems del carrito y su look) verifican que el recurso sea del usuario.
 - `jobs`: el usuario puede **leer** el estado y el progreso de sus jobs (columnas no sensibles: también `progress`, `look_id` y `garment_slot`); nunca crear ni modificar, ni leer `payload`, `result` o `last_error`.
 - `ai_usage`, `analytics_events`, `payment_events`: sin acceso desde el cliente.
@@ -319,20 +336,21 @@ Rutas: `<user_id>/<...>`. Las políticas comparan la primera carpeta con `auth.u
 
 ## Funciones SQL
 
-| Función                                    | Quién la ejecuta | Qué hace                                                                                                                         |
-| ------------------------------------------ | ---------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| `handle_new_user()`                        | Trigger          | Crea `profiles` al registrarse                                                                                                   |
-| `set_cart_item_price_snapshot()`           | Trigger          | Fija el precio del ítem al agregar y al cambiar producto o talle; sin precio, rechaza (o conserva el último al cambiar el talle) |
-| `replace_look_products(look, slot, items)` | service_role     | Reemplaza el ranking de una prenda de un look en una transacción                                                                 |
-| `current_user_is_premium()`                | RLS              | Regla Premium                                                                                                                    |
-| `current_user_is_admin()`                  | RLS / servidor   | Rol admin                                                                                                                        |
-| `can_read_generated_look(name)`            | Política Storage | Imagen generada visible según look y plan                                                                                        |
-| `enqueue_job(...)`                         | service_role     | Encola (idempotente con `idempotency_key`)                                                                                       |
-| `claim_next_job(...)`                      | service_role     | Toma el próximo job con `FOR UPDATE SKIP LOCKED`                                                                                 |
-| `complete_job(...)`                        | service_role     | Marca COMPLETED (solo el worker que lo tomó)                                                                                     |
-| `fail_job(...)`                            | service_role     | Reintenta con delay o marca FAILED                                                                                               |
-| `retry_job(id)`                            | service_role     | Reintento manual de un FAILED                                                                                                    |
-| `update_job_progress(job, worker, prog)`   | service_role     | Guarda el progreso (solo el worker que tiene el job en curso)                                                                    |
-| `replace_cheaper_look_products(...)`       | service_role     | Reemplaza las "más baratas" de una prenda, sin tocar ni repetir el ranking                                                       |
-| `admin_overview_metrics()`                 | service_role     | Métricas del overview de `/admin`                                                                                                |
-| `admin_event_counts(days)`                 | service_role     | Conteo de eventos para `/admin/analytics`                                                                                        |
+| Función                                                         | Quién la ejecuta | Qué hace                                                                                                                         |
+| --------------------------------------------------------------- | ---------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `handle_new_user()`                                             | Trigger          | Crea `profiles` al registrarse                                                                                                   |
+| `set_updated_at()`                                              | Trigger          | Mantiene `updated_at` en las tablas que lo tienen                                                                                |
+| `create_style_profile_with_looks(user, profile, advice, looks)` | service_role     | Guarda núcleo, asesoría (`style_advice`) y los 3 looks en una transacción; desactiva el perfil anterior                          |
+| `set_cart_item_price_snapshot()`                                | Trigger          | Fija el precio del ítem al agregar y al cambiar producto o talle; sin precio, rechaza (o conserva el último al cambiar el talle) |
+| `replace_look_products(look, slot, items)`                      | service_role     | Reemplaza el ranking de una prenda de un look en una transacción                                                                 |
+| `current_user_is_premium()`                                     | RLS              | Regla Premium                                                                                                                    |
+| `can_read_generated_look(name)`                                 | Política Storage | Imagen generada visible según look y plan                                                                                        |
+| `enqueue_job(...)`                                              | service_role     | Encola (idempotente con `idempotency_key`)                                                                                       |
+| `claim_next_job(...)`                                           | service_role     | Toma el próximo job con `FOR UPDATE SKIP LOCKED`                                                                                 |
+| `complete_job(...)`                                             | service_role     | Marca COMPLETED (solo el worker que lo tomó)                                                                                     |
+| `fail_job(...)`                                                 | service_role     | Reintenta con delay o marca FAILED                                                                                               |
+| `retry_job(id)`                                                 | service_role     | Reintento manual de un FAILED                                                                                                    |
+| `update_job_progress(job, worker, prog)`                        | service_role     | Guarda el progreso (solo el worker que tiene el job en curso)                                                                    |
+| `replace_cheaper_look_products(...)`                            | service_role     | Reemplaza las "más baratas" de una prenda, sin tocar ni repetir el ranking                                                       |
+| `admin_overview_metrics()`                                      | service_role     | Métricas del overview de `/admin`                                                                                                |
+| `admin_event_counts(days)`                                      | service_role     | Conteo de eventos para `/admin/analytics`                                                                                        |

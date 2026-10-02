@@ -22,7 +22,7 @@ export function normalizeText(text: string): string {
 /** Sustantivos por categoría, del más usado en Uruguay al menos usado. */
 export const CATEGORY_TERMS: Record<ProductCategory, string[]> = {
   SHIRT: ["camisa"],
-  T_SHIRT: ["remera", "camiseta", "t-shirt"],
+  T_SHIRT: ["remera", "camiseta", "chomba", "polo", "t-shirt"],
   KNITWEAR: ["buzo", "sweater", "cardigan", "suéter"],
   TOP: ["top", "musculosa", "blusa"],
   OUTERWEAR: ["campera", "chaqueta", "sobrecamisa", "abrigo"],
@@ -90,6 +90,8 @@ const SEARCHABLE_ALIASES = new Set([
 /** Grupos de sinónimos (para expandir búsquedas léxicas y para chequear pertinencia). */
 export const SYNONYM_GROUPS: string[][] = [
   ["remera", "camiseta", "t-shirt"],
+  // La chomba (polo) es otra prenda que la remera: se busca y se acepta por su nombre (paso 13).
+  ["chomba", "polo"],
   ["championes", "zapatillas", "sneakers"],
   ["buzo", "sweater", "suéter", "canguro"],
   ["campera", "chaqueta", "abrigo"],
@@ -123,12 +125,21 @@ export function synonymsOf(term: string): string[] {
   return group ? [...new Set(group.map(normalizeText))] : [n];
 }
 
-/** Sustantivo principal: el de la categoría que aparece en la descripción, o el primero. */
+/**
+ * Sustantivo principal: el de la categoría que aparece en la descripción; si la descripción
+ * nombra la prenda con el sustantivo de otra categoría ("polo tejido" clasificado como
+ * tejido, paso 13), ese; si no, el primero de la categoría.
+ */
 function mainNoun(category: ProductCategory, description: string): string {
   const words = ` ${applyTermAliases(description)} `;
   const nouns = CATEGORY_TERMS[category].map(normalizeText);
   const found = nouns.find((n) => words.includes(` ${n} `));
   if (found) return found;
+  const named = Object.values(CATEGORY_TERMS)
+    .flat()
+    .map(normalizeText)
+    .find((n) => words.includes(` ${n} `));
+  if (named) return named;
   // "OTHER" o una descripción sin el sustantivo: la primera palabra con contenido.
   const first = words
     .trim()

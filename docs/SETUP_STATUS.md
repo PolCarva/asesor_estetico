@@ -1,6 +1,6 @@
 # Estado del setup
 
-Última actualización: 2026-10-01 (paso 11 del plan `docs/goals/asesoria-shopping/`) · **Foundation completa** · **Milestone 1 (análisis con IA) completo** · Milestone 2 en curso (imagen del look lista) · **Asesoría completa, shopping real en Uruguay, carrito y guardados** (pasos 01–10b).
+Última actualización: 2026-10-02 (paso 13 del plan `docs/goals/asesoria-shopping/`, plan terminado) · **Foundation completa** · **Milestone 1 (análisis con IA) completo** · Milestone 2 en curso (imagen del look lista) · **Asesoría completa, shopping real en Uruguay, carrito y guardados** (pasos 01–10b).
 
 ## Implementado
 
@@ -9,8 +9,8 @@
 | Monorepo      | pnpm workspaces + catálogo de versiones, Turborepo (cache correcta entre paquetes vía tarea `transit`)                                                                                                                                                                                                                                                                                                                                                                                         |
 | Calidad       | TypeScript strict (`noUncheckedIndexedAccess`), ESLint 9 compartido, Prettier + plugin Tailwind                                                                                                                                                                                                                                                                                                                                                                                                |
 | Entorno       | `.env.example`, `@asesor/config/env/{public,server,worker}` con Zod, regla ESLint contra `process.env` suelto                                                                                                                                                                                                                                                                                                                                                                                  |
-| Supabase      | `config.toml`, 6 migraciones reproducibles desde cero, tipos generados (CI verifica que estén al día)                                                                                                                                                                                                                                                                                                                                                                                          |
-| Base de datos | 17 tablas, enums, índices, triggers (`updated_at`, perfil al registrarse, precio del carrito), RLS en todas                                                                                                                                                                                                                                                                                                                                                                                    |
+| Supabase      | `config.toml`, 15 migraciones reproducibles desde cero, tipos generados (CI verifica que estén al día)                                                                                                                                                                                                                                                                                                                                                                                         |
+| Base de datos | 19 tablas, enums, índices, triggers (`updated_at`, perfil al registrarse, precio del carrito), RLS en todas                                                                                                                                                                                                                                                                                                                                                                                    |
 | Storage       | Buckets privados `user-photos` y `generated-looks` con políticas por carpeta de usuario                                                                                                                                                                                                                                                                                                                                                                                                        |
 | Auth          | Signup / login / logout con Server Actions, sesión persistente en cookies, `proxy.ts`, confirmación por email preparada, +18                                                                                                                                                                                                                                                                                                                                                                   |
 | Autorización  | `getCurrentUser`, `requireAuth`, `requirePremium`, `requireAdmin`, `requireResourceOwner` + RLS                                                                                                                                                                                                                                                                                                                                                                                                |
@@ -32,14 +32,14 @@
 
 ## Mockeado
 
-| Qué                      | Mock                                                                                                                                         | Dónde                               |
-| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------- |
-| Modelos de IA (opcional) | `MockAIProvider` con `AI_PROVIDER=mock` (default y en tests). Con `openrouter` es real                                                       | `packages/ai/src/providers/mock.ts` |
-| Búsqueda de productos    | Real por defecto (`SHOPPING_PROVIDER=live`). `MockSearchProvider` (catálogo ficticio `.test`) solo con `SHOPPING_PROVIDER=mock` en tests/E2E | `packages/shopping/src/mocks.ts`    |
-| Páginas de tiendas       | Real (`HttpProductFetcher`) con `live`; `MockProductFetcher` (HTML con JSON-LD) con `mock`                                                   | idem                                |
-| Pagos                    | `MockPaymentProvider` (en memoria)                                                                                                           | `packages/payments/src/mock.ts`     |
-| Handlers del worker      | Solo `GENERATE_STYLE_BOARD` (el análisis y el shopping, `SEARCH_PRODUCTS` y `REFRESH_PRODUCT`, son reales desde los pasos 01 y 06)           | `apps/worker/src/handlers`          |
-| Contenido de la UI       | Looks de ejemplo (fixtures) cuando el usuario no tiene looks; paywall sin checkout                                                           | `apps/web`                          |
+| Qué                      | Mock                                                                                                                                                                                                                      | Dónde                               |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------- |
+| Modelos de IA (opcional) | `MockAIProvider` con `AI_PROVIDER=mock` (default y en tests). Con `openrouter` es real. Con `NODE_ENV=production`, `mock` se rechaza al arrancar                                                                          | `packages/ai/src/providers/mock.ts` |
+| Búsqueda de productos    | Real por defecto (`SHOPPING_PROVIDER=live`). `MockSearchProvider` (catálogo ficticio `.test`) solo con `SHOPPING_PROVIDER=mock` en tests/E2E; con `NODE_ENV=production`, `mock` se rechaza al arrancar (`@asesor/config`) | `packages/shopping/src/mocks.ts`    |
+| Páginas de tiendas       | Real (`HttpProductFetcher`) con `live`; `MockProductFetcher` (HTML con JSON-LD) con `mock`                                                                                                                                | idem                                |
+| Pagos                    | `MockPaymentProvider` (en memoria)                                                                                                                                                                                        | `packages/payments/src/mock.ts`     |
+| Handlers del worker      | Solo `GENERATE_STYLE_BOARD` (el análisis y el shopping, `SEARCH_PRODUCTS` y `REFRESH_PRODUCT`, son reales desde los pasos 01 y 06)                                                                                        | `apps/worker/src/handlers`          |
+| Contenido de la UI       | Looks de ejemplo (fixtures) cuando el usuario no tiene looks; paywall sin checkout                                                                                                                                        | `apps/web`                          |
 
 ## Proveedores reales que faltan
 
@@ -65,12 +65,14 @@ Detalle en `README.md`.
 
 ## Resultado de la verificación final
 
-- `pnpm check`: ✅ 29/29 tareas (también sin cache, `--force`).
-- `pnpm test`: ✅ 84 unitarios + 19 integración.
-- `pnpm test:e2e`: ✅ 10/10 (desktop y mobile).
-- Pipeline real con OpenRouter probado de punta a punta con fotos de una persona ficticia generada por IA: validación, análisis, 3 looks e imagen del look 1 (~USD 0.10).
-- Setup desde cero en una copia limpia siguiendo el README: ✅.
-- Imagen Docker del worker: ✅ build, corre como `node`, sale con código 0 ante SIGTERM.
+Paso 13 del plan `asesoria-shopping` (2026-10-02): ver la verificación completa (con `--force`) en `docs/goals/asesoria-shopping/README.md` y `RESUMEN.md`. Lo vigente:
+
+- `pnpm format`, `lint`, `typecheck`, `build`: ✅.
+- `CI=1 pnpm test`: ✅ unitarios e integración contra Supabase local (cantidades en la fila "Tests" de arriba).
+- `pnpm test:e2e`: ✅ 24 (desktop y mobile), con el worker mock que levanta Playwright.
+- `pnpm db:reset` + `pnpm db:types`: sin diferencias.
+- Prueba real de punta a punta (paso 12b): los 15 criterios de aceptación con IA real y 25 tiendas reales, ~USD 0.41.
+- De la foundation (2026-09-29): setup desde cero en una copia limpia siguiendo el README ✅; imagen Docker del worker ✅ (corre como `node`, sale con código 0 ante SIGTERM).
 
 ## Riesgos conocidos
 
@@ -88,17 +90,18 @@ Detalle en `README.md`.
 - **Versiones recientes** (Next 16, Zod 4, TypeScript 6, pnpm 12, Vitest 5): APIs nuevas, menos ejemplos en la comunidad.
 - Supabase CLI fijada en el proyecto (npm); una CLI global de otra versión sobre el mismo stack puede romper Storage.
 
-## Costos (paso 11)
+## Costos (pasos 11 y 12b)
 
-| Qué                                                             | Costo                                                                                        | De dónde sale                                                                                   |
-| --------------------------------------------------------------- | -------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
-| Análisis con la asesoría completa (perfil v3 + 3 LookSpecs)     | ~USD 0.046                                                                                   | Prueba real del paso 02b: `ANALYZE_STYLE_PROFILE` USD 0.0220 + `GENERATE_LOOK_SPECS` USD 0.0238 |
-| Usuario free (análisis + imagen del look 1)                     | ~USD 0.10                                                                                    | Milestone 1 (`ai_usage`)                                                                        |
-| Usuario Premium (análisis + 3 imágenes)                         | ~USD 0.24                                                                                    | Milestone 1 (`ai_usage`)                                                                        |
-| Búsqueda de un look en vivo (5 prendas, con descubrimiento web) | ~USD 0.04–0.055 en búsqueda web (~0.01 por prenda), 200–220 requests HTTP a tiendas, 30–60 s | Pasos 03, 05, 06 y 10b (`ai_usage` `WEB_SEARCH`: 3 búsquedas del look 1 = USD 0.134)            |
-| Búsqueda de un look desde la cache (24 h)                       | USD 0, 0 requests (salvo revalidar productos de más de 8 h)                                  | Paso 05                                                                                         |
-| "Buscar más barato"                                             | casi siempre USD 0 (pool cacheado); en vivo ~USD 0.01                                        | Paso 09                                                                                         |
-| Revalidar un producto (carrito, "Comprar ↗")                    | USD 0; 1–3 requests, una vez por producto y hora                                             | Pasos 08 y 10a                                                                                  |
+| Qué                                                                          | Costo                                                                                        | De dónde sale                                                                                   |
+| ---------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| Análisis con la asesoría completa (perfil v3 + 3 LookSpecs)                  | ~USD 0.046                                                                                   | Prueba real del paso 02b: `ANALYZE_STYLE_PROFILE` USD 0.0220 + `GENERATE_LOOK_SPECS` USD 0.0238 |
+| Usuario free (análisis + imagen del look 1)                                  | ~USD 0.10                                                                                    | Milestone 1 (`ai_usage`)                                                                        |
+| Usuario Premium (análisis + 3 imágenes)                                      | ~USD 0.25                                                                                    | Paso 12b (`ai_usage`: USD 0.2514)                                                               |
+| Prueba de punta a punta (Premium: análisis, 3 imágenes, 3 búsquedas en vivo) | ~USD 0.41 (0.25 de IA + 0.16 de búsqueda web)                                                | Paso 12b                                                                                        |
+| Búsqueda de un look en vivo (5 prendas, con descubrimiento web)              | ~USD 0.04–0.055 en búsqueda web (~0.01 por prenda), 200–220 requests HTTP a tiendas, 30–60 s | Pasos 03, 05, 06 y 10b (`ai_usage` `WEB_SEARCH`: 3 búsquedas del look 1 = USD 0.134)            |
+| Búsqueda de un look desde la cache (24 h)                                    | USD 0, 0 requests (salvo revalidar productos de más de 8 h)                                  | Paso 05                                                                                         |
+| "Buscar más barato"                                                          | casi siempre USD 0 (pool cacheado); en vivo ~USD 0.01                                        | Paso 09                                                                                         |
+| Revalidar un producto (carrito, "Comprar ↗")                                 | USD 0; 1–3 requests, una vez por producto y hora                                             | Pasos 08 y 10a                                                                                  |
 
 La IA del shopping no se usa (solo la búsqueda web de OpenRouter). Los límites por usuario (10 búsquedas de look por hora, 20 "más barato", 3 análisis por día) acotan el gasto máximo por usuario.
 

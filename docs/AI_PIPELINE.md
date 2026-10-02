@@ -2,7 +2,7 @@
 
 ## Estado
 
-El pipeline **fotos → validación → análisis → 3 looks → imagen** funciona con IA real vía **OpenRouter** (`AI_PROVIDER=openrouter`) o con **`MockAIProvider`** (`AI_PROVIDER=mock`, default: determinístico, sin red, costo 0). Los tests usan siempre el mock o un `fetch` simulado.
+El pipeline **fotos → validación → análisis → 3 looks → imagen** funciona con IA real vía **OpenRouter** (`AI_PROVIDER=openrouter`) o con **`MockAIProvider`** (`AI_PROVIDER=mock`, default: determinístico, sin red, costo 0; rechazado con `NODE_ENV=production`). Los tests usan siempre el mock o un `fetch` simulado.
 
 | Uso                                        | Modelo por defecto (OpenRouter) | Variable                 |
 | ------------------------------------------ | ------------------------------- | ------------------------ |
@@ -15,7 +15,9 @@ Por qué estos modelos (medido el 2026-09-30):
 - El modelo de texto tiene que aceptar **JSON Schema estricto con schemas grandes** (StyleProfile, 3 LookSpecs). `anthropic/claude-sonnet-5.5` los rechaza ("compiled grammar is too large", máximo 16 campos con unión); Gemini 3.8 Flash los cumple y cuesta ~USD 0.003–0.016 por llamada.
 - El modelo de imagen acepta las fotos del usuario como referencias y mantiene la identidad. ~USD 0.07 por imagen 1K. `google/gemini-3-pro-image` es la alternativa de mayor calidad (más cara).
 
-Costo real medido por usuario: **~USD 0.10** (free: validación + análisis + looks + 1 imagen) y **~USD 0.24** (Premium: 3 imágenes). Se registra en `ai_usage` con el costo informado por OpenRouter.
+Costo real medido por usuario: **~USD 0.10** (free: validación + análisis + looks + 1 imagen) y **~USD 0.25** (Premium: 3 imágenes; prueba del paso 12b: validación 0.0032, análisis 0.0214, looks 0.0213, 3 imágenes 0.2055 = USD 0.2514). Se registra en `ai_usage` con el costo informado por OpenRouter.
+
+**Costo de IA del shopping:** el descubrimiento de tiendas usa la búsqueda web de OpenRouter (`openrouter:web_search`, ~USD 0.05 por búsqueda de un look; prueba del paso 12b: USD 0.1627 en 3 búsquedas). Se registra en `ai_usage` como `WEB_SEARCH`, una fila por job. Se activa con `OPENROUTER_API_KEY` aunque `AI_PROVIDER=mock`, porque es parte del shopping (`SHOPPING_PROVIDER=live`), no del análisis.
 
 ## Flujo
 
@@ -96,7 +98,7 @@ Cada operación (`runOperation`) valida el input con Zod, llama al proveedor con
   - `UNKNOWN` es el "no aplica" de un enum: la foto no deja ver la silueta, o el perfil es anterior a v3.
 - **Tamaño del JSON Schema estricto** (medido con `toStrictJsonSchema`): v1 4384 bytes, 56 propiedades, 3 `anyOf` → v2 5956 bytes, 80 propiedades, 3 `anyOf` → v3 6267 bytes, 83 propiedades, 3 `anyOf`. Gemini 3.8 Flash lo acepta (prueba real del 2026-10-01: 5238 tokens de salida, USD 0.022, con `max_tokens` 8000).
 - **Guardado partido** (D4): `splitStyleProfile` separa el núcleo teaser (`schema_version`, `appearance`, `colors`, `strengths`, `avoid`, `style_direction` → `style_profiles.profile_json`) de la asesoría (`StyleAdviceSchema`, el resto → `style_advice.advice_json`, solo Premium por RLS). `mergeStyleProfile` los vuelve a unir.
-- **Lectura tolerante**: `parseStoredStyleProfile(profile_json, advice_json)` acepta v3, v2 y v1 y devuelve siempre v3: a v2 le agrega `face_features: []` y `UNKNOWN` en silueta y proporciones (nunca un valor inventado); a v1, además, la asesoría nueva vacía. La asesoría no cambió entre v2 y v3. `getActiveStyleProfile(db, userId)` de `@asesor/db` la usa: con el cliente del usuario, `advice` es `null` para free.
+- **Lectura tolerante**: `parseStoredStyleProfile(profile_json, advice_json)` acepta v3, v2 y v1 y devuelve siempre v3: a v2 le agrega `face_features: []` y `UNKNOWN` en silueta y proporciones (nunca un valor inventado); a v1, además, la asesoría nueva vacía. La asesoría no cambió entre v2 y v3. `getActiveStyleProfile(db, userId)` de `@asesor/db` la usa: con el cliente del usuario, la RLS no devuelve `style_advice` a free (un perfil v1 local traería su asesoría vieja dentro de `profile_json`: la web la descarta para free con `selectAdviceForPlan`). El núcleo (`profile_json`) lo puede leer el dueño con cualquier plan; el recorte del teaser (3 "te favorece", 3 "evitar", 6 colores) es de la UI.
 - **Prueba real**: `apps/worker/scripts/real-style-analysis.ts` (análisis con las fotos autorizadas, perfil visual, razones de los looks, guardado y lectura free/Premium; `--save-for <cuenta .test>` lo guarda también en una cuenta local para verlo en el navegador) o `--schema-check` (solo aceptación del schema, sin fotos).
 
 ## LookSpec: "Por qué te queda bien"
@@ -130,7 +132,7 @@ El worker reintenta con backoff exponencial (3 intentos). Si el último falla: f
 
 ## Prompts
 
-`packages/ai/src/prompts`: reglas comunes (español rioplatense, respeto; "mejor versión estética de esta misma persona": **nunca** cambiar estructura facial, altura, cuerpo, peso, musculatura ni rasgos fundamentales; **sin puntuaciones de atractivo** ni análisis médico; no inferir etnia/salud/orientación; recomendaciones concretas, breves y aplicables; solo JSON) y un prompt por operación. `ANALYZE_STYLE_PROFILE_PROMPT` recorre cada bloque del StyleProfile con sus límites (ítems ≤120 caracteres, cantidad máxima por lista, `barber_instructions` ≤400). `buildLookImagePrompt()` arma el prompt de imagen en inglés desde el LookSpec, exigiendo preservar identidad y proporciones. `GENERATE_LOOK_SPECS_PROMPT` pide las razones con aspecto y calificativo. `PROMPT_VERSION` (hoy `2026-10-01.1`) se guarda en `ai_usage.metadata`.
+`packages/ai/src/prompts`: reglas comunes (español rioplatense, respeto; "mejor versión estética de esta misma persona": **nunca** cambiar estructura facial, altura, cuerpo, peso, musculatura ni rasgos fundamentales; **sin puntuaciones de atractivo** ni análisis médico; no inferir etnia/salud/orientación; recomendaciones concretas, breves y aplicables; solo JSON) y un prompt por operación. `ANALYZE_STYLE_PROFILE_PROMPT` recorre cada bloque del StyleProfile con sus límites (pide ítems ≤120 caracteres —Zod acepta hasta 160, como margen—, cantidad máxima por lista, `barber_instructions` ≤400). Las reglas que solo pide el prompt (sin análisis médico, no cambiar el cuerpo, tatuajes vacíos con "cubrirlos") no tienen un control posterior sobre el texto. `buildLookImagePrompt()` arma el prompt de imagen en inglés desde el LookSpec, exigiendo preservar identidad y proporciones. `GENERATE_LOOK_SPECS_PROMPT` pide las razones con aspecto y calificativo. `PROMPT_VERSION` (hoy `2026-10-01.1`) se guarda en `ai_usage.metadata`.
 
 ## Pendiente
 

@@ -188,6 +188,41 @@ describe("ranking con productos reales", () => {
     expect(cheaper[0]!.product.price!.amount).not.toBe(99);
   });
 
+  it("más barato mantiene la categoría: lo relacionado solo si no hay de la misma (paso 13)", () => {
+    const jean: Garment = {
+      category: "JEANS",
+      description: "jean recto",
+      color: { name: "azul", hex: "#2F5DA8" },
+      fit: "recto",
+      material: "denim",
+      pattern: null,
+    };
+    const [base] = pantalones;
+    const item = (id: string, category: Product["category"], title: string, amount: number) => ({
+      ...base!,
+      id,
+      url: `${base!.url}?${id}`,
+      title,
+      category,
+      colors: ["azul"],
+      price: { amount, currency: "UYU" as const },
+    });
+    const max = { amount: 2000, currency: "UYU" as const };
+    const cheaper = (pool: Product[]) =>
+      rankProducts(pool, query(jean, { max_price: max, strict_max_price: true })).map(
+        (r) => r.product.id,
+      );
+    const bermuda = item("bermuda", "SHORTS", "Bermuda de jean azul", 990);
+    const otroJean = item("jean", "JEANS", "Jean recto azul", 1490);
+    expect(cheaper([bermuda, otroJean])).toEqual(["jean"]);
+    // Sin otro jean más barato, la bermuda sigue siendo una opción (lo "más posible").
+    expect(cheaper([bermuda])).toEqual(["bermuda"]);
+    // La búsqueda principal no cambia: lo relacionado sigue entrando.
+    expect(rankProducts([bermuda, otroJean], query(jean)).map((r) => r.product.id)).toContain(
+      "bermuda",
+    );
+  });
+
   it("precio: secundario, filtro estricto opcional y sin factor de precio cuando no hay", () => {
     const strict = rankProducts(
       remeras,

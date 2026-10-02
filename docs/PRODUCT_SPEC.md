@@ -26,7 +26,8 @@ fotos
   → recomendaciones
   → paywall
   → shopping
-  → chat Premium
+  → carrito
+  → chat Premium (pendiente)
 ```
 
 1. **Fotos.** El usuario sube dos fotos: cuerpo entero (`MAIN_BODY`) y rostro (`FACE_DETAIL`).
@@ -44,16 +45,16 @@ fotos
 
    Listas cortas, sin bloques de texto. Cada look tiene su detalle en `/app/looks/[id]`: render con pines por zona, piezas del look (color, fit y material), ficha de pelo y grooming, por qué le queda (cada razón con su aspecto: color, silueta, rostro, pelo o estilo) y qué evitar. `/app/profile` ("Mi perfil") muestra el análisis en un bento: forma y rasgos del rostro, colorimetría, silueta, proporciones torso/piernas, claves y estilo. Silueta y proporciones son categorías para vestirse, sin medidas.
 
-8. **Paywall.** El plan free muestra 1 look. Premium desbloquea el resto.
+8. **Paywall.** El plan free muestra 1 look. Premium desbloquea el resto. Hoy el paywall es informativo: el checkout de Mercado Pago es el milestone 3 y Premium se activa por seed o SQL (suscripción `MOCK`).
 9. **Shopping.** Para cada prenda de un look se buscan productos equivalentes en tiendas de Uruguay. Desde el detalle del look:
    - **Premium:** "Encontrar este look". Si faltan talles, se piden solo los que usa ese look (remera o camisa S/M/L…, pantalón 28–50, calzado EU o US) y se guardan en el perfil, así no se vuelven a pedir; se editan en "Mi perfil". Con los talles, la búsqueda arranca y se ve el progreso real por etapas ("Buscando prendas…", "Revisando tiendas…", "Comparando opciones…", "Verificando precios y talles…", "Ordenando las mejores coincidencias…"), sin porcentajes. Al terminar, un mensaje honesto: para cuántas prendas hubo opciones y si algún stock o talle no se pudo verificar. Se puede repetir con cualquiera de los 3 looks.
    - **Free:** "Encontrá las prendas reales para recrear este look" abre el paywall; el servidor rechaza la búsqueda igual.
-   - **Resultados:** en la misma lista de piezas del look, una fila por prenda con el RECOMENDADO (foto, tienda, nombre, precio con su moneda o "a consultar", talle del usuario: disponible, agotado, no está o sin verificar; stock y cuándo se verificó) y 2–4 alternativas que se abren en la fila. "Comprar ↗" abre la página real de la tienda (si el dato tiene más de 8 h, se revalida). Los locales sin compra online se muestran como "Disponible en tienda física" con dirección y contacto. Si una prenda no tiene opciones, se dice. Abajo, el total de los recomendados por moneda, sin conversiones.
+   - **Resultados:** en la misma lista de piezas del look, una fila por prenda con el RECOMENDADO (foto, tienda, nombre, precio con su moneda o "a consultar", talle del usuario: disponible, agotado, no está o sin verificar; stock y cuándo se verificó) y hasta 3 alternativas que se abren en la fila (la búsqueda guarda 4 opciones por prenda). "Comprar ↗" abre la página real de la tienda (si el dato tiene más de 8 h, se revalida). Los locales sin compra online se muestran como "Disponible en tienda física" con dirección y contacto. Si una prenda no tiene opciones, se dice. Abajo, el total de los recomendados por moneda, sin conversiones.
    - **Buscar más barato:** cada producto con precio lo ofrece. Busca solo esa prenda, con la misma categoría, color, fit, material y estética, y precio menor al del producto; no regenera el look ni cambia las recomendaciones. Las alternativas aparecen en la fila como "Más baratas que $ X", ordenadas por parecido y con cuánto menos cuestan; si no hay, lo dice.
    - **Agregar al carrito:** cada producto con precio tiene "+ Agregar al carrito" (el recomendado, las alternativas y las más baratas). El talle se elige solo, según el perfil. Si el dato tiene más de 8 h, se revalida con la tienda antes de agregarlo (hasta 8 s, "Verificando precio y stock…") y se avisa si el precio cambió, si el talle elegido cuesta otra cosa que lo que se mostraba (otro color u otra variante) o si no se pudo verificar. Un local físico sin precio no se agrega. La píldora oscura del look pasa a "Agregar el look al carrito · $ total": completa con el recomendado las prendas que todavía no tienen nada en el carrito.
 10. **Carrito (`/app/cart`, Premium).** Agregador de productos externos: no procesa la compra. Agrupado por look ("TU LOOK" con su nombre) y por prenda; cada producto con foto, tienda, nombre, talle y color, stock, cuándo se verificó, precio y "Comprar ↗" (abre la tienda original). Se puede elegir otro talle (el precio lo vuelve a fijar la base), cambiar por otra opción de la misma prenda, guardar, marcar como comprado (queda tachado, fuera de lo que falta comprar) y quitar. Subtotal por look y "TOTAL APROX." por moneda, sin sumar monedas distintas (con monedas mezcladas, además un total "aprox." en pesos). Si un producto cambió de precio desde que se agregó, lo dice. Con Premium vencido, el carrito queda guardado en solo lectura.
 11. **Guardados (`/app/favorites`).** ♡ en las cards de los looks, en el detalle (a la derecha de la píldora) y en cada producto. Los looks se guardan con cualquier plan; los productos, con Premium. La pantalla muestra los looks guardados y los productos con su tienda, precio, "Comprar ↗", el look donde aparecen y "Agregar al carrito".
-12. **Chat Premium.** Conversación con el asesor sobre su perfil y sus looks ("¿qué me pongo para un casamiento?", "¿esta camisa me queda?").
+12. **Chat Premium (pendiente).** Conversación con el asesor sobre su perfil y sus looks ("¿qué me pongo para un casamiento?", "¿esta camisa me queda?"). Existe la operación de IA (`chatWithStyleAdvisor`) y las tablas; faltan UI, persistencia y límites.
 
 ## Navegación y diseño
 
@@ -78,22 +79,22 @@ La app nunca muestra puntajes, porcentajes ni medidas que no calculó.
 | Shopping        | Solo Premium, tiendas locales                      |
 | Guardados       | Guardar looks y productos (`/app/favorites`)       |
 | Carrito externo | Lista de productos que deriva a la tienda original |
-| Chat            | Solo Premium                                       |
+| Chat            | Solo Premium (pendiente)                           |
 
 ### Free vs Premium
 
-| Funcionalidad              | Free | Premium |
-| -------------------------- | :--: | :-----: |
-| Subida y análisis de fotos |  ✔   |    ✔    |
-| Teaser de la asesoría      |  ✔   |    ✔    |
-| Asesoría completa          |      |    ✔    |
-| Looks con imagen realista  |  1   |    3    |
-| Shopping local             |      |    ✔    |
-| Guardados (favoritos)      |  ✔   |    ✔    |
-| Carrito externo            |      |    ✔    |
-| Chat con el asesor         |      |    ✔    |
+| Funcionalidad              | Free |  Premium  |
+| -------------------------- | :--: | :-------: |
+| Subida y análisis de fotos |  ✔   |     ✔     |
+| Teaser de la asesoría      |  ✔   |     ✔     |
+| Asesoría completa          |      |     ✔     |
+| Looks con imagen realista  |  1   |     3     |
+| Shopping local             |      |     ✔     |
+| Guardados (favoritos)      |  ✔   |     ✔     |
+| Carrito externo            |      |     ✔     |
+| Chat con el asesor         |      | pendiente |
 
-El teaser es el núcleo del perfil recortado: dirección de estilo, 3 ítems de "te favorece" y 3 de "mejor evitar", hasta 6 colores y el perfil visual (forma y rasgos del rostro, silueta y proporciones). La asesoría completa (pelo, grooming, ropa y fit, cómo equilibrar la silueta, calzado y accesorios, tatuajes, consejos generales, neutros y colores a evitar) es Premium: la protege la RLS de `style_advice` y la web ni siquiera la consulta para un usuario free (`selectAdviceForPlan` en `packages/shared`).
+El teaser es el núcleo del perfil recortado: dirección de estilo, 3 ítems de "te favorece" y 3 de "mejor evitar", hasta 6 colores y el perfil visual (forma y rasgos del rostro, silueta y proporciones). La asesoría completa (pelo, grooming, ropa y fit, cómo equilibrar la silueta, calzado y accesorios, tatuajes, consejos generales) es Premium: la protege la RLS de `style_advice` y la web ni siquiera la consulta para un usuario free. El núcleo completo (las 6 fortalezas y 6 "evitar", neutros y colores a evitar) vive en `style_profiles.profile_json`, que el dueño puede leer con cualquier plan (D4); el recorte del teaser y que free no vea neutros ni colores a evitar es de la UI (`selectAdviceForPlan` en `packages/shared`).
 
 Decisión vigente (aplicada en RLS): en free solo se pueden guardar looks; guardar productos es Premium, igual que el shopping. Revisar con datos de uso.
 

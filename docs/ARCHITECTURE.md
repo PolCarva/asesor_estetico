@@ -56,9 +56,9 @@ apps/
 packages/
   config/     ESLint, tsconfig y variables de entorno (Zod): public / server / worker
   shared/     Dominio puro: schemas Zod, tipos, constantes, logger, rate limit, fixtures
-  db/         Tipos generados, clientes Supabase, auth helpers, cola de jobs, Storage, seed
+  db/         Tipos generados, clientes Supabase, auth helpers, cola de jobs, Storage, seed, y la lógica de las actions (perfil y asesoría, talles, shopping y su progreso, carrito, guardados)
   ai/         Abstracción de IA: operaciones tipadas, OpenRouterProvider, MockAIProvider, prompts
-  shopping/   Pipeline de productos: search (registro por plataforma, sitemaps, búsqueda web) → fetch seguro → extract (JSON-LD → microdata → OpenGraph, htmlparser2) → normalize → rank → cache
+  shopping/   Pipeline de productos: search (registro por plataforma, sitemaps, búsqueda web) → fetch seguro → extract (JSON-LD → microdata → OpenGraph, htmlparser2) → talles y stock por plataforma → normalize → validate → rank → cache
   payments/   PaymentProvider, MockPaymentProvider, esqueleto Mercado Pago, estados
   analytics/  AnalyticsService + DatabaseAnalyticsProvider, registro de uso de IA
 supabase/     config.toml, migraciones y seed.sql mínimo
@@ -68,16 +68,18 @@ docs/         Esta documentación (sistema visual en DESIGN_SYSTEM.md)
 ### Dependencias entre paquetes
 
 ```
-shared ← config (solo env)
-shared ← db ← analytics
-shared ← ai
-shared ← shopping
-shared ← payments
-web    → todos
-worker → ai, analytics, config, db, shared, shopping
+config    (sin dependencias internas: ESLint, tsconfig y env)
+shared    → config (solo como devDependency: tsconfig y ESLint)
+db        → shared, config (env de los clientes)
+analytics → db, shared, config
+ai        → shared, config
+shopping  → shared, config
+payments  → shared, config
+web       → todos
+worker    → ai, analytics, config, db, shared, shopping
 ```
 
-Sin ciclos. `shared` no depende de nadie interno ni hace I/O de red.
+Sin ciclos. `shared` no importa nada interno en su código ni hace I/O de red. `db` no depende de `shopping`: lo que comparten (talles, tono del color, preferencia de variante) vive en `shared`.
 
 ## Separación de capas
 
@@ -97,14 +99,14 @@ Los paquetes exportan TypeScript directamente (`exports` → `./src/*.ts`).
 
 Cada uno en un subpath de `@asesor/db` para que el código de servidor nunca llegue al bundle del navegador:
 
-| Subpath              | Uso                                 | Credencial    | RLS         |
-| -------------------- | ----------------------------------- | ------------- | ----------- |
-| `@asesor/db/browser` | Componentes de cliente              | anon          | Sí          |
-| `@asesor/db/server`  | RSC, Server Actions, Route Handlers | anon + sesión | Sí          |
-| `@asesor/db/proxy`   | `proxy.ts` (refresco de sesión)     | anon + sesión | Sí          |
-| `@asesor/db/service` | Servidor web (admin, webhooks)      | service role  | No (bypass) |
-| `@asesor/db/worker`  | Worker                              | service role  | No (bypass) |
-| `@asesor/db/admin`   | Base de los anteriores, seed, tests | service role  | No (bypass) |
+| Subpath              | Uso                                                                                                                                                             | Credencial    | RLS         |
+| -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------- | ----------- |
+| `@asesor/db/browser` | Componentes de cliente                                                                                                                                          | anon          | Sí          |
+| `@asesor/db/server`  | RSC, Server Actions, Route Handlers                                                                                                                             | anon + sesión | Sí          |
+| `@asesor/db/proxy`   | `proxy.ts` (refresco de sesión)                                                                                                                                 | anon + sesión | Sí          |
+| `@asesor/db/service` | Servidor web: admin, webhooks, analytics, encolar jobs (análisis, búsquedas, revalidación) y esperar la revalidación del carrito, resúmenes de looks bloqueados | service role  | No (bypass) |
+| `@asesor/db/worker`  | Worker                                                                                                                                                          | service role  | No (bypass) |
+| `@asesor/db/admin`   | Base de los anteriores, seed, tests                                                                                                                             | service role  | No (bypass) |
 
 `server` y `service` importan `server-only`. La regla por defecto es usar el cliente del usuario; service role solo cuando RLS no permite la operación (y siempre después de autorizar en el servidor).
 
@@ -114,7 +116,7 @@ Centralizadas en `packages/config/src/env` y validadas con Zod. Nadie lee `proce
 
 - `getPublicEnv()` — solo `NEXT_PUBLIC_*`, referenciadas de forma literal para que Next las incruste.
 - `getServerEnv()` — públicas + secretos del servidor. Lanza si se ejecuta en el navegador.
-- `getWorkerEnv()` — lo que necesita el worker (URL, service role, concurrencia).
+- `getWorkerEnv()` — lo que necesita el worker: URL y service role de Supabase, concurrencia, `AI_PROVIDER` y `OPENROUTER_*` (modelos, clave), `AI_IMAGE_QUALITY`, `SHOPPING_PROVIDER` (`live` por defecto) y `SHOPPING_BOT_CONTACT`. Con `NODE_ENV=production`, `AI_PROVIDER=mock` y `SHOPPING_PROVIDER=mock` se rechazan al arrancar.
 
 El `.env` vive en la raíz y lo comparten web (`loadEnvConfig` en `next.config.ts`) y worker (`--env-file-if-exists`).
 
@@ -128,6 +130,16 @@ El `.env` vive en la raíz y lo comparten web (`loadEnvConfig` en `next.config.t
 ## Jobs
 
 Cola en PostgreSQL (sin Redis ni servicios externos). Ver `DATA_MODEL.md` y `AI_PIPELINE.md`.
+
+| Tipo                    | Qué hace                                                                             | Estado                       |
+| ----------------------- | ------------------------------------------------------------------------------------ | ---------------------------- |
+| `VALIDATE_PHOTOS`       | Valida las fotos con IA y encola el análisis                                         | Real                         |
+| `ANALYZE_STYLE_PROFILE` | StyleProfile + asesoría + 3 LookSpecs, guardados en una transacción                  | Real                         |
+| `GENERATE_LOOK`         | Imagen del look con las fotos del usuario como referencia                            | Real                         |
+| `GENERATE_LOOK_PREVIEW` | Preview de un look                                                                   | Real (sin uso en la UI)      |
+| `GENERATE_STYLE_BOARD`  | Moodboard                                                                            | Mock (devuelve `mock: true`) |
+| `SEARCH_PRODUCTS`       | Shopping de un look completo o de una prenda ("más barato"), con progreso por etapas | Real                         |
+| `REFRESH_PRODUCT`       | Revalida un producto guardado (carrito, "Comprar ↗")                                 | Real                         |
 
 - `enqueue_job` (con clave de idempotencia opcional), `claim_next_job` (`FOR UPDATE SKIP LOCKED`, recupera locks vencidos), `complete_job`, `fail_job` (backoff exponencial, errores no reintentables), `retry_job` (manual).
 - Solo `service_role` puede ejecutarlas.

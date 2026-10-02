@@ -2,13 +2,15 @@
 
 Plan de trabajo por pasos para cumplir [`SPEC.md`](SPEC.md), el pedido original completo y la fuente de verdad del alcance. Se ejecuta **un paso por sesión** con el goal de [`GOAL.md`](GOAL.md): cada vez que se corre, toma el siguiente paso ejecutable de la tabla de abajo.
 
-| Archivo                          | Para qué                                                                          |
-| -------------------------------- | --------------------------------------------------------------------------------- |
-| [`SPEC.md`](SPEC.md)             | Pedido original. Ante cualquier duda de alcance, manda este archivo.              |
-| [`GOAL.md`](GOAL.md)             | Texto para pegar en `/goal` (el mismo en cada sesión).                            |
-| [`DECISIONES.md`](DECISIONES.md) | Decisiones de diseño: propuestas iniciales y lo que confirma cada paso.           |
-| [`TIENDAS_UY.md`](TIENDAS_UY.md) | Relevamiento de tiendas uruguayas: plataformas, endpoints, robots.txt y bloqueos. |
-| `pasos/NN-*.md`                  | Un archivo por paso: objetivo, contexto, trampas, tareas y "Hecho cuando".        |
+| Archivo                          | Para qué                                                                           |
+| -------------------------------- | ---------------------------------------------------------------------------------- |
+| [`SPEC.md`](SPEC.md)             | Pedido original. Ante cualquier duda de alcance, manda este archivo.               |
+| [`GOAL.md`](GOAL.md)             | Texto para pegar en `/goal` (el mismo en cada sesión).                             |
+| [`DECISIONES.md`](DECISIONES.md) | Decisiones de diseño: propuestas iniciales y lo que confirma cada paso.            |
+| [`TIENDAS_UY.md`](TIENDAS_UY.md) | Relevamiento de tiendas uruguayas: plataformas, endpoints, robots.txt y bloqueos.  |
+| `pasos/NN-*.md`                  | Un archivo por paso: objetivo, contexto, trampas, tareas y "Hecho cuando".         |
+| [`AUDITORIA.md`](AUDITORIA.md)   | Auditoría final: cada requisito del SPEC con su estado y dónde se ve en el código. |
+| [`RESUMEN.md`](RESUMEN.md)       | Resumen final con los 11 puntos que pide el SPEC.                                  |
 
 ## Prerrequisitos del usuario (completar antes de la primera corrida)
 
@@ -106,6 +108,8 @@ source ~/.nvm/nvm.sh && nvm use >/dev/null && pnpm format && pnpm lint && pnpm t
 
 ## Progreso
 
+**Plan terminado (2026-10-02):** todos los pasos en ✅. La rama `feat/asesoria-shopping` queda para revisión (sin merge ni push).
+
 | #   | Paso                                                                                               | Orden del SPEC | Depende de | Estado |
 | --- | -------------------------------------------------------------------------------------------------- | -------------- | ---------- | ------ |
 | 01  | [Asesoría: schema, prompt y persistencia](pasos/01-asesoria-schema-prompt.md)                      | 1–5            | —          | ✅     |
@@ -124,7 +128,7 @@ source ~/.nvm/nvm.sh && nvm use >/dev/null && pnpm format && pnpm lint && pnpm t
 | 11  | [Auditoría: analytics, fallas parciales y seguridad](pasos/11-auditoria-analytics-errores.md)      | 20             | 09, 10b    | ✅     |
 | 12a | [Tests E2E de los flujos nuevos](pasos/12a-e2e.md)                                                 | 21             | 11         | ✅     |
 | 12b | [Prueba real de punta a punta (15 criterios)](pasos/12b-prueba-real.md)                            | 21             | 12a        | ✅     |
-| 13  | [Documentación, auditoría final y resumen](pasos/13-docs-auditoria-final.md)                       | 22–23          | 12b        | ⬜     |
+| 13  | [Documentación, auditoría final y resumen](pasos/13-docs-auditoria-final.md)                       | 22–23          | 12b        | ✅     |
 
 - Los pasos 01–02 (asesoría) y 03–06 (motor de shopping) son independientes entre sí: si uno queda ⛔, se sigue con el otro.
 - **UI base (2026-10-01):** la app sigue el diseño "Espejo", opción 2 (`docs/DESIGN_SYSTEM.md`). Cada paso con UI se construye sobre esas pantallas y respeta "Diferencias con el mockup" (nada de puntajes, porcentajes ni medidas inventadas). El paso 02b agrega los datos cualitativos que el diseño necesita y el análisis todavía no produce.
@@ -910,3 +914,21 @@ source ~/.nvm/nvm.sh && nvm use >/dev/null && pnpm format && pnpm lint && pnpm t
 - Para pasos siguientes:
   - **13 (limitaciones):** el ranking no ve las fotos (una sobrecamisa "Verde" con foto a cuadros, una campera "básica" que en la foto es con capucha, un jean sin tono en el título con foto clara); la cobertura de la búsqueda depende de los términos (para "buzo liviano de cuello redondo" en merino no aparecieron buzos de punto: faltan sinónimos como "sweater", "pullover" o "tejido"); reiniciar `pnpm dev` después de `pnpm install` o cambios grandes.
 - Commit: `feat(asesoria-shopping): paso 12b — prueba real de punta a punta`
+
+### Paso 13 — Documentación, auditoría final y resumen · 2026-10-02 · ✅
+
+- Hecho:
+  - **Auditoría contra todo el SPEC** (`AUDITORIA.md`): cuatro relevamientos de solo lectura en paralelo —asesoría; pipeline de shopping; carrito, cache, Premium, jobs, analytics y errores; docs contra código— verificados en el código. Cada requisito quedó **cumplido**, **cumplido con limitación** (con el motivo) o **cumplido con cambio justificado** (D21, orden de trabajo); ninguno **no cumplido**. Los 15 criterios de aceptación, con la evidencia del paso 12b.
+  - **Correcciones de código encontradas en la auditoría** (con test):
+    - "polo" y "chomba" (el ejemplo del SPEC, "polo tejido taupe"): se buscaba como "remera" y se descartaban las chombas; ahora son sustantivo y sinónimos propios, y `mainNoun` usa el sustantivo que nombra la descripción (un "polo tejido" clasificado como tejido ya no se busca como "buzo");
+    - "Buscar más barato" mantiene la categoría (una bermuda solo si no hay otro jean más barato);
+    - `hasV2Advice`: un perfil nuevo sin corte ni consejos (alguien rapado) ya no muestra "aparece en tu próximo análisis";
+    - `size_requested` también cuando el servidor responde `needs_sizes`.
+  - **Docs** revisados contra el código y corregidos: `PRODUCT_SPEC` (chat y checkout pendientes, teaser y RLS, alternativas), `AI_PIPELINE` (Premium ~USD 0.25, costo de la búsqueda web, mocks prohibidos en producción, límites de texto), `DATA_MODEL` (diagrama de `look_products`, `shopping_search_cache`, `ai_usage` y `cart_items`; funciones `create_style_profile_with_looks` y `set_updated_at`; sin `current_user_is_admin`; RLS de Premium precisa; payload con `reference_product_id`), `EXECUTION_PLAN` (milestones 4 ✅ y 5 parcial, qué queda), `SETUP_STATUS` (15 migraciones, 19 tablas, verificación, costos, mocks), `ARCHITECTURE` (dependencias, clientes, env del worker, tipos de job), `SECURITY_PRIVACY` (deletes sin Premium en la RLS, service role, rutas sin rate limit), `SHOPPING_ENGINE` (sustantivos, más barato, payload, POOL_VERSION), `TIENDAS_UY` (Shopify, `parsePrice`, WooCommerce) y `README` raíz (estado, shopping real, variables, costos).
+  - **`DECISIONES.md`**: sin propuestas abiertas; D21 cerrada como "confirmada (06, 07, 11, 12a, 12b)" y D16 normalizada.
+  - **`RESUMEN.md`** con los 11 puntos del SPEC.
+- Evidencia: los cuatro relevamientos devolvieron 0 requisitos "no cumplido"; las limitaciones están en `RESUMEN.md` (punto 9) y en `AUDITORIA.md`. `pnpm db:reset` borró los datos locales de la prueba del 12b (`estilo12b@asesor.test`) y recreó el seed.
+- Verificación (sin cache de turbo, `--force`): format ✓ · lint ✓ · typecheck ✓ · test ✓ (517 unit, 84 integración ejecutados: db 72, worker 12; 0 de 11 tareas en cache) · build ✓ (0 en cache) · e2e ✓ (24, desktop + mobile, `CI=1` contra `next start`) · `db:reset` + `db:types` sin diferencias
+- Decisiones: D21 y D16 cerradas; correcciones de búsqueda (polo/chomba) y de "más barato" (categoría) documentadas en `SHOPPING_ENGINE.md`.
+- Para pasos siguientes (fuera de este plan): milestone 3 (checkout de Mercado Pago y looks 2–3 al pasar a Premium), producción (deploy, rate limit compartido, monitoreo), legal y privacidad; detalle en `RESUMEN.md`, punto 11.
+- Commit: `feat(asesoria-shopping): paso 13 — documentación, auditoría final y resumen`

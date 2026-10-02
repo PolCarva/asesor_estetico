@@ -4,6 +4,7 @@ import {
   ADVICE_SECTION_IDS,
   ClientAnalyticsEventSchema,
   FREE_TEASER_LIMITS,
+  hasV2Advice,
   parseStoredStyleProfile,
   selectAdviceForPlan,
   splitStyleProfile,
@@ -105,6 +106,16 @@ describe("selectAdviceForPlan", () => {
     const none = selectAdviceForPlan(core, null, true);
     expect(none.pendingNextAnalysis).toBe(true);
     expect(none.sections).toEqual([]);
+  });
+
+  it("una asesoría nueva sin corte ni consejos (alguien rapado) no queda como pendiente", () => {
+    const rapado = {
+      ...advice,
+      hair: { ...advice.hair, recommended_cut: "", barber_instructions: "" },
+      general_advice: [],
+    };
+    expect(hasV2Advice(rapado)).toBe(true);
+    expect(selectAdviceForPlan(core, rapado, true).pendingNextAnalysis).toBe(false);
   });
 });
 
