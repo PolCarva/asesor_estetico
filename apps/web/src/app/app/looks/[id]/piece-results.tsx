@@ -95,6 +95,15 @@ function InStore({ option }: { option: ProductOptionView }) {
   );
 }
 
+/** El precio mostrado es el del talle del usuario (otros talles o colores cuestan otra cosa). */
+function SizePriceNote() {
+  return (
+    <span className="block text-right font-mono text-[0.5625rem] tracking-[0.04em] text-stone uppercase">
+      en tu talle
+    </span>
+  );
+}
+
 const chip =
   "inline-flex shrink-0 items-center gap-1 rounded-full bg-ink px-3.5 py-1.5 text-xs font-medium text-paper transition-[filter] hover:brightness-125";
 
@@ -192,6 +201,7 @@ function Alternative({
       <div className="flex flex-col items-end gap-1.5">
         <p className="font-display text-base whitespace-nowrap">
           {option.price ?? <span className="text-xs text-stone">A consultar</span>}
+          {option.sizePrice ? <SizePriceNote /> : null}
         </p>
         {saving ? (
           <p className="font-mono text-[0.625rem] tracking-[0.04em] whitespace-nowrap text-moss uppercase">
@@ -326,6 +336,7 @@ export function PieceResultsRow({
         <div className="col-span-2 flex items-center justify-between gap-3 pl-[4.625rem] sm:col-span-1 sm:flex-col sm:items-end sm:pl-0">
           <p className="font-display text-xl leading-none whitespace-nowrap">
             {recommended.price ?? <span className="text-sm text-stone">Precio a consultar</span>}
+            {recommended.sizePrice ? <SizePriceNote /> : null}
           </p>
           <StoreLink product={ref(recommended, lookId, slot)} className={chip}>
             {isStore ? "Ver local ↗" : "Comprar ↗"}

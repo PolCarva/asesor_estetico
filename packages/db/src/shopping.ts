@@ -179,18 +179,29 @@ export async function markProductVerified(
 }
 
 /**
- * Revalidación fallida: el stock pasa a UNKNOWN (no se sostienen datos viejos como ciertos)
- * y `last_fetched_at` queda como estaba (una falla no es una verificación).
+ * Revalidación fallida: el stock del producto y de cada talle pasa a UNKNOWN (no se sostienen
+ * datos viejos como ciertos) y `last_fetched_at` queda como estaba (una falla no es una
+ * verificación).
  */
 export async function markProductUnverified(db: TypedSupabaseClient, id: string): Promise<void> {
   const stored = await getProductById(db, id);
   if (!stored) return;
-  const product = { ...stored.product, availability: "UNKNOWN" as const };
+  // Tampoco el stock de cada talle: si no, el ranking seguiría diciendo "tu talle en stock".
+  const product = {
+    ...stored.product,
+    availability: "UNKNOWN" as const,
+    variants: stored.product.variants.map((v) => ({ ...v, availability: "UNKNOWN" as const })),
+  };
   const { error } = await db
     .from("products")
     .update({ availability: "UNKNOWN", data_json: toJson(product) })
     .eq("id", id);
   if (error) fail("No se pudo actualizar el producto.", error);
+  const variants = await db
+    .from("product_variants")
+    .update({ availability: "UNKNOWN" })
+    .eq("product_id", id);
+  if (variants.error) fail("No se pudieron actualizar los talles.", variants.error);
 }
 
 // --- Ranking por look ------------------------------------------------------------------

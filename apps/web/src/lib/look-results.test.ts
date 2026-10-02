@@ -297,4 +297,54 @@ describe("textos", () => {
     expect(timeAgo(HOURS(0.5), NOW)).toBe("hace 30 min");
     expect(timeAgo(HOURS(30), NOW)).toBe("hace 1 día");
   });
+
+  it("muestra el precio del talle buscado cuando otros colores cuestan menos (paso 11)", () => {
+    // Decathlon NH500 (prueba real del paso 10b): el 42 más barato está agotado.
+    const nh500: Product = {
+      ...boots!,
+      price: { amount: 2813, currency: "UYU" },
+      variants: [
+        {
+          id: "c42",
+          sku: null,
+          size: "42",
+          size_label: "42",
+          color: "canela oscuro",
+          availability: "OUT_OF_STOCK",
+          price: { amount: 2813, currency: "UYU" },
+        },
+        {
+          id: "a42",
+          sku: null,
+          size: "42",
+          size_label: "42",
+          color: "azul",
+          availability: "IN_STOCK",
+          price: { amount: 4090, currency: "UYU" },
+        },
+        {
+          id: "c39",
+          sku: null,
+          size: "39",
+          size_label: "39",
+          color: "canela oscuro",
+          availability: "IN_STOCK",
+          price: { amount: 2813, currency: "UYU" },
+        },
+      ],
+    };
+    const view = buildLookResults({
+      pieces,
+      rows: [row("shoes", 1, nh500), row("top", 1, crudo!)],
+      summary: null,
+      sizes,
+      now: NOW,
+    });
+    const shoes = view.pieces.find((p) => p.slot === "shoes")!.recommended!;
+    expect(spaces(shoes.price)).toBe("$ 4.090");
+    expect(shoes.sizePrice).toBe(true);
+    // El total usa lo que se paga en el talle: 1.890 + 4.090.
+    expect(spaces(view.totals[0]!.amount)).toBe("$ 5.980");
+    expect(view.pieces.find((p) => p.slot === "top")!.recommended!.sizePrice).toBe(false);
+  });
 });

@@ -18,7 +18,8 @@ function fakeClient(options: {
   const query = (table: string) => {
     const result = { data: options.rows?.[table] ?? null, error: null };
     const chain: Record<string, unknown> = {};
-    for (const method of ["select", "eq", "order", "limit"]) chain[method] = () => chain;
+    for (const method of ["select", "eq", "in", "gt", "order", "limit"])
+      chain[method] = () => chain;
     chain.maybeSingle = async () => result;
     return chain;
   };

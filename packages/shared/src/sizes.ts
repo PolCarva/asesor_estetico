@@ -217,6 +217,25 @@ export function pickVariantForSize<T extends { size: string | null; availability
 }
 
 /**
+ * Precio del producto en el talle del usuario (paso 11). Una tienda puede tener el mismo
+ * talle en varios colores con precios distintos (Decathlon NH500: 42 canela $ 2.813 agotado,
+ * 42 azul y negro $ 4.090): el precio del producto es el menor de todas las variantes, pero lo
+ * que el usuario paga es el de su talle. Toma el menor de las variantes de ese talle en stock
+ * (o, si no hay en stock, de todas las de ese talle); sin variantes con precio, el del producto.
+ */
+export function priceForSize<M extends { amount: number }>(
+  price: M | null,
+  variants: ReadonlyArray<{ size: string | null; price: M | null; availability: string }>,
+  size: string | null,
+): M | null {
+  const matching = variants.filter((v) => v.price && sizeMatches(size, v.size));
+  const inStock = matching.filter((v) => v.availability === "IN_STOCK");
+  const pool = inStock.length > 0 ? inStock : matching;
+  const cheapest = pool.map((v) => v.price!).sort((a, b) => a.amount - b.amount)[0];
+  return cheapest ?? price;
+}
+
+/**
  * Orden natural de talles para listarlos (selector del carrito): letras de chico a grande,
  * números de menor a mayor (`32/30` por cintura y después largo), EE. UU. y Reino Unido
  * después de los europeos, y lo que no se reconoce al final, alfabético.

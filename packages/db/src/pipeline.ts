@@ -1,13 +1,12 @@
 import {
   AppError,
-  isPremiumSubscription,
   type LookSpec,
   splitStyleProfile,
   STORAGE_BUCKETS,
   type StyleProfile,
 } from "@asesor/shared";
 
-import { getLatestSubscription } from "./auth";
+import { getPremiumSubscription } from "./auth";
 import { type LookRow, toJson, type TypedSupabaseClient, type UserPhotoRow } from "./types";
 
 /**
@@ -99,7 +98,7 @@ export async function saveStyleProfileWithLooks(
 }
 
 export async function isUserPremium(db: TypedSupabaseClient, userId: string): Promise<boolean> {
-  return isPremiumSubscription(await getLatestSubscription(db, userId));
+  return (await getPremiumSubscription(db, userId)) !== null;
 }
 
 export async function getLookForUser(

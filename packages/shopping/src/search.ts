@@ -128,7 +128,14 @@ async function readCandidate(
   if (page.status === 404 || page.status === 410) {
     return { status: "failed", candidate, reason: "gone" };
   }
-  const raw = extractProduct(page);
+  // Una página rara (HTML o JSON-LD que el extractor no espera) es una falla de ese candidato,
+  // nunca de la búsqueda entera.
+  let raw: RawProduct | null;
+  try {
+    raw = extractProduct(page);
+  } catch {
+    raw = null;
+  }
   if (!raw) return { status: "not_product", candidate };
   return { status: "read", candidate, page, raw };
 }
@@ -380,7 +387,12 @@ export async function refreshProduct(
   if (outcome.status === "product") {
     return { status: "verified", product: { ...outcome.product, id: product.id } };
   }
-  const stale = { ...product, availability: "UNKNOWN" as const };
+  // Sin verificación, ni el producto ni sus talles sostienen el stock de antes (paso 11).
+  const stale = {
+    ...product,
+    availability: "UNKNOWN" as const,
+    variants: product.variants.map((v) => ({ ...v, availability: "UNKNOWN" as const })),
+  };
   if (outcome.status === "failed" && outcome.reason === "gone") {
     return { status: "gone", product: stale };
   }

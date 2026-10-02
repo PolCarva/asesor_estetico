@@ -1,5 +1,7 @@
 import { type MicrodataItem, type PageData, parseHtml } from "./html";
 import { normalizeAvailability, parsePrice } from "./normalize";
+import type { ProductAudience } from "@asesor/shared";
+
 import type {
   ExtractSource,
   FetchedPage,
@@ -47,13 +49,23 @@ const ENTITIES: Record<string, string> = {
   deg: "°",
 };
 
+/**
+ * Carácter de una entidad numérica, o null si no es un code point válido (fuera de rango o
+ * mitad de un par sustituto): `String.fromCodePoint` lanza con esos y una sola página rota
+ * no puede tirar abajo la búsqueda de una prenda (paso 11).
+ */
+function codePoint(n: number): string | null {
+  if (!Number.isInteger(n) || n <= 0 || n > 0x10ffff || (n >= 0xd800 && n <= 0xdfff)) return null;
+  return String.fromCodePoint(n);
+}
+
 /** El JSON-LD a veces trae entidades HTML adentro de los strings (`H&amp;M`). */
 function decodeEntities(s: string): string {
   return s.replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, (match, code: string) => {
     if (code.startsWith("#x") || code.startsWith("#X")) {
-      return String.fromCodePoint(parseInt(code.slice(2), 16));
+      return codePoint(parseInt(code.slice(2), 16)) ?? match;
     }
-    if (code.startsWith("#")) return String.fromCodePoint(Number(code.slice(1)));
+    if (code.startsWith("#")) return codePoint(Number(code.slice(1))) ?? match;
     return ENTITIES[code] ?? match;
   });
 }
@@ -417,6 +429,76 @@ function fromOpenGraph(data: PageData, base: string): Part | null {
   };
 }
 
+// --- Público ---------------------------------------------------------------------------
+
+const AUDIENCE_WORDS: Array<[Exclude<ProductAudience, "UNISEX">, RegExp]> = [
+  ["MEN", /\b(hombres?|caballeros?|masculinos?|varon(es)?|male|men)\b/],
+  ["WOMEN", /\b(mujer(es)?|damas?|femeninos?|female|women)\b/],
+];
+
+const plain = (s: string) =>
+  s
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+
+/**
+ * Público que nombra un texto: uno solo de los dos, o "unisex" dicho explícitamente. Si nombra
+ * a los dos (una tienda "de hombre y de mujer"), no dice nada del producto: null.
+ */
+function audienceIn(texts: string[]): ProductAudience | null {
+  const t = plain(texts.join(" · "));
+  if (/\bunisex\b/.test(t)) return "UNISEX";
+  const found = AUDIENCE_WORDS.filter(([, re]) => re.test(t)).map(([audience]) => audience);
+  return found.length === 1 ? found[0]! : null;
+}
+
+/** Valores de unas claves en cualquier nivel de un JSON (`gender`, `suggestedGender`). */
+function valuesOf(value: unknown, keys: string[], depth = 0): string[] {
+  if (depth > 6) return [];
+  if (Array.isArray(value)) return value.flatMap((v) => valuesOf(v, keys, depth + 1));
+  if (!isObject(value)) return [];
+  return Object.entries(value).flatMap(([key, v]) =>
+    keys.includes(key) ? asArray(v).flatMap((x) => text(x) ?? []) : valuesOf(v, keys, depth + 1),
+  );
+}
+
+/** "Sección" del producto en las tiendas Fenicio (`"carac":{"seccion":"Hombre"}` en la página). */
+const FENICIO_SECTION = /"seccion"\s*:\s*"([^"]{2,40})"/;
+
+/**
+ * Público que declara la página (paso 11): primero el del producto (schema.org `gender` o
+ * `audience.suggestedGender`, la sección de Fenicio y las migas de pan) y, si no dice nada, el
+ * de la tienda (`Organization`/`WebSite`/`Store`: "Tienda de Ropa para Mujer"). No se deduce
+ * de la foto ni del nombre de la prenda: si la página no lo dice, queda null.
+ */
+function pageAudience(data: PageData, body: string): ProductAudience | null {
+  const nodes = [...topNodes(data.jsonLd), ...allItems(data.items).map((i) => microdataToJson(i))];
+  const crumbs = [
+    ...breadcrumbNames(data.jsonLd),
+    // Migas en microdata (`data-vocabulary.org/Breadcrumb` o `ListItem`).
+    ...nodes
+      .filter((n) => typesOf(n).some((t) => /Breadcrumb|ListItem/.test(t)))
+      .flatMap((n) => [text(n.title), text(n.name)].filter((x): x is string => Boolean(x))),
+  ];
+  const product = audienceIn([
+    ...valuesOf(data.jsonLd, ["gender", "suggestedGender"]),
+    ...nodes.flatMap((n) => valuesOf(n, ["gender", "suggestedGender"])),
+    FENICIO_SECTION.exec(body)?.[1] ?? "",
+    ...crumbs,
+  ]);
+  if (product) return product;
+  const store = nodes
+    .filter((n) =>
+      typesOf(n).some((t) => /^(Organization|WebSite|OnlineStore|ClothingStore|Store)$/.test(t)),
+    )
+    .flatMap((n) => [text(n.name), text(n.alternateName), text(n.description)])
+    .filter((x): x is string => Boolean(x));
+  // A nivel tienda, "unisex" no dice nada del producto.
+  const declared = audienceIn(store);
+  return declared === "UNISEX" ? null : declared;
+}
+
 const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 const SIMPLE_FIELDS = [
@@ -478,6 +560,7 @@ export function extractProduct(page: FetchedPage): RawProduct | null {
       ),
     ],
     inStore: place,
+    audience: pageAudience(data, page.body),
     sources: {},
   };
   const take = (field: RawField, source: ExtractSource) => {

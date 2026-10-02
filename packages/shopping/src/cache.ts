@@ -23,7 +23,8 @@ export const CACHE_TTL_MS = {
 /** Subirla cuando cambie qué entra a un pool (extracción, variantes, Validate). */
 // 3 (2026-10-01): Indian pasó a tienda de mujer y el descubrimiento web respeta el público de
 // las tiendas registradas; los pools de hombre la incluían.
-export const POOL_VERSION = 3;
+// 4 (paso 11): los productos traen el público que declara su página (`Product.audience`).
+export const POOL_VERSION = 4;
 
 /** Lo que identifica al pool de una query: la prenda, sin talle, precio, límite ni slot. */
 export function poolQueryOf(query: ShoppingQuery): PoolQuery {

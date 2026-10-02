@@ -47,7 +47,11 @@ export const AnalyticsEventSchema = z.object({
 });
 export type AnalyticsEvent = z.infer<typeof AnalyticsEventSchema>;
 
-/** Eventos que el navegador puede reportar vía /api/analytics. El resto solo se emite en el servidor. */
+/**
+ * Eventos que el navegador puede reportar vía /api/analytics: solo vistas y clicks. Los de
+ * shopping, carrito, guardados y pagos salen del servidor o del worker (D20), para que no se
+ * puedan falsificar desde el cliente.
+ */
 export const CLIENT_ANALYTICS_EVENTS = [
   "landing_view",
   "signup_started",
@@ -57,7 +61,6 @@ export const CLIENT_ANALYTICS_EVENTS = [
   "premium_look_viewed",
   "product_viewed",
   "external_product_clicked",
-  "cheaper_alternative_requested",
   "style_advice_viewed",
   "size_requested",
 ] as const satisfies readonly AnalyticsEventName[];

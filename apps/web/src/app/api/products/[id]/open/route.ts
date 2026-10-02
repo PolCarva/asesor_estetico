@@ -1,12 +1,13 @@
-import { enqueueProductRefresh, getLatestSubscription, getProductById } from "@asesor/db";
+import { enqueueProductRefresh, getPremiumSubscription, getProductById } from "@asesor/db";
 import { createServerSupabaseClient } from "@asesor/db/server";
 import { getServiceRoleClient } from "@asesor/db/service";
-import { isPremiumSubscription, isProductStale } from "@asesor/shared";
+import { isProductStale } from "@asesor/shared";
 import { NextResponse } from "next/server";
 
 import { errorResponse } from "@/lib/api";
 import { getSessionUser } from "@/lib/auth";
 import { getLogger } from "@/lib/logger";
+import { enforceRateLimit, rateLimiters } from "@/lib/rate-limit";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -21,6 +22,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   try {
     const user = await getSessionUser();
     if (!user) return NextResponse.redirect(new URL("/login", request.url), 303);
+    await enforceRateLimit(rateLimiters.productOpen, user.id);
     const { id } = await params;
     if (!UUID.test(id)) return new NextResponse("Producto no encontrado.", { status: 404 });
 
@@ -32,7 +34,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     }
 
     if (isProductStale(stored.product.fetched_at)) {
-      const premium = isPremiumSubscription(await getLatestSubscription(client, user.id));
+      const premium = (await getPremiumSubscription(client, user.id)) !== null;
       if (premium) {
         await enqueueProductRefresh(getServiceRoleClient(), id).catch((error: unknown) =>
           getLogger().warn("no se pudo encolar la revalidación del producto", { error }),

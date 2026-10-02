@@ -30,7 +30,17 @@ Helpers en `@asesor/db`:
 
 La búsqueda de productos verifica Premium tres veces: en la server action (`requirePremium`), en `startLookShopping` y en el worker al ejecutar el job (corre con service role y la suscripción pudo vencer en el medio). Del job, el usuario solo lee estado y progreso (etapa y conteos): nunca `payload`, `result` ni `last_error`. El panel de progreso los consulta por `GET /api/looks/[id]/shopping`, que exige sesión y usa el cliente del usuario (RLS: solo sus jobs).
 
-El carrito (paso 10a) es Premium en las server actions (`requirePremium` → `paywall`, sin error técnico), en la lógica de `@asesor/db` y en la RLS de `carts` / `cart_items`. El precio de cada ítem lo fija la base desde el catálogo (trigger): el cliente no tiene grant sobre el precio ni la moneda. El look de un ítem tiene que ser del usuario (política de insert y update). Un usuario que dejó de ser Premium conserva la lectura de su carrito (RLS), pero las actions le devuelven `paywall`: el carrito queda en solo lectura. Los productos guardados exigen Premium igual (RLS y `saveFavorite` / `removeFavorite`); los looks guardados, solo sesión. `product_added_to_cart`, `product_removed_from_cart`, `look_saved` y `product_saved` salen del servidor (no están en `CLIENT_ANALYTICS_EVENTS`).
+El carrito (paso 10a) es Premium en las server actions (`requirePremium` → `paywall`, sin error técnico), en la lógica de `@asesor/db` y en la RLS de `carts` / `cart_items`. El precio de cada ítem lo fija la base desde el catálogo (trigger): el cliente no tiene grant sobre el precio ni la moneda. El look de un ítem tiene que ser del usuario (política de insert y update). Un usuario que dejó de ser Premium conserva la lectura de su carrito (RLS), pero las actions le devuelven `paywall`: el carrito queda en solo lectura. Los productos guardados exigen Premium igual (RLS y `saveFavorite` / `removeFavorite`); los looks guardados, solo sesión. `shopping_started`, `shopping_completed`, `cheaper_alternative_requested`, `product_added_to_cart`, `product_removed_from_cart`, `look_saved` y `product_saved` salen del servidor o del worker: `/api/analytics` los rechaza (400) si los manda el navegador (paso 11, test de la ruta).
+
+### Auditoría de Premium (paso 11)
+
+- **Una sola regla en TypeScript y SQL:** `getPremiumSubscription` (usada por `requirePremium`, `isUserPremium` del worker, `getPlan` de la web y "Comprar ↗") considera Premium a cualquier suscripción `ACTIVE` o `CANCELLED` con período vigente, igual que `current_user_is_premium()`. Antes TypeScript miraba solo la más reciente y, con varias filas, podía contradecir a la RLS (test de integración `premium.int.test.ts`).
+- **Escrituras de shopping, carrito y guardados de productos:** Premium en la action (`requirePremium` → `paywall`), en la función de `@asesor/db` y en la RLS de escritura (y en el worker para las búsquedas). Probado con usuarios free y vencidos llamando a las funciones de `@asesor/db` y a las actions, no solo desde la UI.
+- **Lecturas que no piden Premium, a propósito:**
+  - el catálogo (`products`, `product_variants`) lo lee cualquier usuario con sesión: son datos públicos de las tiendas, sin nada del usuario; lo protegido es qué productos corresponden a sus looks (`look_products`, Premium);
+  - el progreso de sus propios jobs (`/api/looks/[id]/shopping`): solo etapa y conteos;
+  - su carrito y sus guardados, también con Premium vencido (solo lectura);
+  - borrar ítems del carrito y guardados propios: la RLS lo permite siempre (son datos del usuario); la app lo bloquea sin Premium por consistencia de la UI.
 
 Los talles del usuario viven en `profiles` y solo los escribe él (grants por columna, validados contra las opciones que se ofrecen); el worker los recibe en el payload del job, nunca en logs ni en analytics.
 
@@ -70,6 +80,13 @@ Y en la base, RLS en todas las tablas (detalle en `DATA_MODEL.md`). Los permisos
   - **no activa Premium** con el contenido del webhook: solo se actualiza una suscripción si el proveedor confirma el estado consultando su API (hoy no implementado → el evento queda `IGNORED`).
 - Errores de API: respuesta con código estable (`AUTH_REQUIRED`, `NOT_FOUND`...) sin detalles internos.
 
+## Qué se manda a terceros (paso 11)
+
+- **Búsqueda web (OpenRouter):** solo el texto de la consulta, armado con el primer término de la prenda, la palabra del público y "comprar online Uruguay" (p. ej., "camisa oxford crudo hombre comprar online Uruguay"), con `data_collection: deny`. Sin nombre, email, id, talles, precio ni fotos. La palabra del público ("hombre"/"mujer") sale de la presentación que la IA infirió de las fotos: es lo único derivado del usuario, y no lo identifica.
+- **Tiendas:** user agent identificable (`AsesorEsteticoBot/1.0 (…; <SHOPPING_BOT_CONTACT>)`, el contacto del operador), `accept-language: es-UY`, sin cookies ni referer; los términos de búsqueda, y el SKU, handle o slug del producto para talles y stock. El público no se manda a las tiendas.
+- **Fotos de productos:** las pide el navegador del usuario a la tienda (sin referer); la tienda ve su IP (D16).
+- **Mocks fuera de producción:** `SHOPPING_PROVIDER=mock` y `AI_PROVIDER=mock` se rechazan con `NODE_ENV=production` (tests de `@asesor/config`): un worker de producción nunca sirve productos ficticios ni análisis inventados. Los mocks siguen exportados por `@asesor/shopping` y `@asesor/ai` porque los usan los tests y los E2E; la guarda está en el arranque.
+
 ## Requests a tiendas (SSRF)
 
 El worker descarga URLs que vienen de terceros (búsqueda web, sitemaps). Todo pasa por `PoliteHttpClient` (`packages/shopping`):
@@ -77,7 +94,8 @@ El worker descarga URLs que vienen de terceros (búsqueda web, sitemaps). Todo p
 - validación por nombre (`isSafeProductUrl`): solo http(s) al puerto estándar, sin credenciales, sin IPs privadas o reservadas en ninguna notación, sin `localhost`/`localhost.`/`*.localhost`, `.internal`, `.local` ni nombres de una etiqueta (servicios de Docker);
 - validación por IP al conectar (`createSafeTransport`): el `lookup` del socket rechaza si alguna IP resuelta no es pública, así que un DNS que apunta a la red interna (o que cambia entre chequeo y conexión) no llega;
 - redirects manuales, revalidados uno por uno (y por el robots.txt de su origen);
-- timeout, tope de tamaño medido mientras se lee y ritmo por dominio.
+- timeout, tope de tamaño medido mientras se lee y ritmo por dominio;
+- los listados, APIs y sitemaps de una tienda solo aportan URLs http(s) de esa misma tienda: una que apunta a otro host (incluida una IP interna) se descarta antes de descargarla (paso 11, test).
 
 Los endpoints de plataforma para talles y stock (API de catálogo VTEX, `.js` de Shopify, Store API de WooCommerce; paso 04b) usan el mismo cliente, siempre en el host de la página del producto y solo si robots.txt los permite. No llevan datos del usuario: solo el SKU, el handle o el slug del producto.
 
@@ -85,7 +103,7 @@ De las respuestas solo se usan los datos de producto extraídos (validados con Z
 
 ## Rate limiting
 
-Interfaz `RateLimiter` (`@asesor/shared`) con implementación en memoria. Límites actuales: auth 10/min por IP en producción (200/min en desarrollo, para los E2E), subida de fotos 20/hora por usuario, analytics 60/min por IP, webhooks 120/min por IP, búsqueda de productos 10/hora por usuario (recorre tiendas reales y puede pagar búsquedas web; además, una sola búsqueda activa por look y prenda), "Buscar más barato" 20/hora por usuario (Premium verificado en la action, en `startCheaperSearch` y en el worker), carrito y guardados 60/min por usuario (agregar puede encolar una revalidación, pero una sola por producto y hora). Pendiente: implementación compartida en Postgres para múltiples instancias.
+Interfaz `RateLimiter` (`@asesor/shared`) con implementación en memoria. Límites actuales: auth 10/min por IP en producción (200/min en desarrollo, para los E2E), subida de fotos 20/hora por usuario, analytics 60/min por IP, webhooks 120/min por IP, búsqueda de productos 10/hora por usuario (recorre tiendas reales y puede pagar búsquedas web; además, una sola búsqueda activa por look y prenda), "Buscar más barato" 20/hora por usuario (Premium verificado en la action, en `startCheaperSearch` y en el worker), carrito y guardados 60/min por usuario (agregar puede encolar una revalidación, pero una sola por producto y hora), "Comprar ↗" 120/min por usuario (puede encolar una revalidación). Cada action y ruta nueva tiene un test que verifica que, con el límite agotado, no toca la base y responde sin detalles técnicos (paso 11). Pendiente: implementación compartida en Postgres para múltiples instancias.
 
 ## Headers de seguridad
 

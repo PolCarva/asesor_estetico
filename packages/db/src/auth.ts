@@ -40,16 +40,37 @@ export async function getLatestSubscription(
   return data;
 }
 
+/**
+ * La suscripción que hoy da Premium, si hay alguna: cualquier fila `ACTIVE` o `CANCELLED` con
+ * período vigente, igual que `current_user_is_premium()` en SQL (la RLS). Mirar solo la más
+ * reciente podía dar otra respuesta que la base con varias filas (paso 11).
+ */
+export async function getPremiumSubscription(
+  client: TypedSupabaseClient,
+  userId: string,
+  now = new Date(),
+): Promise<SubscriptionRow | null> {
+  const { data, error } = await client
+    .from("subscriptions")
+    .select("*")
+    .eq("user_id", userId)
+    .in("status", ["ACTIVE", "CANCELLED"])
+    .gt("current_period_end", now.toISOString())
+    .order("current_period_end", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw new AppError("INTERNAL", "No se pudo leer la suscripción.", { cause: error });
+  return data && isPremiumSubscription(data, now) ? data : null;
+}
+
 /** Exige sesión y Premium vigente. */
 export async function requirePremium(
   client: TypedSupabaseClient,
   now = new Date(),
 ): Promise<AuthUser & { subscription: SubscriptionRow }> {
   const user = await requireAuth(client);
-  const subscription = await getLatestSubscription(client, user.id);
-  if (!subscription || !isPremiumSubscription(subscription, now)) {
-    throw new AppError("PREMIUM_REQUIRED", "Esta función es Premium.");
-  }
+  const subscription = await getPremiumSubscription(client, user.id, now);
+  if (!subscription) throw new AppError("PREMIUM_REQUIRED", "Esta función es Premium.");
   return { ...user, subscription };
 }
 

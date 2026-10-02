@@ -62,7 +62,7 @@ Funciones públicas (`packages/shopping`): `searchProducts`, `loadCandidate(s)`,
 
 - `PoliteHttpClient`: user agent identificable `AsesorEsteticoBot/1.0 (…; SHOPPING_BOT_CONTACT)`, timeout 12 s con `AbortSignal`, 2 requests simultáneos y uno cada 300 ms por dominio, tope de 6 MB y anti-SSRF en cada salto (ver "Descarga segura").
 - robots.txt (RFC 9309): se descarga una vez cada 6 h por origen; grupo del bot o, si no lo nombran, los grupos `*`; gana la regla más larga; `*` y `$`. 4xx → todo permitido; 5xx o error → no se pide nada. Toda request (búsqueda, sitemap, descubrimiento) pasa por ahí.
-- **Público:** cada tienda del registro tiene su público (`MEN`, `WOMEN` o `ALL`). Las de otro público no se consultan por plataforma ni sitemap, y desde el paso 10b tampoco entran por el descubrimiento web cuando el resultado es de una tienda registrada (`storeServesAudience`). Indian se corrigió a `WOMEN` (`TIENDAS_UY.md`); `POOL_VERSION` 3 invalidó los pools que la incluían. Las tiendas descubiertas fuera del registro solo se filtran por las palabras del título y la URL (`isRelevantCandidate`): una señal de la página (`seccion` de Fenicio, migas, Organization) queda para el paso 11.
+- **Público:** cada tienda del registro tiene su público (`MEN`, `WOMEN` o `ALL`). Las de otro público no se consultan por plataforma ni sitemap, y desde el paso 10b tampoco entran por el descubrimiento web cuando el resultado es de una tienda registrada (`storeServesAudience`). Indian se corrigió a `WOMEN` (`TIENDAS_UY.md`); `POOL_VERSION` 3 invalidó los pools que la incluían. Legacy pasó a `ALL` (tiene sección de mujer). **Desde el paso 11, además, cada producto trae el público que declara su página** (`Product.audience`: `MEN`, `WOMEN`, `UNISEX` o null): schema.org `gender`/`audience.suggestedGender`, la `seccion` de Fenicio (`"carac":{"seccion":"Hombre"}`), las migas (JSON-LD `BreadcrumbList` o microdata) y, si el producto no dice nada, la `Organization` de la tienda ("Tienda de Ropa para Mujer"; una tienda "de hombre y de mujer" no cuenta). Nunca se deduce de la foto ni del nombre de la prenda. `rankProducts` descarta lo del otro público (`forAudience`), en vivo y desde la cache, también en tiendas descubiertas. `POOL_VERSION` 4. Prueba real: en 5 prendas de hombre del registro, 5 productos de mujer (Legacy `"seccion":"Mujer"`, BAS miga `MUJER`) quedaron afuera.
 - No se evaden protecciones: un 403 o un desafío anti-bot es una falla más de esa tienda. Mercado Libre, Zara, Nike y Tienda Inglesa están en `BLOCKED_DOMAINS` y se descartan también del descubrimiento.
 - Toda respuesta externa (HTML de listados, JSON de plataformas, sitemaps, OpenRouter) se valida con Zod; un formato inesperado es `MalformedResponseError` y cuenta como falla parcial.
 
@@ -174,6 +174,8 @@ Cada URL candidata se procesa por separado (`loadCandidate`) y su falla no afect
 | `unverified_sizes` | productos válidos de una prenda con talle sin talles verificados (paso 04b)       |
 
 Los dos últimos alimentan el mensaje honesto del SPEC ("no pudimos verificar el stock de algunas prendas").
+
+**Auditoría del paso 11** (`packages/shopping/test/partial-failures.test.ts`, un test por caso del SPEC): tienda que bloquea (403, 429, página de desafío anti-bot con 200 y 503), producto que desapareció (404 y 410 por el camino real de `HttpStatusError`), HTML que cambió (sin datos estructurados: no se adivina), sin talle (`UNVERIFIED` / `NOT_OFFERED`), extracción que falla, candidato que falla (error inesperado o red) y timeout: en todos, el candidato cuenta y las demás tiendas siguen. Arreglado en la auditoría: una entidad HTML numérica fuera de rango (`&#x110000;`) hacía lanzar a `String.fromCodePoint` y caía la búsqueda de toda la prenda; ahora queda como texto y, además, cualquier excepción de la extracción cuenta como `not_product` de ese candidato.
 
 Prueba real: `apps/worker/scripts/real-product-extraction.ts [look-N] [--discovery]` (tabla por tienda con fuentes, fallas y un ejemplo) y `real-product-variants.ts [look-N] [--discovery] [--url …]` (talles y stock por tienda, con lo que quedó sin verificar y por qué).
 
@@ -295,6 +297,14 @@ Con un pool cacheado: `SEARCHING → VERIFYING → RANKING`. El job (`createStag
 - **Total:** suma de los recomendados por moneda, nunca convertida (la conversión aproximada del ranker no se muestra como precio). Si falta algún precio o hay dos monedas, subtotales.
 - **Comprar:** `GET /api/products/[id]/open` redirige a la página real; si el dato tiene más de 8 h, encola `REFRESH_PRODUCT` (`enqueueProductRefresh`) y redirige sin esperar: la tienda muestra el precio de hoy y la app se actualiza para la próxima vez.
 - **Eventos:** `product_viewed` (una vez por producto y sesión del navegador; las alternativas, al abrirlas) y `external_product_clicked` (`product_id`, `store_domain`, `look_id`, `slot`, `rank`), desde el cliente. `product_clicked`, que nadie emitía, se reemplazó por `external_product_clicked`.
+
+### Nunca inventar (auditoría del paso 11)
+
+- **Revalidación fallida:** el stock del producto **y de cada talle** pasa a `UNKNOWN` (en el `Product`, en `data_json` y en `product_variants`), y `last_fetched_at` no avanza. Antes los talles conservaban su `IN_STOCK` viejo y el ranking seguía diciendo "tu talle en stock".
+- **Moneda de una variante:** sin moneda propia toma la del producto; con una moneda no soportada (ARS) su precio queda nulo, nunca se le pone otra.
+- **Talles:** "Calce" no es una clave de talle (en Uruguay es el fit: "Calce: Regular"); en Fenicio, sin etiqueta visible, `data-cpre` solo se usa si parece un talle (en Indian es un código).
+- **Precio en tu talle:** el precio de un producto es el menor de sus variantes, pero el mismo talle puede costar otra cosa en otro color (Decathlon NH500: 42 canela $ 2.813 agotado, 42 azul/negro $ 4.090). `priceForSize` (`@asesor/shared`) da lo que se paga en el talle buscado: lo usan los resultados (con la marca "en tu talle"), el total del look y el `listedPrice` del carrito.
+- **Validación externa:** las APIs de plataforma, la búsqueda web y los sitemaps pasan por Zod (`parseExternal`); el HTML de producto se lee a mano (JSON-LD, microdata, OpenGraph son heterogéneos) y lo que sale se valida con `ProductSchema` al normalizar. Los pools cacheados se vuelven a validar al leerlos.
 
 ### `REFRESH_PRODUCT`
 

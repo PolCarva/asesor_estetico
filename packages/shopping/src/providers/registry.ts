@@ -35,8 +35,10 @@ export const STORE_REGISTRY: RegisteredStore[] = [
     name: "Legacy",
     domain: "legacy.com.uy",
     platform: "FENICIO",
-    audience: "MEN",
+    audience: "ALL",
     search: "PLATFORM",
+    notes:
+      'Tiene sección de mujer (menú "mujer"; productos con "seccion":"Mujer"): estaba como MEN. En una búsqueda de hombre, lo de mujer se descarta por el público de la página (paso 11).',
   },
   {
     name: "Hering",

@@ -308,6 +308,19 @@ export interface RankOptions {
 }
 
 /**
+ * ¿El producto es para el público de la búsqueda? Lo que la página declara del otro público
+ * (una sección "Mujer" en una búsqueda de hombre) se descarta; unisex o sin dato, entra.
+ */
+export function forAudience(product: Product, query: ShoppingQuery): boolean {
+  return (
+    !query.audience ||
+    !product.audience ||
+    product.audience === "UNISEX" ||
+    product.audience === query.audience
+  );
+}
+
+/**
  * Ordena el pool de productos para una prenda y un pedido (talle y precio del usuario).
  * Cada factor puntúa entre 0 y 1 y el score es el promedio ponderado; un producto sin
  * precio (local físico) se rankea sin el factor de precio. Descarta categorías no
@@ -322,7 +335,7 @@ export function rankProducts(
   const { weights = DEFAULT_RANKING_WEIGHTS, diversity = STORE_DIVERSITY_PENALTY } =
     "category_match" in options ? { weights: options } : options;
   const garment = query.garment;
-  const pool = products.filter((p) => withinStrictMax(p, query));
+  const pool = products.filter((p) => withinStrictMax(p, query) && forAudience(p, query));
   const prices = pool.flatMap((p) => (p.price ? [toUyu(p.price)] : []));
   const range = { min: Math.min(...prices), max: Math.max(...prices) };
 

@@ -392,8 +392,11 @@ describe("otros schemas", () => {
       false,
     );
   });
-  it("analytics: carrito y guardados salen solo del servidor (D20)", () => {
+  it("analytics: shopping, carrito y guardados salen solo del servidor (D20)", () => {
     for (const name of [
+      "shopping_started",
+      "shopping_completed",
+      "cheaper_alternative_requested",
       "product_added_to_cart",
       "product_removed_from_cart",
       "look_saved",

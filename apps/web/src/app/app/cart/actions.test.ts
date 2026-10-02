@@ -1,6 +1,8 @@
 import { AppError } from "@asesor/shared";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { rateLimiters } from "@/lib/rate-limit";
+
 /**
  * Actions del carrito y de guardados (paso 10a): capas finas sobre `@asesor/db`. Se prueba lo
  * que agregan: Premium en el servidor (paywall, sin llamar a la lógica), Zod, mensajes
@@ -37,6 +39,7 @@ const {
   addLookToCartAction,
   addToCartAction,
   removeFromCartAction,
+  selectCartItemVariantAction,
   setCartItemPurchasedAction,
   swapCartItemAction,
 } = await import("./actions");
@@ -311,4 +314,65 @@ describe("saveFavoriteAction / removeFavoriteAction", () => {
     expect(await saveFavoriteAction(idle, form({}))).toMatchObject({ status: "error" });
     expect(db.saveFavorite).not.toHaveBeenCalled();
   });
+});
+
+describe("rate limit (`cart`, por usuario) en cada action de carrito y guardados", () => {
+  const limited = { allowed: false, remaining: 0, resetAt: Date.now() + 60_000 };
+  const cases = [
+    {
+      name: "addToCartAction",
+      run: () => addToCartAction(idle, form({ productId: PRODUCT })),
+      fn: db.addToCart,
+    },
+    {
+      name: "addLookToCartAction",
+      run: () => addLookToCartAction(idle, form({ lookId: LOOK })),
+      fn: db.addLookToCart,
+    },
+    {
+      name: "removeFromCartAction",
+      run: () => removeFromCartAction(idle, form({ itemId: ITEM })),
+      fn: db.removeFromCart,
+    },
+    {
+      name: "selectCartItemVariantAction",
+      run: () => selectCartItemVariantAction(idle, form({ itemId: ITEM, variantId: "" })),
+      fn: db.selectCartItemVariant,
+    },
+    {
+      name: "swapCartItemAction",
+      run: () => swapCartItemAction(idle, form({ itemId: ITEM, productId: PRODUCT })),
+      fn: db.swapCartItem,
+    },
+    {
+      name: "setCartItemPurchasedAction",
+      run: () => setCartItemPurchasedAction(idle, form({ itemId: ITEM, purchased: "true" })),
+      fn: db.setCartItemPurchased,
+    },
+    {
+      name: "saveFavoriteAction",
+      run: () => saveFavoriteAction(idle, form({ productId: PRODUCT })),
+      fn: db.saveFavorite,
+    },
+    {
+      name: "removeFavoriteAction",
+      run: () => removeFavoriteAction(idle, form({ lookId: LOOK })),
+      fn: db.removeFavorite,
+    },
+  ];
+
+  it.each(cases)(
+    "$name: con el límite agotado no toca la base y lo dice sin detalles técnicos",
+    async ({ run, fn }) => {
+      const consume = vi.spyOn(rateLimiters.cart, "consume").mockResolvedValueOnce(limited);
+      const state = await run();
+      expect(consume).toHaveBeenCalledWith(USER);
+      expect(fn).not.toHaveBeenCalled();
+      expect(state).toEqual({
+        status: "error",
+        error: "Hiciste muchos cambios seguidos. Probá de nuevo en un rato.",
+      });
+      expect(trackEvent).not.toHaveBeenCalled();
+    },
+  );
 });

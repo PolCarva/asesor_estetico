@@ -65,7 +65,7 @@ export class RegistrySearchProvider implements SearchProvider {
         perStore * 4,
         store.sitemapMatch,
       );
-      return relevant(hits, query).slice(0, perStore);
+      return relevant(ofStore(hits, store.domain), query).slice(0, perStore);
     }
 
     const adapter = store.search === "PLATFORM" ? PLATFORM_ADAPTERS[store.platform] : undefined;
@@ -80,7 +80,7 @@ export class RegistrySearchProvider implements SearchProvider {
         searchPath: store.searchPath,
         signal,
       });
-      for (const hit of relevant(hits, query)) found.set(hit.url, hit);
+      for (const hit of relevant(ofStore(hits, store.domain), query)) found.set(hit.url, hit);
       if (found.size >= perStore) break;
     }
     return [...found.values()].slice(0, perStore);
@@ -122,6 +122,22 @@ export interface DiscoverySearchOptions {
   onError?: SourceErrorHandler;
   /** Se llama con el costo de cada búsqueda web (control de costos). */
   onCost?: (usd: number) => void;
+}
+
+/**
+ * Solo URLs http(s) de la propia tienda (paso 11): un listado, una API o un sitemap que apunta
+ * a otro host no se descarga (de todos modos Validate lo descartaría por `host_mismatch`).
+ */
+function ofStore(hits: StoreHit[], domain: string): StoreHit[] {
+  const host = bareHost(domain);
+  return hits.filter((hit) => {
+    try {
+      const url = new URL(hit.url);
+      return /^https?:$/.test(url.protocol) && bareHost(url.hostname) === host;
+    } catch {
+      return false;
+    }
+  });
 }
 
 /** Hosts uruguayos: `.uy` o dominios del registro (p. ej. `uy.hm.com`). */
@@ -203,12 +219,15 @@ export class DiscoverySearchProvider implements SearchProvider {
     const perStore = this.options.perStore ?? 3;
     const [term] = termsOf(query);
     const hits = relevant(
-      await adapter(this.options.http, {
-        domain: host,
-        term: term ?? "",
-        limit: perStore * 3,
-        signal,
-      }),
+      ofStore(
+        await adapter(this.options.http, {
+          domain: host,
+          term: term ?? "",
+          limit: perStore * 3,
+          signal,
+        }),
+        host,
+      ),
       query,
     ).slice(0, perStore);
     return hits.map((hit): CandidateUrl => ({

@@ -283,6 +283,28 @@ describe("registro de tiendas", () => {
     expect(errors).toEqual(["registry:caida.com.uy"]);
   });
 
+  it("solo URLs de la propia tienda: un listado que apunta a otro host no se descarga (paso 11)", async () => {
+    const listing = [
+      '<a class="img" href="/catalogo/camisa-oxford-blanca_1" title="Camisa Oxford Blanca">',
+      '<a class="img" href="https://evil.example/catalogo/camisa-oxford-celeste_2" title="Camisa Oxford Celeste">',
+      '<a class="img" href="http://169.254.169.254/catalogo/camisa-oxford_3" title="Camisa Oxford">',
+    ].join("");
+    const { fetch } = fakeFetch({
+      "https://legacy.com.uy/robots.txt": { body: "User-agent: *\nAllow: /" },
+      "https://legacy.com.uy/catalogo?q=": { body: listing },
+    });
+    const http = new PoliteHttpClient({ fetch });
+    const provider = new RegistrySearchProvider({
+      http,
+      sitemaps: new SitemapIndex(http),
+      registry: [registry[0]!],
+    });
+    const result = await provider.search(queryFor("camisa oxford", "SHIRT"));
+    expect(result.map((c) => c.url)).toEqual([
+      "https://legacy.com.uy/catalogo/camisa-oxford-blanca_1",
+    ]);
+  });
+
   it("Indian es una tienda de mujer: no entra en búsquedas de hombre (regresión 2026-10-01)", () => {
     const indian = findRegisteredStore("www.indian.com.uy")!;
     expect(indian.audience).toBe("WOMEN");

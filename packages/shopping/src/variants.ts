@@ -1,3 +1,4 @@
+import { sizeSystem } from "@asesor/shared";
 import { Parser } from "htmlparser2";
 import { z } from "zod";
 
@@ -53,7 +54,9 @@ export interface VariantEnricher {
   enrich(input: VariantInput): Promise<VariantResult>;
 }
 
-const SIZE_KEY = /tall[ae]|tamañ|tamano|size|n[uú]mero|calce/i;
+// "Calce" no: en las tiendas de Uruguay es el fit ("Calce: Regular", "calce bajo"), y leerlo
+// como talle hacía que un "Slim" pasara por talle (paso 11).
+const SIZE_KEY = /tall[ae]|tamañ|tamano|size|n[uú]mero/i;
 const COLOR_KEY = /colou?r/i;
 
 const IN_STOCK = "InStock";
@@ -136,7 +139,10 @@ export function parseFenicioSizes(html: string): RawVariant[] | null {
           item = null;
           if (!input) return;
           const sku = input.value?.trim() || null;
-          const size = label.join("").trim() || input["data-cpre"]?.trim() || null;
+          // Sin etiqueta visible, `data-cpre` solo si parece un talle (en Indian es un código).
+          const code = input["data-cpre"]?.trim() ?? "";
+          const size =
+            label.join("").trim() || (code && sizeSystem(code) !== "OTHER" ? code : null);
           const quantity = Number(input["data-stock"]);
           const state = li["data-stock"]?.toLowerCase();
           const availability =

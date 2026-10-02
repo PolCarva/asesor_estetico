@@ -80,12 +80,32 @@ describe("env", () => {
 
   it("SHOPPING_PROVIDER: default live y mock prohibido en producción", () => {
     const worker = { ...base, SUPABASE_SERVICE_ROLE_KEY: "srv" };
+    const production = {
+      ...worker,
+      NODE_ENV: "production",
+      AI_PROVIDER: "openrouter",
+      OPENROUTER_API_KEY: "k",
+    };
     expect(getWorkerEnv(worker).SHOPPING_PROVIDER).toBe("live");
     expect(getWorkerEnv({ ...worker, SHOPPING_PROVIDER: "mock" }).SHOPPING_PROVIDER).toBe("mock");
-    expect(getWorkerEnv({ ...worker, NODE_ENV: "production" }).SHOPPING_PROVIDER).toBe("live");
-    expect(() =>
-      getWorkerEnv({ ...worker, NODE_ENV: "production", SHOPPING_PROVIDER: "mock" }),
-    ).toThrowError(/SHOPPING_PROVIDER/);
+    expect(getWorkerEnv(production).SHOPPING_PROVIDER).toBe("live");
+    expect(() => getWorkerEnv({ ...production, SHOPPING_PROVIDER: "mock" })).toThrowError(
+      /SHOPPING_PROVIDER/,
+    );
     expect(() => getWorkerEnv({ ...worker, SHOPPING_PROVIDER: "fake" })).toThrow();
+  });
+
+  it("AI_PROVIDER: mock por defecto en desarrollo, prohibido en producción (paso 11)", () => {
+    const worker = { ...base, SUPABASE_SERVICE_ROLE_KEY: "srv" };
+    expect(getWorkerEnv(worker).AI_PROVIDER).toBe("mock");
+    expect(() => getWorkerEnv({ ...worker, NODE_ENV: "production" })).toThrowError(/AI_PROVIDER/);
+    expect(
+      getWorkerEnv({
+        ...worker,
+        NODE_ENV: "production",
+        AI_PROVIDER: "openrouter",
+        OPENROUTER_API_KEY: "k",
+      }).AI_PROVIDER,
+    ).toBe("openrouter");
   });
 });

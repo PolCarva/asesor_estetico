@@ -31,6 +31,7 @@ const raw = (overrides: Partial<RawProduct> = {}): RawProduct => ({
   variants: [],
   regions: [],
   inStore: null,
+  audience: null,
   sources: {},
   ...overrides,
 });

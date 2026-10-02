@@ -39,6 +39,7 @@ export const FIXTURE_PRODUCTS: Product[] = [
       },
     ],
     in_store: null,
+    audience: null,
     fetched_at: FETCHED_AT,
   },
   {
@@ -67,6 +68,7 @@ export const FIXTURE_PRODUCTS: Product[] = [
       },
     ],
     in_store: null,
+    audience: null,
     fetched_at: FETCHED_AT,
   },
   {
@@ -95,6 +97,7 @@ export const FIXTURE_PRODUCTS: Product[] = [
       },
     ],
     in_store: null,
+    audience: null,
     fetched_at: FETCHED_AT,
   },
   {
@@ -113,6 +116,7 @@ export const FIXTURE_PRODUCTS: Product[] = [
     availability: "IN_STORE_ONLY",
     variants: [],
     in_store: null,
+    audience: null,
     fetched_at: FETCHED_AT,
   },
   {
@@ -131,6 +135,7 @@ export const FIXTURE_PRODUCTS: Product[] = [
     availability: "UNKNOWN",
     variants: [],
     in_store: null,
+    audience: null,
     fetched_at: FETCHED_AT,
   },
   {
@@ -149,6 +154,7 @@ export const FIXTURE_PRODUCTS: Product[] = [
     availability: "OUT_OF_STOCK",
     variants: [],
     in_store: null,
+    audience: null,
     fetched_at: FETCHED_AT,
   },
 ];
@@ -178,5 +184,6 @@ export const FIXTURE_IN_STORE_PRODUCT: Product = {
     phone: "+598 2000 0000",
     contact_url: "https://sombrereria.ficticia.test/contacto",
   },
+  audience: null,
   fetched_at: FETCHED_AT,
 };

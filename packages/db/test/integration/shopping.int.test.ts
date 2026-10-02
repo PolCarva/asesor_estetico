@@ -145,6 +145,15 @@ describeIntegration("shopping: persistencia y cache de búsquedas", () => {
     const failed = await getProductById(admin, id);
     expect(failed?.product.availability).toBe("UNKNOWN");
     expect(failed?.product.fetched_at).toBe(product!.fetched_at);
+    // Paso 11: tampoco se sostiene el stock de cada talle (ni en el JSON ni en las filas).
+    expect(failed?.product.variants.length).toBeGreaterThan(0);
+    expect(failed?.product.variants.every((v) => v.availability === "UNKNOWN")).toBe(true);
+    const { data: rows } = await admin
+      .from("product_variants")
+      .select("availability")
+      .eq("product_id", id);
+    expect(rows?.length).toBeGreaterThan(0);
+    expect(rows?.every((r) => r.availability === "UNKNOWN")).toBe(true);
 
     const verifiedAt = "2026-10-01T15:00:00.000Z";
     await markProductVerified(admin, id, {

@@ -44,6 +44,10 @@ export const InStoreInfoSchema = z.object({
 });
 export type InStoreInfo = z.infer<typeof InStoreInfoSchema>;
 
+/** Público de un producto según su página: hombre, mujer o los dos (unisex). */
+export const ProductAudienceSchema = z.enum(["MEN", "WOMEN", "UNISEX"]);
+export type ProductAudience = z.infer<typeof ProductAudienceSchema>;
+
 /**
  * Producto normalizado de una tienda externa. `id` es el id de producto que declara la
  * plataforma (`productGroupID`/`productID`) o, si no hay, la URL de la página: estable y
@@ -68,6 +72,11 @@ export const ProductSchema = z
     variants: z.array(ProductVariantSchema).max(100),
     /** Solo en `IN_STORE_ONLY`: ubicación y contacto del local. */
     in_store: InStoreInfoSchema.nullable().default(null),
+    /**
+     * Público que declara la página (sección de la tienda, migas, schema.org o la tienda
+     * entera). `null`: no lo dice. El ranking descarta lo del otro público (paso 11).
+     */
+    audience: ProductAudienceSchema.nullable().default(null),
     fetched_at: z.iso.datetime({ offset: true }),
   })
   .refine((p) => p.price !== null || p.availability === "IN_STORE_ONLY", {

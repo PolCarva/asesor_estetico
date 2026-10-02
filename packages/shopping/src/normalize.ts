@@ -227,7 +227,9 @@ function normalizeVariants(raw: RawProduct, currency: Currency | null): ProductV
     if (!id || seen.has(id)) continue;
     seen.add(id);
     const price = parsePrice(variant.price);
-    const variantCurrency = parseCurrency(variant.currency) ?? currency;
+    // Sin moneda propia, la del producto; con una moneda que no es UYU ni USD (ARS en una
+    // tienda Woo), el precio de la variante no se usa: nunca se le pone otra moneda (paso 11).
+    const variantCurrency = variant.currency ? parseCurrency(variant.currency) : currency;
     const label = variant.size?.trim() || null;
     variants.push({
       id,
@@ -309,6 +311,7 @@ export function normalizeProductResult(
     availability,
     variants,
     in_store: inStoreOnly ? inStoreInfo(raw, url) : null,
+    audience: raw.audience,
     fetched_at: context.fetchedAt,
   };
   const parsed = ProductSchema.safeParse(candidate);

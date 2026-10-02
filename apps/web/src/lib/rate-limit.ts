@@ -24,6 +24,9 @@ export const rateLimiters = {
   // Carrito y guardados: escrituras baratas, pero agregar puede encolar una revalidación
   // (una por producto y hora, así que la tienda no recibe más que eso).
   cart: createMemoryRateLimiter({ limit: 60, windowMs: 60_000 }),
+  // "Comprar ↗": puede encolar una revalidación (una por producto y hora); evita que se use
+  // para recorrer el catálogo.
+  productOpen: createMemoryRateLimiter({ limit: 120, windowMs: 60_000 }),
 } satisfies Record<string, RateLimiter>;
 
 export async function enforceRateLimit(limiter: RateLimiter, key: string) {

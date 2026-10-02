@@ -43,7 +43,7 @@ export const WorkerEnvSchema = z
     NEXT_PUBLIC_SUPABASE_URL: z.url(),
     SUPABASE_SERVICE_ROLE_KEY: z.string().min(1),
     WORKER_CONCURRENCY: z.coerce.number().int().min(1).max(16).default(2),
-    /** mock: sin red ni costo. openrouter: IA real (requiere OPENROUTER_API_KEY). */
+    /** mock: sin red ni costo (prohibido en producción). openrouter: IA real (requiere OPENROUTER_API_KEY). */
     AI_PROVIDER: z.enum(["mock", "openrouter"]).default("mock"),
     OPENROUTER_API_KEY: z.string().min(1).optional(),
     OPENROUTER_TEXT_MODEL: z.string().min(1).default(DEFAULT_OPENROUTER_TEXT_MODEL),
@@ -63,6 +63,11 @@ export const WorkerEnvSchema = z
   })
   .refine((env) => env.NODE_ENV !== "production" || env.SHOPPING_PROVIDER !== "mock", {
     path: ["SHOPPING_PROVIDER"],
+    message: "mock no está permitido en producción",
+  })
+  // La IA mock devuelve un análisis ficticio: en producción sería inventar (paso 11).
+  .refine((env) => env.NODE_ENV !== "production" || env.AI_PROVIDER !== "mock", {
+    path: ["AI_PROVIDER"],
     message: "mock no está permitido en producción",
   });
 export type WorkerEnv = z.infer<typeof WorkerEnvSchema>;

@@ -3,6 +3,7 @@ import "server-only";
 import {
   getActiveStyleProfile as readActiveStyleProfile,
   getLatestSubscription,
+  getPremiumSubscription,
   getUserPhotoSignedUrl,
   getUserSizes,
   type LookRow,
@@ -11,7 +12,6 @@ import { createServerSupabaseClient } from "@asesor/db/server";
 import { getServiceRoleClient } from "@asesor/db/service";
 import {
   type AdviceView,
-  isPremiumSubscription,
   type LookSpec,
   StoredLookSpecSchema,
   SIGNED_URL_TTL_SECONDS,
@@ -30,8 +30,13 @@ import { cache } from "react";
 
 export const getPlan = cache(async (userId: string) => {
   const client = await createServerSupabaseClient();
-  const subscription = await getLatestSubscription(client, userId);
-  return { subscription, isPremium: isPremiumSubscription(subscription) };
+  // Premium con la misma regla que la RLS (cualquier suscripción vigente); para mostrar, la
+  // que da Premium o, si no hay, la más reciente.
+  const [premium, latest] = await Promise.all([
+    getPremiumSubscription(client, userId),
+    getLatestSubscription(client, userId),
+  ]);
+  return { subscription: premium ?? latest, isPremium: premium !== null };
 });
 
 export const getProfile = cache(async (userId: string) => {

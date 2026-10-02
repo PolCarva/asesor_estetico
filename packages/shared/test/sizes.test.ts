@@ -9,6 +9,7 @@ import {
   missingSizesForLook,
   normalizeSizeLabel,
   pickVariantForSize,
+  priceForSize,
   SIZE_OPTIONS,
   sizeForCategory,
   sizeMatches,
@@ -209,5 +210,37 @@ describe("compareSizes: talles en orden para elegir", () => {
       "US 9.5",
       "ÚNICO",
     ]);
+  });
+});
+
+describe("priceForSize: lo que se paga en el talle del usuario", () => {
+  const uyu = (amount: number) => ({ amount, currency: "UYU" as const });
+  // Decathlon NH500 (prueba real del paso 10b): el 42 canela está agotado y es el más barato.
+  const nh500 = [
+    { size: "42", price: uyu(2813), availability: "OUT_OF_STOCK" },
+    { size: "42", price: uyu(4090), availability: "IN_STOCK" },
+    { size: "42", price: uyu(4090), availability: "IN_STOCK" },
+    { size: "39", price: uyu(2813), availability: "IN_STOCK" },
+  ];
+
+  it("el menor del talle en stock, no el menor del producto", () => {
+    expect(priceForSize(uyu(2813), nh500, "42")).toEqual(uyu(4090));
+    expect(priceForSize(uyu(2813), nh500, "39")).toEqual(uyu(2813));
+  });
+
+  it("sin stock en ese talle, el menor del talle; sin variantes con precio o sin talle, el del producto", () => {
+    expect(
+      priceForSize(
+        uyu(2813),
+        [{ size: "42", price: uyu(2999), availability: "OUT_OF_STOCK" }],
+        "42",
+      ),
+    ).toEqual(uyu(2999));
+    expect(
+      priceForSize(uyu(1890), [{ size: "M", price: null, availability: "IN_STOCK" }], "M"),
+    ).toEqual(uyu(1890));
+    expect(priceForSize(uyu(2813), nh500, null)).toEqual(uyu(2813));
+    expect(priceForSize(uyu(2813), nh500, "44")).toEqual(uyu(2813));
+    expect(priceForSize(null, [], "M")).toBeNull();
   });
 });

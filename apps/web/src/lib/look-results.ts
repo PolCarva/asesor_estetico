@@ -6,6 +6,7 @@ import {
   type InStoreInfo,
   isProductStale,
   type Money,
+  priceForSize,
   type ProductAvailability,
   type ShoppingSearchSummary,
   sizeForCategory,
@@ -32,6 +33,8 @@ export interface ProductOptionView {
   imageUrl: string | null;
   /** "$ 1.399", "US$ 79"; null = precio a consultar (local físico). */
   price: string | null;
+  /** El precio es el del talle del usuario, distinto del menor del producto (otro color). */
+  sizePrice: boolean;
   availability: ProductAvailability;
   stock: { label: string; tone: Tone };
   /** null: prenda sin talle (accesorios). */
@@ -155,9 +158,16 @@ export function sizeBadge(
   }
 }
 
+/** Lo que se paga en el talle con que se buscó (paso 11): puede no ser el menor del producto. */
+function rowPrice(row: LookProductResult): Money | null {
+  const { product } = row.product;
+  return priceForSize(product.price, product.variants, row.userSize);
+}
+
 function option(row: LookProductResult, now: Date) {
   const { product } = row.product;
   const image = product.image_url?.startsWith("https://") ? product.image_url : null;
+  const price = rowPrice(row);
   return {
     productId: row.product.id,
     rank: row.rank,
@@ -165,7 +175,8 @@ function option(row: LookProductResult, now: Date) {
     storeName: product.store.name,
     storeDomain: product.store.domain,
     imageUrl: image,
-    price: product.price ? formatMoney(product.price) : null,
+    price: price ? formatMoney(price) : null,
+    sizePrice: Boolean(price && product.price && price.amount !== product.price.amount),
     availability: product.availability,
     stock: STOCK[product.availability],
     // El estado se calculó con el talle de la búsqueda (no con el del perfil de hoy).
@@ -268,7 +279,7 @@ export function buildLookResults(input: {
   const byCurrency = new Map<Currency, { amount: number; count: number }>();
   for (const piece of recommended) {
     const row = mainRows.find((r) => r.product.id === piece.recommended?.productId);
-    const price = row?.product.product.price;
+    const price = row ? rowPrice(row) : null;
     if (!price) continue;
     const sum = byCurrency.get(price.currency) ?? { amount: 0, count: 0 };
     byCurrency.set(price.currency, { amount: sum.amount + price.amount, count: sum.count + 1 });

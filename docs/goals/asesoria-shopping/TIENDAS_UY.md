@@ -26,8 +26,9 @@ Pruebas en vivo del **2026-09-30** con curl y user agent de navegador, desde una
 El registro (`packages/shopping/src/providers/registry.ts`) guarda el público principal de cada tienda (`MEN`, `WOMEN` o `ALL`). Una tienda de otro público no se consulta ni entra por el descubrimiento web.
 
 - **Indian es una tienda de mujer** (corregido el 2026-10-01, paso 10b): su JSON-LD se presenta como "Indian | Tienda de Ropa para Mujer" y "la mejor tienda de ropa para las mujeres uruguayas"; las camisas están en "Vestimenta › Blusas y camisas" y lo único de hombre es "Deportivo HOMBRE" en calzado. Estaba como `ALL` y en la prueba real del paso 10b apareció una camisa de mujer (Camisa Xavro) recomendada a un perfil masculino.
-- Revisadas el mismo día: Hering ("Ropa de Hombre & Ropa de Mujer"), Zooko (multimarca de calle), La Isla (surf y skate) y Tiendas Montevideo venden a los dos públicos; Legacy y Jack & Jones son de hombre; Lolita, de mujer.
-- Señal genérica que dan las tiendas Fenicio en la página de producto: `"carac":{"seccion":"Hombre"}` (Guapa). Sirve para filtrar el público de tiendas descubiertas (anotado para el paso 11).
+- Revisadas el mismo día: Hering ("Ropa de Hombre & Ropa de Mujer"), Zooko (multimarca de calle), La Isla (surf y skate) y Tiendas Montevideo venden a los dos públicos; Jack & Jones es de hombre; Lolita, de mujer.
+- **Legacy también tiene sección de mujer** (paso 11): menú "mujer", 15 links a `/…mujer…` y productos con `"seccion":"Mujer"` ("PANTALÓN DE GABARDINA SKINNY - VERDE"). Pasó de `MEN` a `ALL`.
+- **Público del producto en la página (paso 11):** las tiendas Fenicio declaran `"carac":{"seccion":"Hombre"}` (Guapa) o `"Mujer"` (Legacy); BAS (VTEX) pone la miga `MUJER` en el `BreadcrumbList`. La extracción lee esas señales (más schema.org `gender`/`suggestedGender` y la `Organization` de la tienda) y el ranking descarta el otro público, también en tiendas descubiertas fuera del registro. En la prueba del paso 11 (registro, 5 prendas de hombre): 12 productos de hombre, 5 de mujer descartados (Legacy y BAS) y 33 sin dato.
 
 ## Tiendas bloqueadas o sin datos verificables
 

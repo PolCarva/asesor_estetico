@@ -7,6 +7,7 @@ import {
   isProductStale,
   type Money,
   pickVariantForSize,
+  priceForSize,
   type ProductAvailability,
   type ProductCategory,
   sizeForCategory,
@@ -127,11 +128,27 @@ function catalogPrice(product: CatalogProduct, variantId: string | null): Money 
   return amount === null || currency === null ? null : { amount: Number(amount), currency };
 }
 
-/** Precio del producto (sin variante): lo que se mostraba en los resultados. */
-function listed(product: CatalogProduct): Money | null {
-  return product.price_amount === null || product.currency === null
-    ? null
-    : { amount: Number(product.price_amount), currency: product.currency };
+/**
+ * Lo que se mostraba en los resultados: el precio del talle con que se buscó la prenda
+ * (`priceForSize`, la misma regla que la vista) o, sin talle, el del producto.
+ */
+function listed(product: CatalogProduct, searchedSize: string | null): Money | null {
+  const base =
+    product.price_amount === null || product.currency === null
+      ? null
+      : { amount: Number(product.price_amount), currency: product.currency };
+  const variants = product.product_variants.map((v) => {
+    const currency = v.currency ?? base?.currency ?? null;
+    return {
+      size: v.size,
+      availability: v.availability,
+      price:
+        v.price_amount === null || currency === null
+          ? null
+          : { amount: Number(v.price_amount), currency },
+    };
+  });
+  return priceForSize(base, variants, searchedSize);
 }
 
 function variantInfo(product: CatalogProduct, variantId: string | null) {
@@ -405,7 +422,7 @@ export async function addToCart(input: AddToCartInput): Promise<AddToCartResult>
     variantId: item.variant_id,
     price,
     priceChange: change(previous, price),
-    listedPrice: listed(before),
+    listedPrice: listed(before, result.userSize),
     variant: variantInfo(product, item.variant_id),
     revalidation,
     availability: availabilityOf(product, item.variant_id, revalidation),
@@ -568,7 +585,7 @@ export async function swapCartItem(input: {
     variantId: next.variant_id,
     price,
     priceChange: change(catalogPrice(before, variantId), price),
-    listedPrice: listed(before),
+    listedPrice: listed(before, result.userSize),
     variant: variantInfo(product, next.variant_id),
     availability: availabilityOf(product, next.variant_id, revalidation),
     merged,

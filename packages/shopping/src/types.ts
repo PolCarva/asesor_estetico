@@ -1,5 +1,6 @@
 import type {
   Product,
+  ProductAudience,
   ShoppingAudience,
   ShoppingQuery,
   ShoppingStats,
@@ -105,6 +106,8 @@ export interface RawProduct {
   regions: string[];
   /** Local físico declarado (para `IN_STORE_ONLY`). */
   inStore: RawPlace | null;
+  /** Público que declara la página (sección, migas, schema.org o la tienda); null si no dice. */
+  audience: ProductAudience | null;
   /** Fuente de cada dato que se encontró. */
   sources: Partial<Record<RawField, ExtractSource>>;
 }
@@ -112,7 +115,7 @@ export interface RawProduct {
 export type RawField =
   | Exclude<
       keyof RawProduct,
-      "url" | "canonicalUrl" | "variants" | "regions" | "inStore" | "sources"
+      "url" | "canonicalUrl" | "variants" | "regions" | "inStore" | "audience" | "sources"
     >
   | "variants";
 

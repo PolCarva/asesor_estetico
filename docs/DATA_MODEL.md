@@ -252,6 +252,7 @@ El análisis (`StyleProfile` v3, ver `AI_PIPELINE.md`) se guarda partido para qu
 
 - **Precio** (migración `20261001000100_in_store_price.sql`, D10): `price_amount` y `currency` pueden ser `null` solo en un local físico que no publica el precio. El check `products_price_known` exige que vayan juntos y que, si faltan, `availability = 'IN_STORE_ONLY'`.
 - **Local físico**: ubicación y contacto (`in_store`: dirección, localidad, teléfono, link) van en `data_json`, sin columnas nuevas.
+- **Público** (paso 11): `audience` (`MEN`, `WOMEN`, `UNISEX` o null), el que declara la página del producto, va en `data_json` (sin columna: lo usa el ranking al leer el pool). Los productos guardados antes lo leen como null.
 - **Variantes** (`product_variants`): `size` es el talle normalizado (`M`, `42`, `US 9`, `ÚNICO`). La etiqueta de la tienda (`size_label`) queda en `data_json`.
 - **Carrito**: un producto sin precio (local físico) no entra al carrito (ver "Carrito y guardados").
 - **Identidad y cache** (migración `20261001000200_shopping_cache.sql`, paso 05): el upsert es por `url` (canónica). El único `(store_domain, external_id)` pasó a ser un índice común, porque un handle renombrado o un id externo que cambia entre corridas chocaba con el único de `url`. `products` y `product_variants` son la cache persistente de productos (frescura de 8 h con `last_fetched_at`, que solo avanza con una verificación exitosa).
